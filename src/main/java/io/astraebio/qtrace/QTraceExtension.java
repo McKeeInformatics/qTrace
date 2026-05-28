@@ -22,7 +22,7 @@ public class QTraceExtension implements QuPathExtension {
 
     @Override
     public void installExtension(QuPathGUI qupath) {
-        ServiceLoader.load(QTracePlugin.class, Thread.currentThread().getContextClassLoader())
+        ServiceLoader.load(QTracePlugin.class, QTracePlugin.class.getClassLoader())
             .findFirst().ifPresent(QTracePluginManager::register);
 
         controller = new QTraceController(qupath);
