@@ -1,0 +1,47 @@
+plugins {
+    id 'java-library'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group   = 'io.astraebio.qtrace'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://maven.scijava.org/content/repositories/public' }
+}
+
+ext.qupathVersion = '0.5.1'
+
+javafx {
+    version       = '21'
+    modules       = ['javafx.controls', 'javafx.graphics', 'javafx.fxml', 'javafx.base']
+    configuration = 'compileOnly'
+}
+
+dependencies {
+    compileOnly "io.github.qupath:qupath-core:${qupathVersion}"
+    compileOnly "io.github.qupath:qupath-gui-fx:${qupathVersion}"
+    compileOnly 'com.google.code.gson:gson:2.10.1'
+    compileOnly 'ch.qos.logback:logback-classic:1.4.14'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:6.7.0.202309050840-r'
+}
+
+jar {
+    archiveBaseName = 'qtrace-core'
+    manifest {
+        attributes 'Implementation-Title':   'QTrace Core',
+                   'Implementation-Version': version,
+                   'Built-By':               'McKee Informatics'
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'qupath/**', 'javafx/**', 'com/sun/**', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+}
