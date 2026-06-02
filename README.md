@@ -1,5 +1,7 @@
 # qTrace Core
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20448014.svg)](https://doi.org/10.5281/zenodo.20448014)
+
 Open-source QuPath extension for real-time workflow provenance capture.
 
 ## What it does
@@ -25,8 +27,9 @@ Outputs:
 
 ## Enterprise features
 
-Dashboard, batch processing, and expert validation stamps (GxP/GLP) require
-**qTrace Enterprise** — contact [astraebio.com](https://astraebio.com).
+Cryptographic certification (Ed25519 + OpenTimestamps), contributor identity
+verification, and blockchain anchoring require **qTrace Enterprise** —
+contact [mckeeinformatics.com](https://mckeeinformatics.com).
 
 ## License
 

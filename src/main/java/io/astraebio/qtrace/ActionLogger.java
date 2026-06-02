@@ -969,7 +969,7 @@ public class ActionLogger implements WorkflowListener {
         if (!Files.exists(classifierDir)) return;
 
         java.util.regex.Matcher m = java.util.regex.Pattern
-            .compile("\"([^\"]{1,80})\"")
+            .compile("\"([^\"\r\n]{1,80})\"")
             .matcher(script);
         while (m.find()) {
             String candidate = m.group(1);
