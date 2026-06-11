@@ -183,8 +183,91 @@ public class QTraceSettingsDialog {
         Separator sep2 = new Separator();
         sep2.setStyle("-fx-background-color: " + BORDER + ";");
 
-        Separator sep = new Separator();
+        Separator sep  = new Separator();
         sep.setStyle("-fx-background-color: " + BORDER + ";");
+
+        Separator sep3 = new Separator();
+        sep3.setStyle("-fx-background-color: " + BORDER + ";");
+
+        // ── PIN protection (Enterprise only) ───────────────────────────────────
+        Label pinStatusLbl = new Label();
+        pinStatusLbl.setFont(Font.font("System", 11));
+        pinStatusLbl.setWrapText(true);
+        pinStatusLbl.setMaxWidth(440);
+        refreshPinStatus(pinStatusLbl, cfg);
+
+        Button btnSetPin    = flatButton("Set PIN…",    BLUE);
+        Button btnChangePin = flatButton("Change PIN…", TEXT_SUB);
+        Button btnRemovePin = flatButton("Remove PIN",  ORANGE);
+
+        btnSetPin.setVisible(!cfg.hasPinSet());
+        btnSetPin.setManaged(!cfg.hasPinSet());
+        btnChangePin.setVisible(cfg.hasPinSet());
+        btnChangePin.setManaged(cfg.hasPinSet());
+        btnRemovePin.setVisible(cfg.hasPinSet());
+        btnRemovePin.setManaged(cfg.hasPinSet());
+
+        btnSetPin.setOnAction(e -> {
+            String pin = askPin(dlg, "Set license PIN", "Choose a PIN to protect your license:");
+            if (pin == null) return;
+            String confirm = askPin(dlg, "Confirm PIN", "Confirm your PIN:");
+            if (confirm == null || !confirm.equals(pin)) {
+                showError(dlg, "PINs do not match.");
+                return;
+            }
+            cfg.setPinHash(sha256(pin));
+            cfg.save();
+            refreshPinStatus(pinStatusLbl, cfg);
+            btnSetPin.setVisible(false);    btnSetPin.setManaged(false);
+            btnChangePin.setVisible(true);  btnChangePin.setManaged(true);
+            btnRemovePin.setVisible(true);  btnRemovePin.setManaged(true);
+        });
+
+        btnChangePin.setOnAction(e -> {
+            String old = askPin(dlg, "Change PIN", "Current PIN:");
+            if (old == null) return;
+            if (!sha256(old).equals(cfg.getPinHash())) {
+                showError(dlg, "Incorrect PIN.");
+                return;
+            }
+            String pin = askPin(dlg, "New PIN", "New PIN:");
+            if (pin == null) return;
+            String confirm = askPin(dlg, "Confirm new PIN", "Confirm new PIN:");
+            if (confirm == null || !confirm.equals(pin)) {
+                showError(dlg, "PINs do not match.");
+                return;
+            }
+            cfg.setPinHash(sha256(pin));
+            cfg.save();
+            refreshPinStatus(pinStatusLbl, cfg);
+        });
+
+        btnRemovePin.setOnAction(e -> {
+            String pin = askPin(dlg, "Remove PIN", "Enter current PIN to confirm removal:");
+            if (pin == null) return;
+            if (!sha256(pin).equals(cfg.getPinHash())) {
+                showError(dlg, "Incorrect PIN.");
+                return;
+            }
+            cfg.setPinHash(null);
+            cfg.save();
+            refreshPinStatus(pinStatusLbl, cfg);
+            btnSetPin.setVisible(true);    btnSetPin.setManaged(true);
+            btnChangePin.setVisible(false); btnChangePin.setManaged(false);
+            btnRemovePin.setVisible(false); btnRemovePin.setManaged(false);
+        });
+
+        HBox pinButtons = new HBox(8, btnSetPin, btnChangePin, btnRemovePin);
+        pinButtons.setAlignment(Pos.CENTER_LEFT);
+        pinButtons.setPadding(new Insets(4, 20, 4, 20));
+
+        Label pinHint = new Label(
+            "If set, a PIN will be required before every validation stamp. " +
+            "Protects your license if your machine is compromised.");
+        pinHint.setTextFill(Color.web(TEXT_MUTED));
+        pinHint.setFont(Font.font("System", 10));
+        pinHint.setWrapText(true);
+        pinHint.setMaxWidth(440);
 
         // ── Buttons ────────────────────────────────────────────────────────────
         Button btnReset  = flatButton("Reset all to default", TEXT_MUTED);
@@ -226,6 +309,9 @@ public class QTraceSettingsDialog {
             sep2,
             sectionTitle("Enterprise License"),
             licenseGrid,
+            sep3,
+            sectionTitle("License PIN"),
+            pinButtons, pinStatusLbl, pinHint,
             buttonRow);
         VBox.setMargin(hint,          new Insets(0, 20, 8, 20));
         VBox.setMargin(validatorHint, new Insets(0, 20, 8, 20));
@@ -316,6 +402,47 @@ public class QTraceSettingsDialog {
         Region r = new Region();
         HBox.setHgrow(r, Priority.ALWAYS);
         return r;
+    }
+
+    private static String sha256(String input) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] b = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte x : b) sb.append(String.format("%02x", x));
+            return sb.toString();
+        } catch (Exception e) { throw new RuntimeException(e); }
+    }
+
+    private static void refreshPinStatus(Label lbl, QTraceConfig cfg) {
+        if (cfg.hasPinSet()) {
+            lbl.setText("PIN is set — required before every validation stamp.");
+            lbl.setTextFill(Color.web(GREEN));
+        } else {
+            lbl.setText("No PIN set — anyone with the license file can stamp.");
+            lbl.setTextFill(Color.web(TEXT_MUTED));
+        }
+        lbl.setPadding(new Insets(0, 20, 4, 20));
+    }
+
+    private static String askPin(Stage owner, String title, String prompt) {
+        javafx.scene.control.TextInputDialog d = new javafx.scene.control.TextInputDialog();
+        d.setTitle(title);
+        d.setHeaderText(null);
+        d.setContentText(prompt);
+        d.initOwner(owner);
+        // Style the dialog to match the dark theme as much as possible
+        return d.showAndWait().map(String::trim).filter(s -> !s.isEmpty()).orElse(null);
+    }
+
+    private static void showError(Stage owner, String msg) {
+        javafx.scene.control.Alert a = new javafx.scene.control.Alert(
+            javafx.scene.control.Alert.AlertType.ERROR);
+        a.setTitle("qTrace Settings");
+        a.setHeaderText(null);
+        a.setContentText(msg);
+        a.initOwner(owner);
+        a.showAndWait();
     }
 
     private static void updateLicenseStatus(Label statusLbl, String path, TextField tfValidator) {

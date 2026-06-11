@@ -33,6 +33,7 @@ public class QTraceConfig {
     private String trainingDir;
     private String validatorName;
     private String licensePath;
+    private String pinHash;   // SHA-256 hex of the user's PIN, null = no PIN set
 
     private QTraceConfig() {}
 
@@ -67,6 +68,12 @@ public class QTraceConfig {
 
     public String getLicensePath()         { return licensePath != null ? licensePath : ""; }
     public void   setLicensePath(String p) { this.licensePath = blank(p); }
+
+    // ── PIN protection ────────────────────────────────────────────────────────
+
+    public boolean hasPinSet()          { return pinHash != null && !pinHash.isBlank(); }
+    public String  getPinHash()         { return pinHash != null ? pinHash : ""; }
+    public void    setPinHash(String h) { this.pinHash = (h == null || h.isBlank()) ? null : h; }
 
     // ── Raw string getters (for the dialog text fields) ───────────────────────
 

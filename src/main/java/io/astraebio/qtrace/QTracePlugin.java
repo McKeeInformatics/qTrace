@@ -22,4 +22,17 @@ public interface QTracePlugin {
      * or null if the token is invalid.
      */
     default LicenseInfo validateLicense(String token) { return null; }
+
+    /**
+     * Returns the LicenseInfo for the currently loaded license, or null if none/invalid.
+     * Used by the panel to display the license holder's name.
+     */
+    default LicenseInfo getActiveLicenseInfo() { return null; }
+
+    /**
+     * Called before any stamp is recorded. Returns true if the user is authorized to stamp
+     * (PIN verified, or no PIN set). Returns false if the user cancelled or entered a wrong PIN.
+     * Default: always authorized (no PIN without Enterprise).
+     */
+    default boolean requirePinToStamp(javafx.stage.Window owner) { return true; }
 }

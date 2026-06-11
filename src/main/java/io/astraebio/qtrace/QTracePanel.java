@@ -103,7 +103,22 @@ public class QTracePanel {
         sub.setFont(Font.font("System", 11));
         sub.setFill(Color.web(TEXT_MUTED));
 
-        VBox titleBlock = new VBox(1, title, sub);
+        // Show license holder name if Enterprise + valid license loaded
+        String licenseeLine = null;
+        QTracePlugin ep = QTracePluginManager.get();
+        if (ep != null) {
+            LicenseInfo li = ep.getActiveLicenseInfo();
+            if (li != null && !li.expired()) licenseeLine = "✓ " + li.name();
+        }
+        Text licenseText = licenseeLine != null ? new Text(licenseeLine) : null;
+        if (licenseText != null) {
+            licenseText.setFont(Font.font("System", FontWeight.BOLD, 11));
+            licenseText.setFill(Color.web(GREEN));
+        }
+
+        VBox titleBlock = licenseText != null
+            ? new VBox(1, title, sub, licenseText)
+            : new VBox(1, title, sub);
         titleBlock.setAlignment(Pos.CENTER_LEFT);
 
         Region spacer = new Region();

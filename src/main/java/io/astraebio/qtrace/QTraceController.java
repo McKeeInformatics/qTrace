@@ -344,6 +344,8 @@ public class QTraceController {
             return;
         }
         logger.refreshAllAnnotationCaptures();
+        QTracePlugin enterprise = QTracePluginManager.get();
+        if (enterprise != null && !enterprise.requirePinToStamp(qupath.getStage())) return;
         String currentStatus = readCurrentStatus();
         ValidationStamper.show(qupath.getStage(), null, logger.getImageHash(),
                                logger.computeClassifierFidelity(), currentStatus)
