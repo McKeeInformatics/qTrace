@@ -25,6 +25,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -967,8 +968,13 @@ public class QTraceDashboard {
 
         // Latest validation always visible
         JsonObject latestSession = validatedSessions.get(validatedSessions.size() - 1);
-        imageCardContent.getChildren().add(
-            buildValidationRow(latestSession.getAsJsonObject("validation"), root, true));
+        JsonObject latestVal = latestSession.getAsJsonObject("validation");
+        imageCardContent.getChildren().add(buildValidationRow(latestVal, root, true));
+
+        // Anchor (OTS) badge — M2
+        File qtraceFile = (selectedData != null) ? selectedData.qtraceFile() : null;
+        HBox anchorRow = buildAnchorRow(latestVal, qtraceFile);
+        imageCardContent.getChildren().add(anchorRow);
 
         if (validatedSessions.size() <= 1) return;
 
@@ -1062,6 +1068,93 @@ public class QTraceDashboard {
         }
 
         return box;
+    }
+
+    // ── Anchor (OTS) badge ───────────────────────────────────────────────────
+
+    /**
+     * Builds an "Anchor" row label showing the OTS proof status for the latest stamp.
+     * Returns null if case_id is absent or an unexpected error occurs (caller must handle null).
+     *
+     * Layout of returned HBox:
+     *   "Anchor"  [badge label]
+     */
+    private HBox buildAnchorRow(JsonObject val, File qtraceFile) {
+        HBox row = new HBox(20);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(2, 0, 2, 0));
+
+        Label keyLbl = lbl("Anchor:", TEXT_MUTED, 11, FontWeight.NORMAL, false);
+
+        Label badgeLbl;
+        try {
+            // 1. Read case_id from the validation block
+            String caseId = str(val, "case_id", null);
+            if (caseId == null || qtraceFile == null) {
+                badgeLbl = lbl("— No case", TEXT_MUTED, 11, FontWeight.NORMAL, true);
+                row.getChildren().addAll(keyLbl, badgeLbl);
+                return row;
+            }
+
+            // 2. exportDir = parent of the .qtrace file
+            Path exportDir = qtraceFile.toPath().getParent();
+            if (exportDir == null) {
+                badgeLbl = lbl("— No case", TEXT_MUTED, 11, FontWeight.NORMAL, true);
+                row.getChildren().addAll(keyLbl, badgeLbl);
+                return row;
+            }
+
+            // 3. Sanitize caseId → case dir name  (same logic as ChainLog.sanitize)
+            String sanitized = caseId.replaceAll("[^a-zA-Z0-9._-]", "_");
+            Path caseDir = exportDir.resolve("case_" + sanitized);
+            if (!Files.isDirectory(caseDir)) {
+                badgeLbl = lbl("— No case", TEXT_MUTED, 11, FontWeight.NORMAL, true);
+                row.getChildren().addAll(keyLbl, badgeLbl);
+                return row;
+            }
+
+            // 4. Find latest certificate_id from chain.jsonl (last non-empty line)
+            Path chainLog = caseDir.resolve("chain.jsonl");
+            String certId = null;
+            if (Files.exists(chainLog)) {
+                try {
+                    List<String> lines = Files.readAllLines(chainLog);
+                    for (int i = lines.size() - 1; i >= 0; i--) {
+                        String line = lines.get(i).trim();
+                        if (!line.isEmpty()) {
+                            try {
+                                com.google.gson.JsonObject entry =
+                                    com.google.gson.JsonParser.parseString(line).getAsJsonObject();
+                                if (entry.has("certificate_id") && !entry.get("certificate_id").isJsonNull())
+                                    certId = entry.get("certificate_id").getAsString();
+                            } catch (Exception ignored) {}
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // 5. Check if anchors/<certId>.ots exists
+            if (certId == null) {
+                // chain.jsonl absent or no cert yet → pending
+                badgeLbl = lbl("⏳ Anchor pending", PEACH, 11, FontWeight.BOLD, false);
+            } else {
+                Path otsFile = caseDir.resolve("anchors").resolve(certId + ".ots");
+                if (Files.exists(otsFile)) {
+                    badgeLbl = lbl("⚓ Anchored (OTS)", BLUE, 11, FontWeight.BOLD, false);
+                    badgeLbl.setTooltip(new Tooltip(
+                        "Bitcoin timestamp proof present — run qtrace-verify check for full verification"));
+                } else {
+                    badgeLbl = lbl("⏳ Anchor pending", PEACH, 11, FontWeight.BOLD, false);
+                }
+            }
+        } catch (Exception ex) {
+            // Defensive: never crash the dashboard
+            badgeLbl = lbl("⏳ Anchor pending", PEACH, 11, FontWeight.BOLD, false);
+        }
+
+        row.getChildren().addAll(keyLbl, badgeLbl);
+        return row;
     }
 
     // ── Card 2 — Alignement ───────────────────────────────────────────────────
