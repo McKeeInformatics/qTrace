@@ -194,7 +194,9 @@ public class QTraceExporter {
             if (stamp.signature()      != null) val.addProperty("signature",       stamp.signature());
             if (stamp.validatorKeyPub() != null) val.addProperty("validatorKeyPub", stamp.validatorKeyPub());
             if (stamp.imageHash()       != null) val.addProperty("imageHash",       stamp.imageHash());
+            if (stamp.qpdataSha256()    != null) val.addProperty("qpdata_sha256",   stamp.qpdataSha256());
             if (stamp.statusLabel()     != null) val.addProperty("statusLabel",     stamp.statusLabel());
+            val.addProperty("signing_meaning", ValidationStamp.SIGNING_MEANING);
             session.add("validation", val);
         } else {
             session.add("validation", JsonNull.INSTANCE);

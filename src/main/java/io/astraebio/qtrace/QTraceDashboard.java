@@ -19,6 +19,8 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import qupath.lib.gui.QuPathGUI;
 
+import io.astraebio.qtrace.chain.CanonicalJson;
+
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.lang.reflect.Method;
@@ -56,7 +58,7 @@ public class QTraceDashboard {
 
     private static final String[] COL_NAMES = {
         "Sample", "ROI", "Status", "Region", "BV (aSMA+)", "Tau", "✓ Validated",
-        "Alignment", "Segmentation", "Classifiers", "Steps"
+        "Alignment", "Segmentation", "Classifiers", "Steps", "🛡"
     };
 
     // ── Resizable column widths ───────────────────────────────────────────────
@@ -72,6 +74,7 @@ public class QTraceDashboard {
         new SimpleDoubleProperty(88),   // Segmentation
         new SimpleDoubleProperty(156),  // Classifiers
         new SimpleDoubleProperty(52),   // Steps
+        new SimpleDoubleProperty(78),   // 🛡 Signature
     };
     private final Label[] sortIndicators = new Label[COL_NAMES.length];
 
@@ -698,9 +701,42 @@ public class QTraceDashboard {
             }
         }
 
-        // Col 9 — Steps
+        // Col 10 — Steps
         String stepsText = (hasSession && session.has("steps_captured"))
             ? String.valueOf(session.get("steps_captured").getAsInt()) : "—";
+
+        // Col 11 — 🛡 Signature
+        String shieldText, shieldColor;
+        {
+            JsonObject val = hasSession ? jsonObj(session, "validation") : null;
+            String sig    = val != null ? str(val, "signature",       "") : "";
+            String pubKey = val != null ? str(val, "validatorKeyPub", "") : "";
+            if (!sig.isEmpty() && !pubKey.isEmpty()) {
+                String vldtr    = str(val, "validator",    "");
+                String scope    = str(val, "scope",        "");
+                String conf     = str(val, "confidence",   "");
+                String ts       = str(val, "timestamp",    "");
+                String imgHash  = str(val, "imageHash",    "");
+                String stLbl    = str(val, "statusLabel",  "");
+                String qpdataSha = str(val, "qpdata_sha256", null);
+                if (imgHash.isEmpty()) {
+                    JsonObject img = jsonObj(root, "image");
+                    if (img != null) imgHash = str(img, "sha256", "");
+                }
+                if (stLbl.isEmpty() && root != null) stLbl = str(root, "status", "");
+                String payload = buildCanonicalPayload(
+                    vldtr, scope, conf, stLbl, imgHash, qpdataSha, ts, pubKey);
+                boolean ok = StampSigner.verify(payload, pubKey, sig);
+                shieldText  = ok ? "signed" : "corrupted";
+                shieldColor = ok ? GREEN : RED;
+            } else if (val != null && !str(val, "validator", "").isEmpty()) {
+                shieldText  = "not signed";
+                shieldColor = TEXT_MUTED;
+            } else {
+                shieldText  = "—";
+                shieldColor = TEXT_MUTED;
+            }
+        }
 
         String bgDefault = alt
             ? "-fx-background-color:" + ROW_ALT + ";-fx-cursor:hand;"
@@ -731,7 +767,8 @@ public class QTraceDashboard {
             tcell(alignText, alignColor,  7),
             tcell(segText,   segColor,    8),
             tcell(clfText,   clfColor,    9),
-            tcell(stepsText, TEXT_MUTED, 10)
+            tcell(stepsText,  TEXT_MUTED,  10),
+            tcell(shieldText, shieldColor, 11)
         );
 
         row.setOnMouseEntered(e -> { if (row != selectedRow) row.setStyle(bgHover); });
@@ -997,9 +1034,9 @@ public class QTraceDashboard {
         String signature    = str(val, "signature",       "");
         String validatorKey = str(val, "validatorKeyPub", "");
         if (!signature.isEmpty() && !validatorKey.isEmpty()) {
-            // Reconstruct canonical payload — mirrors ValidationStamp.canonicalPayload()
-            String imageHash   = str(val, "imageHash",   "");
-            String statusLabel = str(val, "statusLabel", "");
+            String imageHash   = str(val, "imageHash",    "");
+            String statusLabel = str(val, "statusLabel",  "");
+            String qpdataSha   = str(val, "qpdata_sha256", null);
 
             // Fallbacks for stamps generated before Phase 19.6
             if (imageHash.isEmpty() && root != null) {
@@ -1009,13 +1046,8 @@ public class QTraceDashboard {
             if (statusLabel.isEmpty() && isLatest && root != null)
                 statusLabel = str(root, "status", "");
 
-            String payload = "validator=" + validator
-                + "\nscope="      + scope
-                + "\nconfidence=" + confidence
-                + "\nstatus="     + statusLabel
-                + "\ngitHash="    // always empty — UI stamps pass null gitHash
-                + "\nimageHash="  + imageHash
-                + "\ntimestamp="  + timestamp;
+            String payload = buildCanonicalPayload(
+                validator, scope, confidence, statusLabel, imageHash, qpdataSha, timestamp, validatorKey);
 
             boolean valid = StampSigner.verify(payload, validatorKey, signature);
             String badgeText  = valid ? "🔐  Signature ED25519 ✓" : "⚠  Signature invalide";
@@ -1586,11 +1618,36 @@ public class QTraceDashboard {
         return s;
     }
 
+    // ── Signature helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Reconstructs the RFC 8785 canonical payload for a stamp read from a .qtrace.
+     * Mirrors ValidationStamp.canonicalPayload() exactly.
+     * qpdataSha256 may be null (stamps created before M0 or without a project).
+     */
+    private static String buildCanonicalPayload(
+            String validator, String scope, String confidence,
+            String statusLabel, String imageHash, String qpdataSha256,
+            String timestamp, String validatorKeyPub) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("confidence",        confidence     != null ? confidence    : "");
+        fields.put("git_hash",          "");            // UI stamps always pass null gitHash
+        fields.put("image_sha256",      imageHash      != null ? imageHash     : "");
+        fields.put("qpdata_sha256",     qpdataSha256);  // null → JSON null, matches stamp
+        fields.put("scope",             scope          != null ? scope         : "");
+        fields.put("signing_meaning",   ValidationStamp.SIGNING_MEANING);
+        fields.put("status",            statusLabel    != null ? statusLabel   : "");
+        fields.put("timestamp",         timestamp      != null ? timestamp     : "");
+        fields.put("validator",         validator      != null ? validator     : "");
+        fields.put("validator_key_pub", validatorKeyPub != null ? validatorKeyPub : "");
+        return CanonicalJson.of(fields);
+    }
+
     // ── JSON helpers ──────────────────────────────────────────────────────────
 
     private String str(JsonObject obj, String key, String def) {
         if (obj == null || !obj.has(key) || obj.get(key).isJsonNull())
-            return def != null ? def : "";
+            return def;   // returns null when def is null (used for optional fields)
         return obj.get(key).getAsString();
     }
 

@@ -345,7 +345,8 @@ public class QTraceController {
         }
         logger.refreshAllAnnotationCaptures();
         String currentStatus = readCurrentStatus();
-        ValidationStamper.show(qupath.getStage(), null, logger.getImageHash(),
+        String qpdataHash = resolveQpdataHash();
+        ValidationStamper.show(qupath.getStage(), null, logger.getImageHash(), qpdataHash,
                                logger.computeClassifierFidelity(), currentStatus)
             .ifPresentOrElse(
                 stamp -> {
@@ -363,6 +364,32 @@ public class QTraceController {
                 },
                 () -> { if (panel != null) panel.log("Record cancelled."); }
             );
+    }
+
+    /**
+     * Hashes the .qpdata file for the currently open image so the stamp can
+     * bind the certificate to the exact data state at validation time.
+     * Returns null silently if no project is open or the file cannot be located.
+     */
+    private String resolveQpdataHash() {
+        try {
+            var imageData = logger.getCurrentImageData();
+            if (imageData == null) return null;
+            var project = qupath.getProject();
+            if (project == null) return null;
+            String imgName = imageData.getServer().getMetadata().getName();
+            for (var entry : project.getImageList()) {
+                if (!imgName.equals(entry.getImageName())) continue;
+                Path entryPath = entry.getEntryPath();
+                if (entryPath == null) continue;
+                Path qpdata = entryPath.resolve("data.qpdata");
+                if (Files.exists(qpdata))
+                    return io.astraebio.qtrace.chain.Hashing.sha256Hex(qpdata);
+            }
+        } catch (Exception e) {
+            System.err.println("[qTrace] resolveQpdataHash: " + e.getMessage());
+        }
+        return null;
     }
 
     private String readCurrentStatus() {
@@ -439,7 +466,8 @@ public class QTraceController {
         String hash = logger.getImageHash();
         lastStamp = new ValidationStamp(
             validator, java.time.Instant.now(), scope, confidence, notes,
-            null, hash, logger.computeClassifierFidelity().name(), 1, "1-In Progress",
+            null, hash, null,  // qpdataSha256: null on batch path (no QuPath project context)
+            logger.computeClassifierFidelity().name(), 1, "1-In Progress",
             null, null);  // signature + validatorKeyPub: unsigned (batch path, no dialog)
 
         Path exportDir = QTraceConfig.get().getExportDir();

@@ -32,6 +32,7 @@ public class ValidationStamper {
     public static final String[] STATUS_LABELS = {"0-To Begin", "1-In Progress", "2-Finished"};
 
     public static Optional<ValidationStamp> show(Stage owner, String gitHash, String imgHash,
+                                                  String qpdataHash,
                                                   ClassifierFidelity fidelity,
                                                   String currentStatusLabel) {
         Dialog<ValidationStamp> dialog = new Dialog<>();
@@ -94,6 +95,10 @@ public class ValidationStamper {
         notesArea.setPrefRowCount(3);
         notesArea.setWrapText(true);
 
+        CheckBox attestationBox = new CheckBox(ValidationStamp.SIGNING_MEANING);
+        attestationBox.setWrapText(true);
+        attestationBox.setMaxWidth(360);
+
         ComboBox<String> statusBox = new ComboBox<>(
             FXCollections.observableArrayList(STATUS_LABELS));
         String preselect = "1-In Progress";
@@ -145,6 +150,7 @@ public class ValidationStamper {
         grid.add(new Label("Scope"),              0, row); grid.add(scopeBox,       1, row++);
         grid.add(new Label("Confidence"),         0, row); grid.add(confidenceBox,  1, row++);
         grid.add(new Label("Notes"),              0, row); grid.add(notesArea,      1, row++);
+        grid.add(new Label("Attestation *"),      0, row); grid.add(attestationBox, 1, row++);
         grid.add(new Label("Workflow status"),    0, row); grid.add(statusBox,      1, row++);
         grid.add(new Label("Git hash"),           0, row); grid.add(gitLabel,       1, row++);
         grid.add(new Label("Image SHA-256"),      0, row); grid.add(imgLabel,       1, row++);
@@ -153,13 +159,15 @@ public class ValidationStamper {
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
-        // Disable OK until a validator name is entered (license lock = always valid)
+        // Disable OK until validator name entered AND attestation checked (21 CFR §11.50)
         Node okBtn = dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okBtn.setDisable(validatorField.getText().trim().isEmpty());
+        Runnable updateOk = () ->
+            okBtn.setDisable(validatorField.getText().trim().isEmpty() || !attestationBox.isSelected());
         if (activeLicense == null) {
-            validatorField.textProperty().addListener((obs, o, n) ->
-                okBtn.setDisable(n.trim().isEmpty()));
+            validatorField.textProperty().addListener((obs, o, n) -> updateOk.run());
         }
+        attestationBox.selectedProperty().addListener((obs, o, n) -> updateOk.run());
+        updateOk.run();
 
         // ── Result converter ─────────────────────────────────────────────────
         // Capture license info for signing (evaluated once, used in converter)
@@ -181,6 +189,7 @@ public class ValidationStamper {
                 notesArea.getText().trim(),
                 gitHash,
                 imgHash,
+                qpdataHash,
                 fidelity.name(),
                 idx,
                 sel,
@@ -197,7 +206,8 @@ public class ValidationStamper {
             return new ValidationStamp(
                 unsigned.validator(), unsigned.timestamp(),
                 unsigned.scope(), unsigned.confidence(), unsigned.notes(),
-                unsigned.gitHash(), unsigned.imageHash(), unsigned.classifierFidelity(),
+                unsigned.gitHash(), unsigned.imageHash(), unsigned.qpdataSha256(),
+                unsigned.classifierFidelity(),
                 unsigned.statusIndex(), unsigned.statusLabel(),
                 sig,
                 unsigned.validatorKeyPub()
