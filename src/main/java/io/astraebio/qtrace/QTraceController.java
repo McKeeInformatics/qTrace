@@ -482,11 +482,11 @@ public class QTraceController {
         }
         ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath)
           .thenAccept(url -> {
-              if (url != null) {
+              if (url != null && !url.startsWith("ERROR:")) {
                   if (panel != null) panel.log("☁ " + url);
               } else {
                   if (panel != null) {
-                      panel.log("☁ Push failed — check network or license.");
+                      panel.log("☁ Push failed: " + (url != null ? url : "network/license error"));
                       panel.setPushEnabled(true);
                   }
               }
