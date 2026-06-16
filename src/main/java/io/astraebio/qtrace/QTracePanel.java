@@ -200,7 +200,7 @@ public class QTracePanel {
         gear.setOnMouseExited(e  -> gear.setTextFill(Color.web(TEXT_MUTED)));
         gear.setOnAction(e -> QTraceSettingsDialog.show(stage));
 
-        // Cloud workspace push — Enterprise only, disabled until a .qtcert has been written
+        // Cloud workspace push + Replay — Enterprise only
         if (QTracePluginManager.hasEnterprise()) {
             btnPush = new Button("☁");
             btnPush.setFont(Font.font("System", 14));
@@ -216,7 +216,21 @@ public class QTracePanel {
             btnPush.setOnMouseEntered(e -> { if (!btnPush.isDisabled()) btnPush.setTextFill(Color.web(BLUE)); });
             btnPush.setOnMouseExited(e  -> { if (!btnPush.isDisabled()) btnPush.setTextFill(Color.web(TEXT_MUTED)); });
             btnPush.setOnAction(e -> controller.pushToWorkspace());
-            header.getChildren().addAll(logoView, titleBlock, spacer, btnRecord, btnPush, dashboard, batchBtn, reset, gear);
+
+            Button btnReplay = new Button("▶");
+            btnReplay.setFont(Font.font("System", FontWeight.BOLD, 13));
+            btnReplay.setTextFill(Color.web(GREEN));
+            btnReplay.setTooltip(new Tooltip("Replay from workspace — load a qtc_ bundle into the Script Editor"));
+            btnReplay.setStyle(
+                "-fx-background-color: transparent;"
+              + "-fx-cursor: hand;"
+              + "-fx-padding: 0 4 0 4;"
+            );
+            btnReplay.setOnMouseEntered(e -> btnReplay.setTextFill(Color.web(TEXT_MAIN)));
+            btnReplay.setOnMouseExited(e  -> btnReplay.setTextFill(Color.web(GREEN)));
+            btnReplay.setOnAction(e -> controller.openReplayDialog());
+
+            header.getChildren().addAll(logoView, titleBlock, spacer, btnRecord, btnPush, btnReplay, dashboard, batchBtn, reset, gear);
         } else {
             header.getChildren().addAll(logoView, titleBlock, spacer, btnRecord, dashboard, batchBtn, reset, gear);
         }

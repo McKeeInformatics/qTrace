@@ -282,6 +282,39 @@ public class QTraceController {
         }
     }
 
+    // ── Replay (Enterprise) ──────────────────────────────────────────────────
+
+    public void openReplayDialog() {
+        QTracePlugin ep = QTracePluginManager.get();
+        if (ep != null) ep.replay(qupath, logger);
+    }
+
+    /**
+     * Opens QuPath's Script Editor (if not already open) and loads {@code script} into it.
+     * Uses reflection to stay compatible across QuPath 0.5.1–0.7.x.
+     */
+    public static void openInScriptEditor(QuPathGUI qupath, String script) {
+        ScriptEditor se = qupath.getScriptEditor();
+        if (se == null) return;
+        try {
+            // Try getEditorComponent().setText() — QuPath 0.7.x DefaultScriptEditor
+            Object comp = invokeMethod(se, "getEditorComponent");
+            if (comp != null) {
+                try {
+                    comp.getClass().getMethod("setText", String.class).invoke(comp, script);
+                    return;
+                } catch (Exception ignored) {}
+            }
+            // Fallback: write to scriptText StringProperty directly
+            Object raw = findField(se, "scriptText", Object.class);
+            if (raw instanceof javafx.beans.property.StringProperty sp) {
+                sp.setValue(script);
+            }
+        } catch (Exception e) {
+            System.err.println("[qTrace] openInScriptEditor: " + e.getMessage());
+        }
+    }
+
     // ── Reflection helpers ───────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
