@@ -1,5 +1,7 @@
 package io.astraebio.qtrace;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -14,6 +16,7 @@ import javafx.scene.shape.Circle;
 import javafx.scene.text.*;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import qupath.lib.gui.QuPathGUI;
 
 public class QTracePanel {
@@ -48,6 +51,8 @@ public class QTracePanel {
 
     // Log
     private TextArea logArea;
+    private Label    progressLabel;
+    private Timeline progressTimeline;
 
     public QTracePanel(QuPathGUI qupath, QTraceController controller) {
         this.controller = controller;
@@ -314,7 +319,15 @@ public class QTracePanel {
         );
         logArea.appendText("[QTrace " + QTraceController.VERSION + "] Initialized.\n");
 
-        section.getChildren().addAll(title, logArea);
+        progressLabel = new Label();
+        progressLabel.setVisible(false);
+        progressLabel.setStyle(
+            "-fx-text-fill: " + BLUE + ";"
+          + "-fx-font-size: 10;"
+          + "-fx-font-family: monospace;"
+        );
+
+        section.getChildren().addAll(title, logArea, progressLabel);
         return section;
     }
 
@@ -422,6 +435,54 @@ public class QTracePanel {
         Platform.runLater(() -> {
             logArea.appendText(message + "\n");
             logArea.setScrollTop(Double.MAX_VALUE);
+        });
+    }
+
+    /** Starts an animated "uploading…" progress bar in the log panel. Call from any thread. */
+    public void startPushProgress() {
+        Platform.runLater(() -> {
+            String[] frames = {
+                "☁ ·          ",
+                "☁ ··         ",
+                "☁ ···        ",
+                "☁  ···       ",
+                "☁   ···      ",
+                "☁    ···     ",
+                "☁     ···    ",
+                "☁      ···   ",
+                "☁       ···  ",
+                "☁        ··· ",
+                "☁         ···",
+                "☁        ··· ",
+                "☁       ···  ",
+                "☁      ···   ",
+                "☁     ···    ",
+                "☁    ···     ",
+                "☁   ···      ",
+                "☁  ···       ",
+                "☁ ···        ",
+                "☁ ··         ",
+            };
+            final int[] idx = {0};
+            progressLabel.setText(frames[0]);
+            progressLabel.setVisible(true);
+            progressTimeline = new Timeline(new KeyFrame(Duration.millis(80), e -> {
+                idx[0] = (idx[0] + 1) % frames.length;
+                progressLabel.setText(frames[idx[0]]);
+            }));
+            progressTimeline.setCycleCount(Timeline.INDEFINITE);
+            progressTimeline.play();
+        });
+    }
+
+    /** Stops the push progress animation. Call from any thread. */
+    public void stopPushProgress() {
+        Platform.runLater(() -> {
+            if (progressTimeline != null) {
+                progressTimeline.stop();
+                progressTimeline = null;
+            }
+            progressLabel.setVisible(false);
         });
     }
 

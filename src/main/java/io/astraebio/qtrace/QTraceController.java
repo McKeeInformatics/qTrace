@@ -545,9 +545,11 @@ public class QTraceController {
             for (ClassifierRecord clf : classifiers)
                 panel.log("  · classifiers/" + clf.name + ".json");
             panel.setPushEnabled(false);
+            panel.startPushProgress();
         }
         ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers)
           .thenAccept(url -> {
+              if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {
                   if (panel != null) panel.log("☁ " + url);
               } else {
@@ -556,6 +558,14 @@ public class QTraceController {
                       panel.setPushEnabled(true);
                   }
               }
+          })
+          .exceptionally(t -> {
+              if (panel != null) {
+                  panel.stopPushProgress();
+                  panel.log("☁ Push error: " + t.getMessage());
+                  panel.setPushEnabled(true);
+              }
+              return null;
           });
     }
 
@@ -583,21 +593,37 @@ public class QTraceController {
 
     private JsonArray collectLoadedExtensions() {
         JsonArray arr = new JsonArray();
+
+        // QuPath 0.5.x: getLoadedExtensions() on QuPathGUI
         try {
-            Method getExts = QuPathGUI.class.getMethod("getLoadedExtensions");
-            java.util.Collection<?> exts = (java.util.Collection<?>) getExts.invoke(qupath);
-            for (Object ext : exts) {
-                try {
-                    JsonObject ej = new JsonObject();
-                    ej.addProperty("name", (String) ext.getClass().getMethod("getName").invoke(ext));
-                    try {
-                        ej.addProperty("version", (String) ext.getClass().getMethod("getVersion").invoke(ext));
-                    } catch (Exception ignored) {}
-                    arr.add(ej);
-                } catch (Exception ignored) {}
-            }
+            Method m = QuPathGUI.class.getMethod("getLoadedExtensions");
+            java.util.Collection<?> exts = (java.util.Collection<?>) m.invoke(qupath);
+            for (Object ext : exts) addExtToArray(arr, ext);
+            if (arr.size() > 0) return arr;
         } catch (Exception ignored) {}
+
+        // QuPath 0.7.x: ServiceLoader via extension classloader (getLoadedExtensions removed)
+        try {
+            ClassLoader cl = QTraceController.class.getClassLoader();
+            Class<?> extClass = Class.forName("qupath.lib.gui.extensions.QuPathExtension", false, cl);
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            java.util.ServiceLoader<?> sl = java.util.ServiceLoader.load((Class) extClass, cl);
+            for (Object ext : sl) addExtToArray(arr, ext);
+        } catch (Exception ignored) {}
+
         return arr;
+    }
+
+    private static void addExtToArray(com.google.gson.JsonArray arr, Object ext) {
+        try {
+            JsonObject ej = new JsonObject();
+            ej.addProperty("name", (String) ext.getClass().getMethod("getName").invoke(ext));
+            try {
+                Object ver = ext.getClass().getMethod("getVersion").invoke(ext);
+                if (ver != null) ej.addProperty("version", ver.toString());
+            } catch (Exception ignored) {}
+            arr.add(ej);
+        } catch (Exception ignored) {}
     }
 
     // ── Batch export ─────────────────────────────────────────────────────────
