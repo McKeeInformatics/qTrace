@@ -283,7 +283,21 @@ public class MetaScriptGenerator {
         sb.append("// The trained model JSON is embedded below (Base64).\n");
         sb.append("// It will be written to project/classifiers/pixel_classifiers/ on replay.\n");
         sb.append("try {\n");
-        sb.append("    def _b64_").append(safe).append(" = \"").append(b64).append("\"\n");
+        // JVM string literal limit is 65535 chars — split b64 into 60000-char chunks
+        int CHUNK = 60000;
+        if (b64.length() <= CHUNK) {
+            sb.append("    def _b64_").append(safe).append(" = \"").append(b64).append("\"\n");
+        } else {
+            sb.append("    def _b64_").append(safe).append(" = \"")
+              .append(b64, 0, CHUNK).append("\"");
+            int pos = CHUNK;
+            while (pos < b64.length()) {
+                int end = Math.min(pos + CHUNK, b64.length());
+                sb.append(" +\n        \"").append(b64, pos, end).append("\"");
+                pos = end;
+            }
+            sb.append("\n");
+        }
         sb.append("    def _json_").append(safe)
           .append(" = new String(java.util.Base64.getDecoder().decode(_b64_").append(safe)
           .append("), \"UTF-8\")\n");
