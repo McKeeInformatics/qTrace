@@ -1012,49 +1012,44 @@ public class QTraceDashboard {
         String scope      = str(val, "scope",               "");
         String confidence = str(val, "confidence",          "");
         String notes      = str(val, "notes",               "");
+        String gitCommit  = str(val, "git_commit",          "");
         String fidelity   = str(val, "classifier_fidelity", "");
         String confColor  = confidenceColor(confidence);
 
-        VBox box = new VBox(3);
+        // ── Left: stamp metadata ──────────────────────────────────────────────
+        VBox left = new VBox(3);
         HBox vRow = new HBox(8);
         vRow.setAlignment(Pos.CENTER_LEFT);
         vRow.getChildren().addAll(
             lbl("✔  " + validator, confColor,  12, FontWeight.BOLD,   false),
             lbl("—  " + timestamp, TEXT_MUTED, 11, FontWeight.NORMAL, false)
         );
-        box.getChildren().add(vRow);
+        left.getChildren().add(vRow);
 
         HBox details = new HBox(20);
         details.setAlignment(Pos.CENTER_LEFT);
         details.getChildren().addAll(
-            kvLbl("Scope",     scope,      TEXT_SUB),
+            kvLbl("Scope",      scope,      TEXT_SUB),
             kvLbl("Confidence", confidence, confColor),
-            kvLbl("Fidelity",  fidelity,   fidelityColor(fidelity))
+            kvLbl("Fidelity",   fidelity,   fidelityColor(fidelity))
         );
-        box.getChildren().add(details);
+        left.getChildren().add(details);
 
-        if (!notes.isBlank())
-            box.getChildren().add(lbl("Notes : \"" + notes + "\"", TEXT_MUTED, 11, FontWeight.NORMAL, true));
-
-        // ── Signature verification (Phase 19.6) ──────────────────────────────
+        // ── Signature verification ────────────────────────────────────────────
         String signature    = str(val, "signature",       "");
         String validatorKey = str(val, "validatorKeyPub", "");
         if (!signature.isEmpty() && !validatorKey.isEmpty()) {
             String imageHash   = str(val, "imageHash",    "");
             String statusLabel = str(val, "statusLabel",  "");
             String qpdataSha   = str(val, "qpdata_sha256", null);
-
-            // Fallbacks for stamps generated before Phase 19.6
             if (imageHash.isEmpty() && root != null) {
                 JsonObject img = jsonObj(root, "image");
                 if (img != null) imageHash = str(img, "sha256", "");
             }
             if (statusLabel.isEmpty() && isLatest && root != null)
                 statusLabel = str(root, "status", "");
-
             String payload = buildCanonicalPayload(
                 validator, scope, confidence, statusLabel, imageHash, qpdataSha, timestamp, validatorKey);
-
             boolean valid = StampSigner.verify(payload, validatorKey, signature);
             String badgeText  = valid ? "🔐  Signature ED25519 ✓" : "⚠  Signature invalide";
             String badgeColor = valid ? GREEN : RED;
@@ -1064,9 +1059,40 @@ public class QTraceDashboard {
             badge.setTooltip(new Tooltip(valid
                 ? "Signature ED25519 valide.\nClé publique : " + vkShort
                 : "Signature invalide — le fichier a peut-être été modifié après le stamp."));
-            box.getChildren().add(badge);
+            left.getChildren().add(badge);
         }
 
+        // ── Right: notes + commit (future) ───────────────────────────────────
+        VBox right = new VBox(5);
+        right.setMinWidth(190);
+        right.setMaxWidth(230);
+        right.setPadding(new Insets(2, 8, 0, 20));
+        right.setAlignment(Pos.TOP_LEFT);
+        right.setStyle("-fx-border-color: " + BORDER + "; -fx-border-width: 0 0 0 1;");
+
+        if (!notes.isBlank()) {
+            right.getChildren().add(lbl("Notes", TEXT_MUTED, 9, FontWeight.BOLD, false));
+            Label notesLbl = lbl("\"" + notes + "\"", TEXT_SUB, 11, FontWeight.NORMAL, true);
+            notesLbl.setMaxWidth(200);
+            right.getChildren().add(notesLbl);
+        }
+        if (!gitCommit.isBlank()) {
+            right.getChildren().add(lbl("Commit", TEXT_MUTED, 9, FontWeight.BOLD, false));
+            String shortHash = gitCommit.length() > 12 ? gitCommit.substring(0, 12) : gitCommit;
+            Label commitLbl = lbl(shortHash, TEXT_SUB, 11, FontWeight.NORMAL, false);
+            commitLbl.setStyle("-fx-font-family: monospace;");
+            commitLbl.setTooltip(new Tooltip(gitCommit));
+            right.getChildren().add(commitLbl);
+        }
+
+        // ── Assemble ──────────────────────────────────────────────────────────
+        HBox outer = new HBox(0, left);
+        HBox.setHgrow(left, Priority.ALWAYS);
+        outer.setAlignment(Pos.TOP_LEFT);
+        if (!right.getChildren().isEmpty())
+            outer.getChildren().add(right);
+
+        VBox box = new VBox(0, outer);
         return box;
     }
 
