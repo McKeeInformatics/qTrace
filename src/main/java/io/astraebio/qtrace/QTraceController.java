@@ -686,19 +686,19 @@ public class QTraceController {
             showGraphInfo(QTraceI18n.t("report.info.noqtrace"));
             return;
         }
-        if (panel != null) panel.log("📄 " + QTraceI18n.t("report.generating"));
+        if (panel != null) panel.log("▤ " + QTraceI18n.t("report.generating"));
         // Build the digest off the FX thread — a .qtrace can be tens of MB.
         CompletableFuture.supplyAsync(() -> ep.buildReportDigest(qtrace.toPath()))
             .thenAccept(digest -> Platform.runLater(() -> {
                 if (digest == null || digest.isBlank()) {
-                    if (panel != null) panel.log("📄 " + QTraceI18n.t("report.failed"));
+                    if (panel != null) panel.log("▤ " + QTraceI18n.t("report.failed"));
                     return;
                 }
                 // Security/transparency: let the user review exactly what is transmitted.
                 if (QTraceConfig.get().isReportConfirmBeforeSend()) {
                     ReportConfirmDialog.Result r = ReportConfirmDialog.show(qupath.getStage(), digest);
                     if (!r.send) {
-                        if (panel != null) panel.log("📄 " + QTraceI18n.t("report.cancelled"));
+                        if (panel != null) panel.log("▤ " + QTraceI18n.t("report.cancelled"));
                         return;
                     }
                     if (r.dontAskAgain) {
@@ -712,7 +712,7 @@ public class QTraceController {
             }))
             .exceptionally(t -> {
                 Platform.runLater(() -> {
-                    if (panel != null) panel.log("📄 " + QTraceI18n.t("report.error") + ": " + t.getMessage());
+                    if (panel != null) panel.log("▤ " + QTraceI18n.t("report.error") + ": " + t.getMessage());
                 });
                 return null;
             });
@@ -722,16 +722,16 @@ public class QTraceController {
         ep.sendReportDigest(digest)
           .thenAccept(markdown -> Platform.runLater(() -> {
               if (markdown == null || markdown.isBlank()) {
-                  if (panel != null) panel.log("📄 " + QTraceI18n.t("report.failed"));
+                  if (panel != null) panel.log("▤ " + QTraceI18n.t("report.failed"));
               } else {
-                  if (panel != null) panel.log("📄 " + QTraceI18n.t("report.ready"));
+                  if (panel != null) panel.log("▤ " + QTraceI18n.t("report.ready"));
                   ReportDialog.show(qupath.getStage(), qtrace, markdown,
-                      msg -> { if (panel != null) panel.log("📄 " + msg); });
+                      msg -> { if (panel != null) panel.log("▤ " + msg); });
               }
           }))
           .exceptionally(t -> {
               Platform.runLater(() -> {
-                  if (panel != null) panel.log("📄 " + QTraceI18n.t("report.error") + ": " + t.getMessage());
+                  if (panel != null) panel.log("▤ " + QTraceI18n.t("report.error") + ": " + t.getMessage());
               });
               return null;
           });
@@ -744,9 +744,9 @@ public class QTraceController {
             if (base.endsWith(".qtrace")) base = base.substring(0, base.length() - ".qtrace".length());
             Path out = qtrace.resolveSibling(base + ".report-input.json");
             Files.write(out, digest.getBytes(StandardCharsets.UTF_8));
-            if (panel != null) panel.log("📄 " + QTraceI18n.t("report.audit.saved") + " " + out.getFileName());
+            if (panel != null) panel.log("▤ " + QTraceI18n.t("report.audit.saved") + " " + out.getFileName());
         } catch (Exception e) {
-            if (panel != null) panel.log("📄 " + QTraceI18n.t("report.error") + ": " + e.getMessage());
+            if (panel != null) panel.log("▤ " + QTraceI18n.t("report.error") + ": " + e.getMessage());
         }
     }
 

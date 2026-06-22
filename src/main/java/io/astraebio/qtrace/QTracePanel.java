@@ -258,9 +258,10 @@ public class QTracePanel {
             btnGraph.setOnMouseExited(e  -> btnGraph.setTextFill(Color.web(TEXT_MUTED)));
             btnGraph.setOnAction(e -> controller.showCommitGraph());
 
-            // 📄 Activity report — per-contributor LLM summary of the .qtrace
-            Button btnReport = new Button("📄");
-            btnReport.setFont(Font.font("System", 13));
+            // ▤ Activity report — per-contributor LLM summary of the .qtrace
+            //   (geometric glyph, not an emoji — emojis don't render in JavaFX's default font)
+            Button btnReport = new Button("▤");
+            btnReport.setFont(Font.font("System", FontWeight.BOLD, 14));
             btnReport.setTextFill(Color.web(TEXT_MUTED));
             btnReport.setTooltip(new Tooltip(QTraceI18n.t("btn.report.tooltip")));
             btnReport.setStyle(
