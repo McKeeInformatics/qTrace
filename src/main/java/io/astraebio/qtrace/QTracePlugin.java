@@ -81,11 +81,12 @@ public interface QTracePlugin {
 
     /**
      * POSTs a previously-built digest to the qtrace.ca portal, which calls an LLM
-     * and returns a Markdown activity report. Auth: reads the .qtlicense JWT from
-     * QTraceConfig and sends it as a bearer token. Returns a CompletableFuture
-     * resolving to the Markdown report, or null on failure / not supported.
+     * and returns a Markdown activity report written in the given language code.
+     * Auth: reads the .qtlicense JWT from QTraceConfig and sends it as a bearer
+     * token. Returns a CompletableFuture resolving to the Markdown report, or null
+     * on failure / not supported.
      */
-    default CompletableFuture<String> sendReportDigest(String digestJson) {
+    default CompletableFuture<String> sendReportDigest(String digestJson, String lang) {
         return CompletableFuture.completedFuture(null);
     }
 }

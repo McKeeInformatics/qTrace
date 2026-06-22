@@ -5,8 +5,10 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.util.StringConverter;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -38,6 +40,7 @@ public class ReportConfirmDialog {
     public static final class Result {
         public boolean send = false;
         public boolean dontAskAgain = false;
+        public String  lang = null;   // chosen report language code
     }
 
     /** Modal — blocks until the user chooses. */
@@ -63,6 +66,18 @@ public class ReportConfirmDialog {
           + "-fx-border-color: " + BORDER + ";");
         VBox.setVgrow(area, Priority.ALWAYS);
 
+        Label langLabel = new Label(QTraceI18n.t("report.confirm.language"));
+        langLabel.setTextFill(javafx.scene.paint.Color.web(TEXT_SUB));
+        ComboBox<String> langBox = new ComboBox<>();
+        for (String[] l : ReportLanguages.LANGS) langBox.getItems().add(l[0]);
+        langBox.setConverter(new StringConverter<>() {
+            @Override public String toString(String code) { return code == null ? "" : ReportLanguages.label(code); }
+            @Override public String fromString(String s) { return s; }
+        });
+        langBox.setValue(QTraceConfig.get().getReportLanguage());
+        HBox langRow = new HBox(8, langLabel, langBox);
+        langRow.setAlignment(Pos.CENTER_LEFT);
+
         CheckBox pseudonymize = new CheckBox(QTraceI18n.t("report.confirm.pseudonymize"));
         pseudonymize.setDisable(true);   // shown now, implemented later
         pseudonymize.setTextFill(javafx.scene.paint.Color.web(TEXT_MUTED));
@@ -84,6 +99,7 @@ public class ReportConfirmDialog {
         send.setOnAction(e -> {
             result.send = true;
             result.dontAskAgain = dontAsk.isSelected();
+            result.lang = langBox.getValue();
             stage.close();
         });
 
@@ -92,7 +108,7 @@ public class ReportConfirmDialog {
         HBox buttons = new HBox(8, spacer, cancel, send);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox root = new VBox(10, notice, area, pseudoRow, dontAsk, buttons);
+        VBox root = new VBox(10, notice, area, langRow, pseudoRow, dontAsk, buttons);
         root.setPadding(new Insets(12));
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
 

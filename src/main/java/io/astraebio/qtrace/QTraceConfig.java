@@ -42,6 +42,7 @@ public class QTraceConfig {
     // Activity report — confirm the data sent to Claude before each send
     // (null = ask by default; user can disable via "ne plus me demander" / Security settings)
     private Boolean reportConfirmBeforeSend;
+    private String  reportLanguage; // language code for the generated report (null = UI locale)
 
     private QTraceConfig() {}
 
@@ -95,6 +96,13 @@ public class QTraceConfig {
     /** Whether to show the pre-send confirmation (data preview) before each report. Default: yes. */
     public boolean isReportConfirmBeforeSend()        { return reportConfirmBeforeSend == null || reportConfirmBeforeSend; }
     public void    setReportConfirmBeforeSend(boolean b) { this.reportConfirmBeforeSend = b; }
+
+    /** Language code for the generated report; defaults to the UI locale when unset. */
+    public String getReportLanguage() {
+        return (reportLanguage != null && ReportLanguages.isKnown(reportLanguage))
+            ? reportLanguage : ReportLanguages.defaultCode();
+    }
+    public void setReportLanguage(String code) { this.reportLanguage = blank(code); }
 
     // ── Raw string getters (for the dialog text fields) ───────────────────────
 

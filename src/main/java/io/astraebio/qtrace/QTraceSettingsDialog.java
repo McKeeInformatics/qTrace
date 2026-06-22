@@ -10,6 +10,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
+import javafx.util.StringConverter;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
@@ -211,7 +212,20 @@ public class QTraceSettingsDialog {
         HBox pseudoRow = new HBox(8, chkPseudonymize, pseudoSoon);
         pseudoRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox securityBox = new VBox(6, chkReportConfirm, securityHint, pseudoRow);
+        Label langLabel = new Label(QTraceI18n.t("settings.security.language"));
+        langLabel.setTextFill(Color.web(TEXT_SUB));
+        langLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
+        ComboBox<String> langBox = new ComboBox<>();
+        for (String[] l : ReportLanguages.LANGS) langBox.getItems().add(l[0]);
+        langBox.setConverter(new StringConverter<>() {
+            @Override public String toString(String code) { return code == null ? "" : ReportLanguages.label(code); }
+            @Override public String fromString(String s) { return s; }
+        });
+        langBox.setValue(cfg.getReportLanguage());
+        HBox langRow = new HBox(8, langLabel, langBox);
+        langRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox securityBox = new VBox(6, chkReportConfirm, securityHint, langRow, pseudoRow);
         securityBox.setPadding(new Insets(4, 20, 8, 20));
 
         // ── Buttons ────────────────────────────────────────────────────────────
@@ -237,6 +251,7 @@ public class QTraceSettingsDialog {
             cfg.setValidatorName(tfValidator.getText());
             cfg.setLicensePath(tfLicense.getText());
             cfg.setReportConfirmBeforeSend(chkReportConfirm.isSelected());
+            if (langBox.getValue() != null) cfg.setReportLanguage(langBox.getValue());
             cfg.save();
             dlg.close();
         });

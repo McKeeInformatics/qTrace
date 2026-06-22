@@ -694,6 +694,7 @@ public class QTraceController {
                     if (panel != null) panel.log("▤ " + QTraceI18n.t("report.failed"));
                     return;
                 }
+                String lang = QTraceConfig.get().getReportLanguage();
                 // Security/transparency: let the user review exactly what is transmitted.
                 if (QTraceConfig.get().isReportConfirmBeforeSend()) {
                     ReportConfirmDialog.Result r = ReportConfirmDialog.show(qupath.getStage(), digest);
@@ -701,14 +702,18 @@ public class QTraceController {
                         if (panel != null) panel.log("▤ " + QTraceI18n.t("report.cancelled"));
                         return;
                     }
-                    if (r.dontAskAgain) {
-                        QTraceConfig.get().setReportConfirmBeforeSend(false);
-                        QTraceConfig.get().save();
+                    QTraceConfig cfg = QTraceConfig.get();
+                    boolean changed = false;
+                    if (r.dontAskAgain) { cfg.setReportConfirmBeforeSend(false); changed = true; }
+                    if (r.lang != null) {
+                        lang = r.lang;
+                        if (!r.lang.equals(cfg.getReportLanguage())) { cfg.setReportLanguage(r.lang); changed = true; }
                     }
+                    if (changed) cfg.save();
                 }
                 // Audit artifact: persist exactly what was sent, next to the .qtrace.
                 writeReportAuditInput(qtrace.toPath(), digest);
-                sendReportAndShow(ep, qtrace.toPath(), digest);
+                sendReportAndShow(ep, qtrace.toPath(), digest, lang);
             }))
             .exceptionally(t -> {
                 Platform.runLater(() -> {
@@ -718,8 +723,8 @@ public class QTraceController {
             });
     }
 
-    private void sendReportAndShow(QTracePlugin ep, Path qtrace, String digest) {
-        ep.sendReportDigest(digest)
+    private void sendReportAndShow(QTracePlugin ep, Path qtrace, String digest, String lang) {
+        ep.sendReportDigest(digest, lang)
           .thenAccept(markdown -> Platform.runLater(() -> {
               if (markdown == null || markdown.isBlank()) {
                   if (panel != null) panel.log("▤ " + QTraceI18n.t("report.failed"));
