@@ -6,6 +6,8 @@ public final class QTracePluginManager {
     // (offline-expired license, or server says inactive) downgrades it. A network
     // error never flips this — an offline pathologist keeps certification.
     private static volatile boolean entitled = true;
+    // Why the license is inactive, when it is: "expired" | "corrupted" | "inactive" | null.
+    private static volatile String inactiveReason = null;
 
     private QTracePluginManager() {}
 
@@ -25,5 +27,11 @@ public final class QTracePluginManager {
      */
     public static QTracePlugin getEntitled()    { return isEntitled() ? plugin : null; }
 
-    static void setEntitled(boolean e)          { entitled = e; }
+    /** Reason the license is inactive: "expired" | "corrupted" | "inactive", or null when active/none. */
+    public static String inactiveReason()       { return inactiveReason; }
+
+    static void setEntitled(boolean e)          { entitled = e; if (e) inactiveReason = null; }
+
+    /** Downgrade to Core with a reason that the UI uses to pick wording/severity. */
+    static void setInactive(String reason)      { entitled = false; inactiveReason = reason; }
 }

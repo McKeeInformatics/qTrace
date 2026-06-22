@@ -101,7 +101,9 @@ public class QTracePanel {
 
         ImageView logoView = logoView(28);
 
-        String edition = QTracePluginManager.hasEnterprise() ? "Enterprise" : "Core";
+        String edition = QTracePluginManager.hasEnterprise()
+            ? "Enterprise" + QTraceController.entitlementSuffix()
+            : "Core";
         Text title = new Text("qTrace " + edition);
         title.setFont(Font.font("System", FontWeight.BOLD, 18));
         title.setFill(Color.web(TEXT_MAIN));
@@ -122,10 +124,11 @@ public class QTracePanel {
             licenseeLine = "⚠ " + QTraceI18n.t("license.inactive.header");
             licenseWarn = true;
         }
+        boolean licenseError = QTraceController.entitlementIsError(); // invalid signature → red
         Text licenseText = licenseeLine != null ? new Text(licenseeLine) : null;
         if (licenseText != null) {
             licenseText.setFont(Font.font("System", FontWeight.BOLD, 11));
-            licenseText.setFill(Color.web(licenseWarn ? PEACH : GREEN));
+            licenseText.setFill(Color.web(licenseError ? RED : licenseWarn ? PEACH : GREEN));
         }
 
         VBox titleBlock = licenseText != null

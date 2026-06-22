@@ -33,6 +33,7 @@ public class QTraceAboutDialog {
     private static final String GREEN      = "#a6e3a1";   // Certified
     private static final String TEAL       = "#94e2d5";
     private static final String ORANGE     = "#fab387";
+    private static final String RED        = "#f38ba8";   // invalid/tampered license
 
     private static final String WEBSITE    = "https://astraebio.com";
     private static final String PORTAL_URL = "https://qtrace.ca/portal";
@@ -48,6 +49,12 @@ public class QTraceAboutDialog {
         }
         Mode mode = !hasEnterprise ? Mode.CORE
                   : (activeLicense != null ? Mode.CERTIFIED : Mode.ENTERPRISE);
+
+        // Enterprise JAR present but license inactive/expired (a license is configured
+        // yet not entitled) — signal the degraded state rather than a fresh Enterprise.
+        boolean inactive = hasEnterprise
+            && !QTracePluginManager.isEntitled()
+            && !QTraceConfig.get().getLicensePath().isBlank();
 
         Stage dialog = new Stage();
         dialog.initOwner(qupath.getStage());
@@ -75,12 +82,12 @@ public class QTraceAboutDialog {
         });
 
         root.getChildren().add(buildTitleBar(dialog));
-        root.getChildren().add(buildHero(logo, mode));
+        root.getChildren().add(buildHero(logo, mode, inactive));
         if (mode == Mode.CERTIFIED) root.getChildren().add(buildCertCard(activeLicense));
         root.getChildren().add(hRule());
         root.getChildren().add(buildFeatureGrid(mode));
         root.getChildren().add(hRule());
-        root.getChildren().add(buildFooter(mode));
+        root.getChildren().add(buildFooter(mode, inactive));
 
         Scene scene = new Scene(root);
         scene.setFill(Color.TRANSPARENT);
@@ -106,7 +113,7 @@ public class QTraceAboutDialog {
 
     // ── Hero ──────────────────────────────────────────────────────────────────
 
-    private static VBox buildHero(Image logo, Mode mode) {
+    private static VBox buildHero(Image logo, Mode mode, boolean inactive) {
         VBox box = new VBox(8);
         box.setAlignment(Pos.CENTER);
         box.setPadding(new Insets(4, 28, 20, 28));
@@ -122,12 +129,12 @@ public class QTraceAboutDialog {
         name.setFont(Font.font("System", FontWeight.BOLD, 30));
         name.setFill(Color.web(TEXT_MAIN));
 
-        String badgeColor  = switch (mode) {
+        String badgeColor  = inactive ? inactiveColor() : switch (mode) {
             case CORE       -> BLUE;
             case ENTERPRISE -> YELLOW;
             case CERTIFIED  -> GREEN;
         };
-        String badgeText   = switch (mode) {
+        String badgeText   = inactive ? "Enterprise — " + inactiveWord() : switch (mode) {
             case CORE       -> "Core";
             case ENTERPRISE -> "Enterprise";
             case CERTIFIED  -> "✓ Certified";
@@ -156,6 +163,17 @@ public class QTraceAboutDialog {
         tagline.setFont(Font.font("System", FontPosture.ITALIC, 12));
 
         box.getChildren().addAll(nameRow, version, tagline);
+
+        if (inactive) {
+            Label warn = new Label("⚠ Your qTrace Enterprise license is no longer active — running in Core mode.");
+            warn.setTextFill(Color.web(inactiveColor()));
+            warn.setFont(Font.font("System", FontWeight.BOLD, 11));
+            warn.setWrapText(true);
+            warn.setMaxWidth(360);
+            warn.setAlignment(Pos.CENTER);
+            warn.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+            box.getChildren().add(warn);
+        }
         return box;
     }
 
@@ -288,7 +306,7 @@ public class QTraceAboutDialog {
 
     // ── Footer ────────────────────────────────────────────────────────────────
 
-    private static HBox buildFooter(Mode mode) {
+    private static HBox buildFooter(Mode mode, boolean inactive) {
         HBox footer = new HBox(8);
         footer.setAlignment(Pos.CENTER_LEFT);
         footer.setPadding(new Insets(12, 24, 16, 24));
@@ -310,7 +328,21 @@ public class QTraceAboutDialog {
 
         footer.getChildren().addAll(copy, license, spacer);
 
-        if (mode == Mode.CORE) {
+        if (inactive) {
+            boolean error = QTraceController.entitlementIsError();
+            String c = inactiveColor();
+            Button renew = new Button(error ? "Regenerate key →" : "Renew license →");
+            renew.setStyle(
+                "-fx-background-color: " + c + "22;"
+              + "-fx-border-color: " + c + "66;"
+              + "-fx-border-radius: 5; -fx-background-radius: 5;"
+              + "-fx-text-fill: " + c + ";"
+              + "-fx-font-size: 11; -fx-font-weight: bold;"
+              + "-fx-cursor: hand; -fx-padding: 4 10 4 10;"
+            );
+            renew.setOnAction(e -> openUrl(PORTAL_URL));
+            footer.getChildren().add(renew);
+        } else if (mode == Mode.CORE) {
             Button upgrade = new Button("Get Enterprise ↑");
             upgrade.setStyle(
                 "-fx-background-color: " + YELLOW + "22;"
@@ -344,6 +376,19 @@ public class QTraceAboutDialog {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Word shown in the badge for an inactive license: corrupted / expired / inactive. */
+    private static String inactiveWord() {
+        String r = QTracePluginManager.inactiveReason();
+        if ("corrupted".equals(r)) return "corrupted";
+        if ("expired".equals(r))   return "expired";
+        return "inactive";
+    }
+
+    /** Red for a security failure (invalid signature), amber otherwise. */
+    private static String inactiveColor() {
+        return QTraceController.entitlementIsError() ? RED : ORANGE;
+    }
 
     private static Label colHeader(String text, String color) {
         Label l = new Label(text);

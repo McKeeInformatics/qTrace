@@ -39,7 +39,7 @@ import java.util.function.Consumer;
  */
 public class QTraceController {
 
-    static final String VERSION = "1.0.6";
+    static final String VERSION = "1.0.7";
 
     public static String getDisplayVersion() {
         QTracePlugin ep = QTracePluginManager.get();
@@ -55,9 +55,28 @@ public class QTraceController {
         if (ep != null) {
             String epVersion = ep.getPluginVersion();
             String v = epVersion != null ? epVersion : VERSION;
-            return "qTrace Enterprise  v" + v;
+            return "qTrace Enterprise" + entitlementSuffix() + "  v" + v;
         }
         return "qTrace Core  v" + VERSION;
+    }
+
+    /**
+     * Title suffix reflecting the license state: "" when active/absent, else
+     * " (corrupted)" / " (expired)" / " (inactive)" depending on why it was downgraded.
+     */
+    static String entitlementSuffix() {
+        if (!QTracePluginManager.hasEnterprise() || QTracePluginManager.isEntitled()) return "";
+        String r = QTracePluginManager.inactiveReason();
+        if ("corrupted".equals(r)) return " (corrupted)";
+        if ("expired".equals(r))   return " (expired)";
+        return " (inactive)";
+    }
+
+    /** True when the inactive state is a security failure (invalid/tampered signature) → show red. */
+    static boolean entitlementIsError() {
+        return QTracePluginManager.hasEnterprise()
+            && !QTracePluginManager.isEntitled()
+            && "corrupted".equals(QTracePluginManager.inactiveReason());
     }
 
     /**

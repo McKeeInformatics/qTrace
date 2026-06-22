@@ -10,6 +10,8 @@ import qupath.lib.gui.QuPathGUI;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -46,14 +48,32 @@ public final class QTraceLicenseGate {
             return;
         }
 
-        LicenseInfo li = ep.getActiveLicenseInfo(); // null if expired/invalid (offline-certain)
-        if (li == null) {
-            QTracePluginManager.setEntitled(false);
-            notifyInactive(qupath, controller, QTraceI18n.t("license.inactive.expired"));
+        String raw = readLicenseRaw(licensePath);
+        if (raw == null) {
+            // License file unreadable → can't trust identity (treat like a bad license).
+            QTracePluginManager.setInactive("corrupted");
+            notifyInvalid(qupath, controller);
             return;
         }
 
-        // License present and not expired offline → confirm with the server (async).
+        // validateLicense() verifies the RS256 signature: null ⇒ invalid/tampered;
+        // non-null ⇒ signature trusted (expiry is then a separate, softer state).
+        LicenseInfo li = ep.validateLicense(raw);
+        if (li == null) {
+            // Corrupted / invalid signature → identity can no longer be guaranteed (ERROR).
+            QTracePluginManager.setInactive("corrupted");
+            notifyInvalid(qupath, controller);
+            return;
+        }
+        if (li.expired()) {
+            // Signature valid but expired → soft downgrade (WARNING).
+            QTracePluginManager.setInactive("expired");
+            notifyInactive(qupath, controller,
+                QTraceI18n.t("license.inactive.expired"), Alert.AlertType.WARNING);
+            return;
+        }
+
+        // License present, signed and not expired → confirm with the server (async).
         CompletableFuture.runAsync(() -> {
             try {
                 String jwt = QTraceUpdater.licenseJwt();
@@ -63,8 +83,9 @@ public final class QTraceLicenseGate {
                     .parseString(new String(body, StandardCharsets.UTF_8)).getAsJsonObject();
                 boolean active = st.has("active") && st.get("active").getAsBoolean();
                 if (!active) {
-                    QTracePluginManager.setEntitled(false);
-                    notifyInactive(qupath, controller, QTraceI18n.t("license.inactive.subscription"));
+                    QTracePluginManager.setInactive("inactive");
+                    notifyInactive(qupath, controller,
+                        QTraceI18n.t("license.inactive.subscription"), Alert.AlertType.WARNING);
                 }
             } catch (Exception ignored) {
                 // offline / server error — keep Enterprise active (do not downgrade on uncertainty)
@@ -72,12 +93,33 @@ public final class QTraceLicenseGate {
         });
     }
 
-    private static void notifyInactive(QuPathGUI qupath, QTraceController controller, String reason) {
+    private static String readLicenseRaw(String path) {
+        try {
+            return Files.readString(Path.of(path)).strip();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Expired / cancelled — soft degradation to Core (amber WARNING). */
+    private static void notifyInactive(QuPathGUI qupath, QTraceController controller,
+                                       String header, Alert.AlertType type) {
+        alertWithPortal(qupath, controller, type, header, QTraceI18n.t("license.inactive.body"));
+    }
+
+    /** Invalid / tampered signature — identity cannot be guaranteed (red ERROR). */
+    private static void notifyInvalid(QuPathGUI qupath, QTraceController controller) {
+        alertWithPortal(qupath, controller, Alert.AlertType.ERROR,
+            QTraceI18n.t("license.invalid.header"), QTraceI18n.t("license.invalid.body"));
+    }
+
+    private static void alertWithPortal(QuPathGUI qupath, QTraceController controller,
+                                        Alert.AlertType type, String header, String body) {
         Platform.runLater(() -> {
-            Alert a = new Alert(Alert.AlertType.WARNING);
+            Alert a = new Alert(type);
             a.setTitle(QTraceI18n.t("license.inactive.title"));
-            a.setHeaderText(reason);
-            a.setContentText(QTraceI18n.t("license.inactive.body"));
+            a.setHeaderText(header);
+            a.setContentText(body);
 
             ButtonType openPortal = new ButtonType(
                 QTraceI18n.t("license.inactive.open"), ButtonBar.ButtonData.LEFT);
