@@ -39,7 +39,7 @@ import java.util.function.Consumer;
  */
 public class QTraceController {
 
-    static final String VERSION = "1.0.5";
+    static final String VERSION = "1.0.6";
 
     public static String getDisplayVersion() {
         QTracePlugin ep = QTracePluginManager.get();
@@ -70,7 +70,7 @@ public class QTraceController {
      * human-readable contributor shown on commit-graph nodes and in attributions.
      */
     public static String currentContributor() {
-        QTracePlugin ep = QTracePluginManager.get();
+        QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep != null) {
             LicenseInfo li = ep.getActiveLicenseInfo();
             if (li != null && !li.expired() && li.name() != null && !li.name().isBlank())
@@ -123,6 +123,11 @@ public class QTraceController {
     }
 
     // ── Panel lifecycle ──────────────────────────────────────────────────────
+
+    /** Rebuilds the panel UI to reflect a changed entitlement (license downgrade). */
+    public void refreshPanel() {
+        if (panel != null && panel.isShowing()) panel.refresh();
+    }
 
     public void showPanel() {
         if (panel == null || !panel.isShowing()) {
@@ -359,7 +364,7 @@ public class QTraceController {
     // ── Replay (Enterprise) ──────────────────────────────────────────────────
 
     public void openReplayDialog() {
-        QTracePlugin ep = QTracePluginManager.get();
+        QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep != null) ep.replay(qupath, logger);
     }
 
@@ -568,8 +573,8 @@ public class QTraceController {
                 panel.log("  CSV: " + csvFile.getFileName());
             }
 
-            // Enterprise: build .qtcert chain-of-custody certificate
-            QTracePlugin ep = QTracePluginManager.get();
+            // Enterprise: build .qtcert chain-of-custody certificate (only when licensed & active)
+            QTracePlugin ep = QTracePluginManager.getEntitled();
             lastQtracePath = outFile;
             lastCertPath   = null;
             if (ep != null && lastStamp != null) {
@@ -598,7 +603,7 @@ public class QTraceController {
     // ── Cloud workspace push (Enterprise) ────────────────────────────────────
 
     public void pushToWorkspace() {
-        QTracePlugin ep = QTracePluginManager.get();
+        QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep == null) return;
         if (lastCertPath == null || lastQtracePath == null) {
             if (panel != null) panel.log("☁ Nothing to push — export first.");
@@ -646,7 +651,7 @@ public class QTraceController {
     // ── Import .qTrace (Enterprise stub) ─────────────────────────────────────
 
     public void importAndReplay() {
-        QTracePlugin plugin = QTracePluginManager.get();
+        QTracePlugin plugin = QTracePluginManager.getEntitled();
         if (plugin != null) plugin.replay(qupath, logger);
     }
 

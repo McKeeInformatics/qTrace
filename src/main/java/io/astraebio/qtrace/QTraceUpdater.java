@@ -135,7 +135,7 @@ public final class QTraceUpdater {
     }
 
     /** Reads the .qtlicense JWT from config (bare JWT or {"jwt":...} envelope). */
-    private static String licenseJwt() {
+    static String licenseJwt() {
         try {
             String path = QTraceConfig.get().getLicensePath();
             if (path == null || path.isBlank()) return null;

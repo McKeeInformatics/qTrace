@@ -32,8 +32,11 @@ public final class StampSigner {
      * Returns null silently if no signing key is available.
      */
     public static String sign(ValidationStamp stamp) {
+        // Enterprise installed but license inactive → degrade to Core: no certification at all.
+        if (QTracePluginManager.hasEnterprise() && !QTracePluginManager.isEntitled()) return null;
+
         // 1. Try in-memory decrypted key (Enterprise, passphrase-protected .qtlicense)
-        QTracePlugin ep = QTracePluginManager.get();
+        QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep != null) {
             String decryptedKey = ep.getDecryptedSigningKey();
             if (decryptedKey != null) {

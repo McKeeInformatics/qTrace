@@ -42,7 +42,9 @@ public class ValidationStamper {
         dialog.setHeaderText("Validate this workflow capture");
 
         // ── Passphrase unlock (before any dialog) ────────────────────────────
-        QTracePlugin ep = QTracePluginManager.get();
+        // getEntitled() → null when the license is inactive, degrading the stamp
+        // dialog to Core mode (no identity lock, no PIN/passphrase, no attestation).
+        QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep != null && ep.hasEncryptedSigningKey() && ep.getDecryptedSigningKey() == null) {
             ep.promptPassphraseAndDecrypt(owner);
             if (ep.getDecryptedSigningKey() == null) return Optional.empty(); // cancelled or wrong passphrase

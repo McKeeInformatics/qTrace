@@ -110,17 +110,22 @@ public class QTracePanel {
         sub.setFont(Font.font("System", 11));
         sub.setFill(Color.web(TEXT_MUTED));
 
-        // Show license holder name if Enterprise + valid license loaded
+        // Enterprise header line: green "✓ Name" when licensed & active,
+        // amber "⚠ License expired — renew" when the JAR is present but not entitled.
         String licenseeLine = null;
-        QTracePlugin ep = QTracePluginManager.get();
-        if (ep != null) {
-            LicenseInfo li = ep.getActiveLicenseInfo();
-            if (li != null && !li.expired()) licenseeLine = "✓ " + li.name();
+        boolean licenseWarn = false;
+        QTracePlugin entitled = QTracePluginManager.getEntitled();
+        if (entitled != null) {
+            LicenseInfo li = entitled.getActiveLicenseInfo();
+            if (li != null) licenseeLine = "✓ " + li.name();
+        } else if (QTracePluginManager.hasEnterprise()) {
+            licenseeLine = "⚠ " + QTraceI18n.t("license.inactive.header");
+            licenseWarn = true;
         }
         Text licenseText = licenseeLine != null ? new Text(licenseeLine) : null;
         if (licenseText != null) {
             licenseText.setFont(Font.font("System", FontWeight.BOLD, 11));
-            licenseText.setFill(Color.web(GREEN));
+            licenseText.setFill(Color.web(licenseWarn ? PEACH : GREEN));
         }
 
         VBox titleBlock = licenseText != null
@@ -205,8 +210,9 @@ public class QTracePanel {
         gear.setOnMouseExited(e  -> gear.setTextFill(Color.web(TEXT_MUTED)));
         gear.setOnAction(e -> QTraceSettingsDialog.show(stage));
 
-        // Cloud workspace push + Replay — Enterprise only
-        if (QTracePluginManager.hasEnterprise()) {
+        // Cloud workspace push + Replay + Graph — Enterprise, only when licensed & active.
+        // When the license is inactive the panel degrades to the Core button set.
+        if (QTracePluginManager.isEntitled()) {
             btnPush = new Button("☁");
             btnPush.setFont(Font.font("System", 14));
             btnPush.setTextFill(Color.web(TEXT_MUTED));
@@ -443,6 +449,15 @@ public class QTracePanel {
 
     public boolean isShowing() {
         return stage.isShowing();
+    }
+
+    /** Rebuilds the scene to reflect a changed entitlement (e.g. license downgrade). */
+    public void refresh() {
+        Platform.runLater(() -> {
+            stage.setTitle(QTraceController.getEditionLabel());
+            stage.setScene(new Scene(buildRoot()));
+            refreshStatus();
+        });
     }
 
     public void log(String message) {
