@@ -33,7 +33,9 @@ contact [Tourte Romain](mailto:tourteromain@gmail.com).
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE)
+**GPL v3** for open-source / academic use — see [LICENSE](LICENSE).
+
+Commercial licenses (required for proprietary or institutional deployments) are available at [qtrace.ca](https://qtrace.ca).
 
 ## Build from source
 
