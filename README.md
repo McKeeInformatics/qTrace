@@ -1,6 +1,6 @@
 # qTrace Core
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20835208.svg)](https://doi.org/10.5281/zenodo.20835208)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20837590.svg)](https://doi.org/10.5281/zenodo.20837590)
 
 Open-source QuPath extension for real-time workflow provenance capture.
 
