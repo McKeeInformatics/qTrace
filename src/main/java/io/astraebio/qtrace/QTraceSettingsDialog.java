@@ -401,14 +401,14 @@ public class QTraceSettingsDialog {
             return;
         }
         try {
-            QTracePlugin enterprise = QTracePluginManager.get();
-            if (enterprise == null) {
+            QTracePlugin plugin = QTracePluginManager.get();
+            if (plugin == null) {
                 statusLbl.setText("Compliance plugin not installed.");
                 statusLbl.setTextFill(Color.web(ORANGE));
                 return;
             }
             String token = java.nio.file.Files.readString(java.nio.file.Path.of(path)).strip();
-            io.astraebio.qtrace.LicenseInfo info = enterprise.validateLicense(token);
+            io.astraebio.qtrace.LicenseInfo info = plugin.validateLicense(token);
             if (info == null) {
                 statusLbl.setText("Invalid or corrupted license file.");
                 statusLbl.setTextFill(Color.web(RED));

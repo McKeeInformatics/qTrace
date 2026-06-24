@@ -68,7 +68,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         QTraceUpdater.reapOldJars(QTraceExtension.class, "core");
 
         // Register the highest-version QTracePlugin among those discovered — an update
-        // may leave two enterprise JARs loaded until the old file is reaped next restart.
+        // may leave two Compliance JARs loaded until the old file is reaped next restart.
         QTracePlugin best = null;
         for (QTracePlugin p : ServiceLoader.load(QTracePlugin.class, QTracePlugin.class.getClassLoader())) {
             if (best == null || QTraceUpdater.compareSemver(
@@ -106,7 +106,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         QTraceLicenseGate.checkAtStartup(qupath, controller);
 
         // ── Startup update checks (async; user-validated, applied on restart) ──
-        // Both checks are Core-driven so an old enterprise JAR still gets updated.
+        // Both checks are Core-driven so an old Compliance JAR still gets updated.
         QTraceUpdater.checkCore(qupath);
         QTraceUpdater.checkCompliance(qupath, QTracePluginManager.get());
     }

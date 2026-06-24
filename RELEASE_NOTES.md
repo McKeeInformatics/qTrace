@@ -17,7 +17,7 @@ The button is grey (disabled) until at least one step is captured, then turns re
 ### MetaScript & GitBridge removed from Core
 Groovy replay-script generation and Git commit logic have been extracted from Core.  
 Core now focuses exclusively on provenance capture and `.qtrace` export.  
-The replay hook is reserved for the Enterprise module via `QTracePlugin.replay()`.
+The replay hook is reserved for the Compliance module via `QTracePlugin.replay()`.
 
 ### UI refinements
 - Panel header subtitle: **"Workflow Provenance — v1.0.1"** displayed below the main title

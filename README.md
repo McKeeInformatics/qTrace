@@ -25,7 +25,7 @@ Outputs:
 2. Copy to your QuPath extensions folder: `~/QuPath/v0.7/extensions/`
 3. Restart QuPath → Extensions > QTrace > Open QTrace Panel
 
-## Enterprise features
+## Compliance features
 
 Cryptographic certification (Ed25519 + OpenTimestamps), contributor identity
 verification, and blockchain anchoring require **qTrace Compliance** —

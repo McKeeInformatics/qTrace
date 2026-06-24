@@ -29,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Service interface implemented by the Compliance module.
- * Discovered at runtime via ServiceLoader — if no enterprise JAR is present,
+ * Discovered at runtime via ServiceLoader — if no Compliance JAR is present,
  * QTracePluginManager.get() returns null and premium features are silently absent.
  *
  * Compliance features: cryptographic certification (Ed25519 + OpenTimestamps),

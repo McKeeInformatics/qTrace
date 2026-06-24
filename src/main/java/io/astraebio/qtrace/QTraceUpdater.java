@@ -120,12 +120,12 @@ public final class QTraceUpdater {
         });
     }
 
-    // ── Compliance check (driven by Core, works with any enterprise JAR) ─────────
+    // ── Compliance check (driven by Core, works with any Compliance JAR) ─────────
 
     /**
-     * Async, safe. Offers an Compliance update based on the qtrace.ca manifest.
-     * Driven by the Core (not the enterprise JAR) so it works even when the
-     * installed enterprise JAR predates the auto-update feature — it only reads
+     * Async, safe. Offers a Compliance update based on the qtrace.ca manifest.
+     * Driven by the Core (not the Compliance JAR) so it works even when the
+     * installed Compliance JAR predates the auto-update feature — it only reads
      * the loaded plugin's reported version and the license from config.
      */
     public static void checkCompliance(QuPathGUI qupath, QTracePlugin ep) {
