@@ -34,7 +34,7 @@ public final class QTraceLicenseGate {
 
     private QTraceLicenseGate() {}
 
-    private static final String STATUS_URL = "https://q-trace-alpha.vercel.app/api/license/status";
+    private static final String STATUS_URL = "https://qtrace.ca/api/license/status";
     private static final String PORTAL_URL = "https://qtrace.ca/portal";
 
     public static void checkAtStartup(QuPathGUI qupath, QTraceController controller) {

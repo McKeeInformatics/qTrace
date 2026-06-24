@@ -44,9 +44,9 @@ public final class QTraceUpdater {
     private static final String GITHUB_LATEST =
         "https://api.github.com/repos/RomainTourte/qTrace-core/releases/latest";
     private static final String VERSION_URL =
-        "https://q-trace-alpha.vercel.app/api/version";
+        "https://qtrace.ca/api/version";
     private static final String ENT_DOWNLOAD_URL =
-        "https://q-trace-alpha.vercel.app/api/download/enterprise/licensed";
+        "https://qtrace.ca/api/download/enterprise/licensed";
 
     private static final Pattern JAR_VERSION =
         Pattern.compile("^qtrace-(?:core|enterprise)-(\\d+(?:\\.\\d+)*)\\.jar$");
