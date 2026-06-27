@@ -1,52 +1,39 @@
-## What's new in v1.0.1
+## What's new in v1.0.8
 
-### QuPath toolbar integration
-A **qTrace MenuButton** is now embedded directly in the QuPath toolbar — no need to go through the Extensions menu.
-- Logo icon: **grey** when no image is open, **red** as soon as an image is loaded and recording is active
-- Dropdown: **Panel · Dashboard · Preferences · About**
+### Detection correction audit
+When an analyst manually deletes or subdivides detections — removing false positives, separating merged cells, correcting AI over-segmentation — qTrace now **captures the event and prompts for a justification note**.
 
-### Autonomous recording
-The ActionLogger now starts **as soon as the extension loads**, independently of the floating panel.  
-Opening an image in QuPath immediately begins provenance capture. When the panel is opened afterwards, it synchronises to the live logger state — step count, recording indicator, and ◉ button are all pre-filled.
+A non-intrusive dialog appears automatically:
+- Heading shows the count: *"3 detections manually deleted"*
+- Free-text field for a short rationale: *"merged artifact — two clearly distinct nuclei"*
+- **Save** records the note · **Skip** records the event silently
 
-### Single-action "Record your Trace" button (◉)
-The four-button row (Generate / Validate / Export / Replay) has been replaced by a single **◉** button in the panel header.  
-One click: opens the Expert Validation dialog → on confirm, exports the `.qtrace` sidecar automatically.  
-The button is grey (disabled) until at least one step is captured, then turns red.
+All corrections are exported to the `.qtrace` sidecar under `manual_detection_corrections[]`, with timestamp, author, deleted object UUIDs, centroid coordinates, and the justification note. Split operations (delete + re-draw) are recorded as type `"split"` with both `deleted[]` and `created[]` arrays.
 
-### MetaScript & GitBridge removed from Core
-Groovy replay-script generation and Git commit logic have been extracted from Core.  
-Core now focuses exclusively on provenance capture and `.qtrace` export.  
-The replay hook is reserved for the Compliance module via `QTracePlugin.replay()`.
+**Silent mode:** disable the prompt entirely via Settings → Capture → "Prompt for detection correction note". Events are still recorded — just without asking for a note each time.
 
-### UI refinements
-- Panel header subtitle: **"Workflow Provenance — v1.0.1"** displayed below the main title
-- Settings dialog: "Meta-Scripts (.groovy)" path row removed
+### Fix — multi-detection deletion in QuPath 0.7
+QuPath 0.7 fires `OTHER_STRUCTURE_CHANGE` (not `REMOVED`) when the user deletes ≥ 3 objects via the confirmation dialog — with an empty `changed` list. This was a blind spot in qTrace's hierarchy listener.
+
+The fix uses a `PathObjectSelectionListener` to snapshot the selected detections before the dialog, then identifies removed objects by diffing against the hierarchy after the `OTHER_STRUCTURE_CHANGE` event. Deletions of 1–2 objects (no dialog) continue to use the direct `REMOVED` path.
 
 ---
 
-## Earlier v1.0.1 changes
+### Added
+- **Detection correction audit** — when the user manually deletes or splits detections, qTrace captures the event and optionally prompts for a justification note ("merged artifact", "two clearly distinct nuclei", etc.)
+  - Dialog shows count ("3 detections manually deleted") with an optional free-text note field
+  - Silent mode available: disable the prompt via Settings → Capture → "Prompt for detection correction note"
+  - Corrections exported to `.qtrace` sidecar under `manual_detection_corrections[]` with timestamp, author, deleted UUIDs, centroid coordinates, and note
+  - Split detection (delete + re-draw) recorded as type `"split"` with both `deleted[]` and `created[]` arrays
 
-### Workflow status in ValidationStamper
-Validation dialog now shows the current workflow status (`0 — Not started`, `1 — In Progress`, `2 — Complete`) and lets the validator update it at stamp time.  
-Dashboard gains a **Status** column and a status filter.
-
-### Delete .qtrace from Dashboard
-Dashboard rows now have a **Delete** button with a confirmation step.
-
-### Bug fix — batch export crash on Windows
-`InvalidPathException: Illegal char <\n>` when launching batch export after using the pixel classifier dialog.  
-**Root cause:** regex `[^\"]` matched newline characters, passing multi-line strings to `Path.resolve()`.  
-**Fix:** changed to `[^\"\r\n]`.
-
-### GeoJSON export path
-Training GeoJSON annotations are now written to `trainingDir` (configurable in Settings) instead of `exportDir`.
+### Fixed
+- **QuPath 0.7 multi-deletion event** — QuPath 0.7 fires `OTHER_STRUCTURE_CHANGE` with an empty `changed` list (instead of `REMOVED`) when the user deletes ≥ 3 objects via the confirmation dialog; qTrace now tracks the selection via `PathObjectSelectionListener` and identifies removed detections by diffing against the hierarchy after the event
 
 ---
 
 ## Installation
 
-Drop `qtrace-core-1.0.1.jar` into your QuPath extensions folder:
+Drop `qtrace-core-1.0.8.jar` into your QuPath extensions folder:
 
 | Platform | Path |
 |---|---|
