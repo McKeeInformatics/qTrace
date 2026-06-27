@@ -26,13 +26,26 @@ import com.google.gson.JsonParser;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+
+import java.util.function.Consumer;
 import qupath.lib.images.servers.AffineTransformImageServer;
 import java.awt.geom.AffineTransform;
 import qupath.lib.gui.QuPathGUI;
@@ -124,6 +137,14 @@ public class ActionLogger implements WorkflowListener {
     // Script fragments of deleted annotations — filtered out by MetaScriptGenerator
     private final Set<String> deletedFragments = new HashSet<>();
 
+    // Detection correction audit ──────────────────────────────────────────────
+    private final List<JsonObject> manualDetectionCorrections = new ArrayList<>();
+    private final List<JsonObject> pendingRemovedDetections   = new ArrayList<>();
+    private final List<JsonObject> pendingAddedDetections     = new ArrayList<>();
+    private volatile boolean       detectionBatchPending      = false;
+    private volatile long          lastDetectionEventTime     = 0;
+    private static final long      DETECTION_BATCH_WINDOW_MS  = 400;
+
     private final PathObjectHierarchyListener hierarchyListener = event -> {
         var type      = event.getEventType();
         boolean ready = System.currentTimeMillis() - attachTime >= 800;
@@ -169,6 +190,25 @@ public class ActionLogger implements WorkflowListener {
                     captureManualAnnotation(obj);
                 }
             }
+        }
+
+        // Manual detection deletion
+        if (type == PathObjectHierarchyEvent.HierarchyEventType.REMOVED && !scriptRunning) {
+            boolean any = false;
+            for (PathObject obj : changed) {
+                if (obj.isDetection()) { pendingRemovedDetections.add(serializeDetectionEvent(obj)); any = true; }
+            }
+            if (any) scheduleDetectionBatch();
+        }
+
+        // Split fragments arriving in the same 400 ms window as a manual deletion
+        if (type == PathObjectHierarchyEvent.HierarchyEventType.ADDED && !scriptRunning
+                && !pendingRemovedDetections.isEmpty()) {
+            boolean any = false;
+            for (PathObject obj : changed) {
+                if (obj.isDetection()) { pendingAddedDetections.add(serializeDetectionEvent(obj)); any = true; }
+            }
+            if (any) scheduleDetectionBatch();
         }
     };
 
@@ -265,6 +305,10 @@ public class ActionLogger implements WorkflowListener {
         annotationStepIndex.clear();
         snapshotAnnotationIds.clear();
         deletedFragments.clear();
+        manualDetectionCorrections.clear();
+        pendingRemovedDetections.clear();
+        pendingAddedDetections.clear();
+        detectionBatchPending = false;
 
         if (panel != null) panel.setRecordingActive(false);
         if (panel != null) panel.setRecordReady(false);
@@ -290,6 +334,8 @@ public class ActionLogger implements WorkflowListener {
             }
         }
         lastKnownStepCount = newSize;
+        // Detection correction batches are already guarded by !scriptRunning in hierarchyListener,
+        // so scripted workflow steps cannot generate false REMOVED events. No cancellation needed.
 
         refreshManualAnnotationCount();
 
@@ -508,6 +554,165 @@ public class ActionLogger implements WorkflowListener {
 
     public Set<String> getDeletedFragments() {
         return Collections.unmodifiableSet(deletedFragments);
+    }
+
+    public List<JsonObject> getManualDetectionCorrections() {
+        return Collections.unmodifiableList(manualDetectionCorrections);
+    }
+
+    // ── Detection correction tracking ─────────────────────────────────────────
+
+    private void scheduleDetectionBatch() {
+        lastDetectionEventTime = System.currentTimeMillis();
+        if (detectionBatchPending) return;
+        detectionBatchPending = true;
+        Thread t = new Thread(() -> {
+            try {
+                while (System.currentTimeMillis() - lastDetectionEventTime < DETECTION_BATCH_WINDOW_MS)
+                    Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            Platform.runLater(this::processDetectionBatch);
+        }, "qtrace-detection-batch");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void processDetectionBatch() {
+        detectionBatchPending = false;
+        if (pendingRemovedDetections.isEmpty()) {
+            pendingAddedDetections.clear();
+            return;
+        }
+        List<JsonObject> removed = new ArrayList<>(pendingRemovedDetections);
+        List<JsonObject> added   = new ArrayList<>(pendingAddedDetections);
+        pendingRemovedDetections.clear();
+        pendingAddedDetections.clear();
+
+        String type   = added.isEmpty() ? "deletion" : "split";
+        String author = QTraceController.currentContributor();
+
+        if (QTraceConfig.get().isPromptDetectionNote()) {
+            showDetectionNoteDialog(type, removed.size(), added.size(),
+                note -> recordDetectionCorrection(type, removed, added, author, note));
+        } else {
+            recordDetectionCorrection(type, removed, added, author, "");
+        }
+    }
+
+    private void recordDetectionCorrection(String type, List<JsonObject> removed,
+                                            List<JsonObject> added, String author, String note) {
+        JsonObject record = new JsonObject();
+        record.addProperty("type",      type);
+        record.addProperty("timestamp", Instant.now().toString());
+        record.addProperty("author",    author);
+        record.addProperty("n_deleted", removed.size());
+        record.addProperty("n_created", added.size());
+        if (note != null && !note.isBlank()) record.addProperty("note", note);
+
+        JsonArray deletedArr = new JsonArray();
+        removed.forEach(deletedArr::add);
+        record.add("deleted", deletedArr);
+
+        if (!added.isEmpty()) {
+            JsonArray addedArr = new JsonArray();
+            added.forEach(addedArr::add);
+            record.add("created", addedArr);
+        }
+
+        manualDetectionCorrections.add(record);
+        if (panel != null) panel.setRecordReady(true);
+
+        String msg = type.equals("split")
+            ? "Detection split: " + removed.size() + " → " + added.size() + " fragment(s)"
+            : "Detection" + (removed.size() > 1 ? "s" : "") + " deleted: " + removed.size();
+        if (note != null && !note.isBlank()) msg += " — " + note;
+        if (panel != null) panel.log(msg);
+    }
+
+    private void showDetectionNoteDialog(String type, int nDeleted, int nAdded,
+                                          Consumer<String> onDone) {
+        String heading = type.equals("split")
+            ? nDeleted + " detection" + (nDeleted > 1 ? "s" : "") + " split into "
+                + nAdded + " fragment" + (nAdded > 1 ? "s" : "")
+            : nDeleted + " detection" + (nDeleted > 1 ? "s" : "") + " manually deleted";
+
+        Stage dlg = new Stage();
+        dlg.initOwner(qupath.getStage());
+        dlg.initModality(Modality.WINDOW_MODAL);
+        dlg.setTitle("qTrace — Detection correction");
+        dlg.setResizable(false);
+
+        Label headLbl = new Label(heading);
+        headLbl.setTextFill(Color.web("#cdd6f4"));
+        headLbl.setFont(Font.font("System", FontWeight.BOLD, 13));
+
+        Label promptLbl = new Label("Note (optional) — e.g. \"merged artifact, two clearly distinct nuclei\"");
+        promptLbl.setTextFill(Color.web("#a6adc8"));
+        promptLbl.setFont(Font.font("System", 11));
+        promptLbl.setWrapText(true);
+
+        TextField noteFld = new TextField();
+        noteFld.setPromptText("Add a justification…");
+        noteFld.setPrefWidth(380);
+        noteFld.setStyle(
+            "-fx-background-color: #181825;"
+          + "-fx-text-fill: #cdd6f4;"
+          + "-fx-prompt-text-fill: #6c7086;"
+          + "-fx-border-color: #313244;"
+          + "-fx-border-radius: 4;"
+          + "-fx-background-radius: 4;"
+        );
+
+        Button btnSave = new Button("Save");
+        btnSave.setFont(Font.font("System", FontWeight.BOLD, 12));
+        btnSave.setPadding(new Insets(5, 16, 5, 16));
+        btnSave.setStyle(
+            "-fx-background-color: #89b4fa;"
+          + "-fx-text-fill: #1e1e2e;"
+          + "-fx-background-radius: 6;"
+          + "-fx-cursor: hand;"
+        );
+
+        Button btnSkip = new Button("Skip");
+        btnSkip.setFont(Font.font("System", 12));
+        btnSkip.setTextFill(Color.web("#a6adc8"));
+        btnSkip.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: transparent;");
+
+        HBox btnRow = new HBox(8, btnSkip, btnSave);
+        btnRow.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox root = new VBox(10, headLbl, promptLbl, noteFld, btnRow);
+        root.setPadding(new Insets(20));
+        root.setStyle("-fx-background-color: #1e1e2e;");
+        root.setPrefWidth(420);
+
+        btnSave.setOnAction(e -> { dlg.close(); onDone.accept(noteFld.getText().strip()); });
+        btnSkip.setOnAction(e -> { dlg.close(); onDone.accept(""); });
+        noteFld.setOnAction(e -> { dlg.close(); onDone.accept(noteFld.getText().strip()); });
+
+        dlg.setScene(new Scene(root));
+        dlg.showAndWait();
+    }
+
+    private JsonObject serializeDetectionEvent(PathObject obj) {
+        JsonObject j = new JsonObject();
+        j.addProperty("uuid",  obj.getID().toString());
+        j.addProperty("name",  obj.getName() != null ? obj.getName() : "");
+        j.addProperty("class", obj.getPathClass() != null ? obj.getPathClass().getName() : "(unclassified)");
+        var roi = obj.getROI();
+        if (roi != null) {
+            j.addProperty("roi_type",     roi.getRoiName());
+            j.addProperty("centroid_x",   roi.getCentroidX());
+            j.addProperty("centroid_y",   roi.getCentroidY());
+            j.addProperty("bounds_x",     roi.getBoundsX());
+            j.addProperty("bounds_y",     roi.getBoundsY());
+            j.addProperty("bounds_width",  roi.getBoundsWidth());
+            j.addProperty("bounds_height", roi.getBoundsHeight());
+        }
+        return j;
     }
 
     /**
