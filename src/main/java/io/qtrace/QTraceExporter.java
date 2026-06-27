@@ -298,6 +298,9 @@ public class QTraceExporter {
         // Annotations with per-author attribution
         session.add("annotations", buildAnnotationsObject(imageData, outputDir, imageName));
 
+        // Manual detection corrections (audit-only — not replayable)
+        session.add("manual_detection_corrections", buildDetectionCorrectionsArray());
+
         // Loaded QuPath extensions at export time
         if (extensions != null && extensions.size() > 0)
             session.add("extensions", extensions);
@@ -437,6 +440,12 @@ public class QTraceExporter {
             cio.addProperty("applied_by", cic.appliedBy);
             arr.add(cio);
         }
+        return arr;
+    }
+
+    private JsonArray buildDetectionCorrectionsArray() {
+        JsonArray arr = new JsonArray();
+        for (JsonObject rec : logger.getManualDetectionCorrections()) arr.add(rec);
         return arr;
     }
 

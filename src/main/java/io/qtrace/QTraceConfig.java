@@ -52,6 +52,7 @@ public class QTraceConfig {
     private String trainingDir;
     private String validatorName;
     private String licensePath;
+    private String pinHash;       // SHA-256 hex of the user's PIN, null = no PIN set
     private String signingKeyPath; // path to qtrace-signing.key; null = default ~/.qTrace/qtrace-signing.key
 
     // Auto-update (null updateCheckEnabled = enabled by default)
@@ -62,6 +63,9 @@ public class QTraceConfig {
     // (null = ask by default; user can disable via "ne plus me demander" / Security settings)
     private Boolean reportConfirmBeforeSend;
     private String  reportLanguage; // language code for the generated report (null = UI locale)
+
+    // Detection correction audit — null = prompt by default
+    private Boolean promptDetectionNote;
 
     private QTraceConfig() {}
 
@@ -97,6 +101,12 @@ public class QTraceConfig {
     public String getLicensePath()         { return licensePath != null ? licensePath : ""; }
     public void   setLicensePath(String p) { this.licensePath = blank(p); }
 
+    // ── PIN protection ────────────────────────────────────────────────────────
+
+    public boolean hasPinSet()          { return pinHash != null && !pinHash.isBlank(); }
+    public String  getPinHash()         { return pinHash != null ? pinHash : ""; }
+    public void    setPinHash(String h) { this.pinHash = (h == null || h.isBlank()) ? null : h; }
+
     // ── Signing key ───────────────────────────────────────────────────────────
 
     public String getSigningKeyPath()         { return signingKeyPath != null ? signingKeyPath : ""; }
@@ -122,6 +132,11 @@ public class QTraceConfig {
             ? reportLanguage : ReportLanguages.defaultCode();
     }
     public void setReportLanguage(String code) { this.reportLanguage = blank(code); }
+
+    // ── Detection correction audit ────────────────────────────────────────────
+
+    public boolean isPromptDetectionNote()           { return promptDetectionNote == null || promptDetectionNote; }
+    public void    setPromptDetectionNote(boolean b) { this.promptDetectionNote = b; }
 
     // ── Raw string getters (for the dialog text fields) ───────────────────────
 

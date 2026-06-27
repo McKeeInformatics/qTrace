@@ -247,6 +247,27 @@ public class QTraceSettingsDialog {
         VBox securityBox = new VBox(6, chkReportConfirm, securityHint, langRow, pseudoRow);
         securityBox.setPadding(new Insets(4, 20, 8, 20));
 
+        // ── Detection correction prompting ──────────────────────────────────────
+        Separator sep4 = new Separator();
+        sep4.setStyle("-fx-background-color: " + BORDER + ";");
+
+        CheckBox chkDetectionNote = new CheckBox(
+            "Prompt for a note when detections are manually deleted or split");
+        chkDetectionNote.setSelected(cfg.isPromptDetectionNote());
+        chkDetectionNote.setTextFill(Color.web(TEXT_SUB));
+        chkDetectionNote.setWrapText(true);
+
+        Label detectionNoteHint = new Label(
+            "When disabled, corrections are logged silently with no note prompt. "
+          + "Either way, every deletion/split is recorded in the .qtrace sidecar.");
+        detectionNoteHint.setTextFill(Color.web(TEXT_MUTED));
+        detectionNoteHint.setFont(Font.font("System", 11));
+        detectionNoteHint.setWrapText(true);
+        detectionNoteHint.setMaxWidth(440);
+
+        VBox captureBox = new VBox(6, chkDetectionNote, detectionNoteHint);
+        captureBox.setPadding(new Insets(4, 20, 8, 20));
+
         // ── Buttons ────────────────────────────────────────────────────────────
         Button btnReset  = flatButton("Reset all to default", TEXT_MUTED);
         Button btnCancel = flatButton("Cancel",               TEXT_SUB);
@@ -259,6 +280,7 @@ public class QTraceSettingsDialog {
             tfValidator.clear();
             tfLicense.clear();
             updateLicenseStatus(licenseStatusLbl, "", tfValidator);
+            chkDetectionNote.setSelected(true);
         });
 
         btnCancel.setOnAction(e -> dlg.close());
@@ -271,6 +293,7 @@ public class QTraceSettingsDialog {
             cfg.setLicensePath(tfLicense.getText());
             cfg.setReportConfirmBeforeSend(chkReportConfirm.isSelected());
             if (langBox.getValue() != null) cfg.setReportLanguage(langBox.getValue());
+            cfg.setPromptDetectionNote(chkDetectionNote.isSelected());
             cfg.save();
             dlg.close();
         });
@@ -292,6 +315,9 @@ public class QTraceSettingsDialog {
             sep3,
             sectionTitle(QTraceI18n.t("settings.security.tab")),
             securityBox,
+            sep4,
+            sectionTitle("Capture"),
+            captureBox,
             buttonRow);
         VBox.setMargin(hint,          new Insets(0, 20, 8, 20));
         VBox.setMargin(validatorHint, new Insets(0, 20, 8, 20));
