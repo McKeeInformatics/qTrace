@@ -254,6 +254,35 @@ public class QTraceController {
         } catch (Exception ignored) { return null; }
     }
 
+    /** Opens the current image's .qtrace file with whatever the OS resolves for it, if one exists. */
+    public void openCurrentQtraceFile() {
+        File file = currentQtraceFile();
+        if (file == null) {
+            showGraphInfo(QTraceI18n.t("report.info.noqtrace"));
+            return;
+        }
+        openWithOs(file);
+    }
+
+    /**
+     * Launches the OS file-open command directly on the file. Deliberately avoids
+     * java.awt.Desktop.open(File): on Linux, initializing AWT's Desktop inside a
+     * JavaFX/GTK process can crash the JVM. xdg-open/open/cmd start don't touch AWT.
+     */
+    private static void openWithOs(File file) {
+        try {
+            String os = System.getProperty("os.name", "").toLowerCase();
+            ProcessBuilder pb;
+            if (os.contains("win"))
+                pb = new ProcessBuilder("cmd", "/c", "start", "", file.getAbsolutePath());
+            else if (os.contains("mac"))
+                pb = new ProcessBuilder("open", file.getAbsolutePath());
+            else
+                pb = new ProcessBuilder("xdg-open", file.getAbsolutePath());
+            pb.start();
+        } catch (Exception ignored) {}
+    }
+
     /** Non-blocking info alert shown when the commit graph has nothing to display. */
     private void showGraphInfo(String message) {
         Platform.runLater(() -> {

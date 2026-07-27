@@ -324,6 +324,25 @@ public class QTracePanel {
             imageNameLabel = styledLabel(controller.getCurrentImageName(), TEXT_MAIN, FontWeight.NORMAL, 11)
         );
 
+        Region imageRowSpacer = new Region();
+        HBox.setHgrow(imageRowSpacer, Priority.ALWAYS);
+        Button btnOpenQtrace = new Button(QTraceI18n.t("btn.openqtrace"));
+        btnOpenQtrace.setStyle(
+            "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";"
+          + "-fx-cursor:hand;-fx-font-size:10;-fx-padding:1 6 1 6;"
+          + "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;");
+        btnOpenQtrace.setTooltip(new Tooltip(QTraceI18n.t("btn.openqtrace.tooltip")));
+        btnOpenQtrace.setOnMouseEntered(e -> btnOpenQtrace.setStyle(
+            "-fx-background-color:#20304a;-fx-text-fill:" + BLUE + ";"
+          + "-fx-cursor:hand;-fx-font-size:10;-fx-padding:1 6 1 6;"
+          + "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;"));
+        btnOpenQtrace.setOnMouseExited(e -> btnOpenQtrace.setStyle(
+            "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";"
+          + "-fx-cursor:hand;-fx-font-size:10;-fx-padding:1 6 1 6;"
+          + "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;"));
+        btnOpenQtrace.setOnAction(e -> controller.openCurrentQtraceFile());
+        imageRow.getChildren().addAll(imageRowSpacer, btnOpenQtrace);
+
         // Row 3: counters
         HBox countersRow = new HBox(20);
         countersRow.setAlignment(Pos.CENTER_LEFT);

@@ -1,0 +1,20 @@
+[
+  {
+    "matchClass": "qupath.ext.instanseg.core.InstanSeg",
+    "displayName": "InstanSeg",
+    "fields": [
+      { "key": "modelPath",         "label": "Model",             "type": "path" },
+      { "key": "device",            "label": "Device",            "type": "string" },
+      { "key": "inputChannels",     "label": "Input channels",    "type": "channel_list" },
+      { "key": "outputChannels",    "label": "Output channels",   "type": "raw" },
+      { "key": "tileDims",          "label": "Tile size",         "type": "int" },
+      { "key": "interTilePadding",  "label": "Tile padding",      "type": "int" },
+      { "key": "nThreads",          "label": "Threads",           "type": "int" },
+      { "key": "makeMeasurements",  "label": "Make measurements", "type": "bool" },
+      { "key": "randomColors",      "label": "Random colors",     "type": "bool" },
+      { "key": "outputType",        "label": "Output type",       "type": "string" },
+      { "key": "build",             "type": "hidden" },
+      { "key": "detectObjects",     "type": "hidden" }
+    ]
+  }
+]

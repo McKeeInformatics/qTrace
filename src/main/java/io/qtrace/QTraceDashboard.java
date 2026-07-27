@@ -42,10 +42,15 @@ import io.qtrace.chain.CanonicalJson;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Floating two-pane dashboard.
@@ -72,9 +77,40 @@ public class QTraceDashboard {
     private static final String ROW_ALT    = "#20202e";
 
     private static final Set<String> SEG_KEYWORDS = Set.of(
-        "detect", "segment", "instantseg", "stardist", "mesmer",
+        "detect", "segment", "instanseg", "stardist", "mesmer",
         "deepcell", "nucleus", "cell", "expand", "watershed", "object"
     );
+
+    // Matches the leading "<fully.qualified.Class>.builder()" line of an extension's
+    // fluent builder chain (InstanSeg, and any other QuPath extension using the same pattern).
+    private static final Pattern EXT_BUILDER_HEADER = Pattern.compile("([\\w.]+)\\.builder\\(\\)");
+    private static final Pattern EXT_CHAIN_CALL      = Pattern.compile("^\\.(\\w+)\\((.*)\\)$");
+    private static final Pattern CHANNEL_EXTRACTOR   = Pattern.compile(
+        "createChannelExtractor\\(\"([^\"]*)\"\\)");
+
+    // ── Extension parameter display schemas (io/qtrace/extensions/extension-params.json) ──
+    // Declarative label/order/type metadata per extension, keyed by the builder's FQCN.
+    // Absent or unmatched → falls back to the generic key-derived formatting below, so a
+    // new/undeclared extension's parameters are still shown, just less nicely labeled.
+
+    private record ExtensionField(String key, String label, String type) {}
+    private record ExtensionSchema(String matchClass, String displayName, List<ExtensionField> fields) {}
+
+    private static final Map<String, ExtensionSchema> EXTENSION_SCHEMAS = loadExtensionSchemas();
+
+    private static Map<String, ExtensionSchema> loadExtensionSchemas() {
+        try (InputStream in = QTraceDashboard.class.getResourceAsStream(
+                "/io/qtrace/extensions/extension-params.json")) {
+            if (in == null) return Map.of();
+            ExtensionSchema[] list = new Gson().fromJson(
+                new InputStreamReader(in, StandardCharsets.UTF_8), ExtensionSchema[].class);
+            Map<String, ExtensionSchema> map = new LinkedHashMap<>();
+            for (var s : list) map.put(s.matchClass(), s);
+            return map;
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
 
     private static final String[] COL_NAMES = {
         "Sample", "ROI", "Status", "Region", "BV (aSMA+)", "Tau", "✓ Validated",
@@ -108,6 +144,8 @@ public class QTraceDashboard {
     private final List<RowData> filteredRows = new ArrayList<>();
     private final VBox          tableRows;
     private final Label         scanPathLabel;
+    private volatile boolean    scanning = false;
+    private volatile String     pendingScanSummary = "";
     private HBox     selectedRow;
     private RowData  selectedData;
     private boolean  sortAsc     = true;
@@ -135,6 +173,7 @@ public class QTraceDashboard {
     private final VBox imageCardContent;
     private final VBox alignmentCardContent;
     private final VBox segmentationCardContent;
+    private final VBox extensionsCardContent;
     private final VBox classifiersCardContent;
     private final VBox cellIntensityCardContent;
     private final VBox annotationsCardContent;
@@ -163,6 +202,7 @@ public class QTraceDashboard {
         imageCardContent                = new VBox(6);
         alignmentCardContent            = new VBox(6);
         segmentationCardContent         = new VBox(6);
+        extensionsCardContent           = new VBox(6);
         classifiersCardContent          = new VBox(6);
         cellIntensityCardContent        = new VBox(6);
         annotationsCardContent          = new VBox(6);
@@ -171,6 +211,28 @@ public class QTraceDashboard {
         stage.setScene(new Scene(buildRoot()));
         clearDetail();
         autoScan();
+    }
+
+    /** On dashboard open, auto-select the row for the image currently open in QuPath, if any. */
+    private void selectCurrentImageRowIfAny() {
+        String currentName;
+        try {
+            var imageData = qupath.getImageData();
+            if (imageData == null) return;
+            currentName = imageData.getServer().getMetadata().getName();
+        } catch (Exception e) { return; }
+        if (currentName == null || currentName.isEmpty()) return;
+
+        for (int i = 0; i < filteredRows.size(); i++) {
+            RowData data = filteredRows.get(i);
+            if (!namesMatch(data.imageName(), currentName)) continue;
+            if (i < tableRows.getChildren().size() && tableRows.getChildren().get(i) instanceof HBox row)
+                selectRow(row);
+            selectedData = data;
+            if (data.qtrace() != null) populate(data.qtrace());
+            else clearDetail();
+            return;
+        }
     }
 
     // ── Root layout ───────────────────────────────────────────────────────────
@@ -369,6 +431,7 @@ public class QTraceDashboard {
             wrapCard("🖼  Image & Validation",              imageCardContent),
             wrapCard("🔗  Alignement",                     alignmentCardContent),
             wrapCard("🔬  Segmentation",                   segmentationCardContent),
+            wrapCard("🧩  Extensions",                     extensionsCardContent),
             wrapCard("🧠  Classifiers Pixel",              classifiersCardContent),
             wrapCard("📊  Cell Intensity Classifications", cellIntensityCardContent),
             wrapCard("👤  Annotations",                    annotationsCardContent),
@@ -382,13 +445,30 @@ public class QTraceDashboard {
 
     // ── Data loading ──────────────────────────────────────────────────────────
 
+    /**
+     * Reads and parses every .qtrace file (can be several MB each) off the FX thread —
+     * doing this inline used to freeze the whole QuPath window (and trigger the OS
+     * "not responding" watchdog) for large multi-session provenance files.
+     */
     private void autoScan() {
-        loadAllRows();
-        extractFilterMeta();
-        rebuildFilterCheckboxes();
-        applyFilter();
-        applySort();
-        renderRows();
+        if (scanning) return;
+        scanning = true;
+        scanPathLabel.setText("⏳  Scanning .qtrace files…");
+        Thread t = new Thread(() -> {
+            loadAllRows();
+            Platform.runLater(() -> {
+                scanPathLabel.setText(pendingScanSummary);
+                extractFilterMeta();
+                rebuildFilterCheckboxes();
+                applyFilter();
+                applySort();
+                renderRows();
+                selectCurrentImageRowIfAny();
+                scanning = false;
+            });
+        }, "qtrace-dashboard-scan");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void loadAllRows() {
@@ -438,8 +518,8 @@ public class QTraceDashboard {
         }
 
         String dirPath = qtDir != null ? qtDir.getAbsolutePath() : "(not configured)";
-        scanPathLabel.setText("📁  " + dirPath
-            + "  (" + qtraceMap.size() + " .qtrace  •  " + allRows.size() + " image(s))");
+        pendingScanSummary = "📁  " + dirPath
+            + "  (" + qtraceMap.size() + " .qtrace  •  " + allRows.size() + " image(s))";
     }
 
     private JsonObject findMatchingQtrace(String name, Map<String, JsonObject> map) {
@@ -876,6 +956,7 @@ public class QTraceDashboard {
         buildImageCard(root, image);
         buildAlignmentCard(session);
         buildSegmentationCard(session);
+        buildExtensionsCard(session);
         buildClassifiersCard(session);
         buildCellIntensityCard(session);
         buildAnnotationsCard(root);
@@ -887,10 +968,37 @@ public class QTraceDashboard {
         setPlaceholder(imageCardContent,                "Select an image from the table above");
         setPlaceholder(alignmentCardContent,            "");
         setPlaceholder(segmentationCardContent,         "");
+        setPlaceholder(extensionsCardContent,           "");
         setPlaceholder(classifiersCardContent,          "");
         setPlaceholder(cellIntensityCardContent,        "");
         setPlaceholder(annotationsCardContent,          "");
         setPlaceholder(detectionCorrectionsCardContent, "");
+    }
+
+    // ── Open .qtrace with whatever the OS resolves for it ───────────────────────
+
+    private void openQtraceFileWithDefaultApp() {
+        if (selectedData == null || selectedData.qtraceFile() == null) return;
+        openWithOs(selectedData.qtraceFile());
+    }
+
+    /**
+     * Launches the OS file-open command directly on the file. Deliberately avoids
+     * java.awt.Desktop.open(File): on Linux, initializing AWT's Desktop inside a
+     * JavaFX/GTK process can crash the JVM. xdg-open/open/cmd start don't touch AWT.
+     */
+    private static void openWithOs(File file) {
+        try {
+            String os = System.getProperty("os.name", "").toLowerCase();
+            ProcessBuilder pb;
+            if (os.contains("win"))
+                pb = new ProcessBuilder("cmd", "/c", "start", "", file.getAbsolutePath());
+            else if (os.contains("mac"))
+                pb = new ProcessBuilder("open", file.getAbsolutePath());
+            else
+                pb = new ProcessBuilder("xdg-open", file.getAbsolutePath());
+            pb.start();
+        } catch (Exception ignored) {}
     }
 
     // ── Delete .qtrace ────────────────────────────────────────────────────────
@@ -938,6 +1046,22 @@ public class QTraceDashboard {
 
         if (img != null) {
             Label nameLabel = lbl("🖼  " + str(img, "name", "(inconnu)"), TEXT_MAIN, 13, FontWeight.BOLD, false);
+            Button openBtn = new Button("📂 Open .qtrace");
+            openBtn.setStyle(
+                "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";" +
+                "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
+                "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;");
+            openBtn.setTooltip(new Tooltip("Open this .qtrace file with the default application"));
+            openBtn.setOnMouseEntered(ev -> openBtn.setStyle(
+                "-fx-background-color:#20304a;-fx-text-fill:" + BLUE + ";" +
+                "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
+                "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;"));
+            openBtn.setOnMouseExited(ev -> openBtn.setStyle(
+                "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";" +
+                "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
+                "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;"));
+            openBtn.setOnAction(ev -> openQtraceFileWithDefaultApp());
+
             Button deleteBtn = new Button("🗑 Delete .qtrace");
             deleteBtn.setStyle(
                 "-fx-background-color:transparent;-fx-text-fill:#e05252;" +
@@ -956,7 +1080,7 @@ public class QTraceDashboard {
 
             Region sp = new Region();
             HBox.setHgrow(sp, Priority.ALWAYS);
-            HBox titleRow = new HBox(6, nameLabel, sp, deleteBtn);
+            HBox titleRow = new HBox(6, nameLabel, sp, openBtn, deleteBtn);
             titleRow.setAlignment(Pos.CENTER_LEFT);
             imageCardContent.getChildren().add(titleRow);
 
@@ -1330,6 +1454,200 @@ public class QTraceDashboard {
             if (!footer.getChildren().isEmpty())
                 segmentationCardContent.getChildren().add(footer);
         }
+    }
+
+    // ── Card 3b — Extensions (extension model runs: InstanSeg, etc.) ───────────
+
+    private void buildExtensionsCard(JsonObject session) {
+        extensionsCardContent.getChildren().clear();
+
+        if (session == null || !session.has("steps") || session.get("steps").isJsonNull()) {
+            setPlaceholder(extensionsCardContent, "No steps captured");
+            return;
+        }
+
+        JsonArray allSteps = session.getAsJsonArray("steps");
+        List<JsonObject> extSteps = new ArrayList<>();
+        for (var el : allSteps) {
+            JsonObject step = el.getAsJsonObject();
+            String script = str(step, "script_fragment", "");
+            if (EXT_BUILDER_HEADER.matcher(script).find()) extSteps.add(step);
+        }
+
+        if (extSteps.isEmpty()) {
+            extensionsCardContent.getChildren().add(lbl(
+                "No extension model run identified among the " + allSteps.size() + " captured steps",
+                TEXT_MUTED, 11, FontWeight.NORMAL, true));
+            return;
+        }
+
+        // Collapse consecutive identical runs (QuPath sometimes fires the same
+        // builder chain more than once for a single user action).
+        List<JsonObject> uniqueRuns = new ArrayList<>();
+        List<Integer> repeatCounts  = new ArrayList<>();
+        for (JsonObject step : extSteps) {
+            String script = str(step, "script_fragment", "");
+            if (!uniqueRuns.isEmpty()
+                    && str(uniqueRuns.get(uniqueRuns.size() - 1), "script_fragment", "").equals(script)) {
+                repeatCounts.set(repeatCounts.size() - 1, repeatCounts.get(repeatCounts.size() - 1) + 1);
+            } else {
+                uniqueRuns.add(step);
+                repeatCounts.add(1);
+            }
+        }
+
+        boolean first = true;
+        for (int i = 0; i < uniqueRuns.size(); i++) {
+            if (!first) extensionsCardContent.getChildren().add(sep());
+            first = false;
+            extensionsCardContent.getChildren().add(
+                buildExtensionRunSubCard(uniqueRuns.get(i), repeatCounts.get(i)));
+        }
+    }
+
+    private VBox buildExtensionRunSubCard(JsonObject step, int repeatCount) {
+        String script = str(step, "script_fragment", "");
+        String cmd    = str(step, "command", "Run extension model");
+        String ts     = str(step, "timestamp", "");
+
+        Matcher hm = EXT_BUILDER_HEADER.matcher(script);
+        String fqcn = hm.find() ? hm.group(1) : null;
+        ExtensionSchema schema = fqcn != null ? EXTENSION_SCHEMAS.get(fqcn) : null;
+        String extName = schema != null ? schema.displayName()
+            : (fqcn != null ? extensionDisplayName(fqcn) : cmd);
+
+        VBox box = new VBox(4);
+
+        HBox header = new HBox(8);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.getChildren().add(lbl("🧩 " + extName, TEXT_MAIN, 12, FontWeight.BOLD, false));
+        header.getChildren().add(lbl(
+            ts.length() > 19 ? ts.substring(0, 19) + "Z" : ts, TEXT_MUTED, 11, FontWeight.NORMAL, false));
+        if (repeatCount > 1)
+            header.getChildren().add(lbl("×" + repeatCount + " (identical re-fires)", PEACH, 11, FontWeight.BOLD, false));
+        box.getChildren().add(header);
+
+        LinkedHashMap<String, String> params = parseBuilderChain(script);
+        GridPane grid = new GridPane();
+        grid.setHgap(16);
+        grid.setVgap(3);
+        grid.setPadding(new Insets(4, 0, 0, 20));
+        VBox longValues = new VBox(6);
+        longValues.setPadding(new Insets(6, 0, 0, 20));
+
+        Set<String> consumed = new HashSet<>();
+        int row = 0;
+
+        // Schema-declared fields first, in the order/labels the JSON declares.
+        if (schema != null) {
+            for (ExtensionField f : schema.fields()) {
+                consumed.add(f.key());
+                if ("hidden".equals(f.type())) continue;
+                String raw = params.get(f.key());
+                if (raw == null) continue; // this build() call didn't set that param on this run
+                row = addParamRow(grid, longValues, row, f.label(), f.type(), raw);
+            }
+        }
+
+        // Anything the schema didn't declare (or no schema at all) — never silently dropped.
+        for (var e : params.entrySet()) {
+            if (consumed.contains(e.getKey())) continue;
+            if (e.getKey().equals("build") || e.getKey().equals("detectObjects")) continue;
+            row = addParamRow(grid, longValues, row,
+                fallbackLabel(e.getKey()), fallbackType(e.getKey()), e.getValue());
+        }
+
+        if (row > 0) box.getChildren().add(grid);
+        if (!longValues.getChildren().isEmpty()) box.getChildren().add(longValues);
+        return box;
+    }
+
+    /**
+     * Adds one parameter to the sub-card. Short scalar values go in the compact two-column
+     * grid; long/list values (e.g. a full multiplex channel list) get their own full-width
+     * wrapped block below the grid instead — nothing is ever truncated or cut off.
+     */
+    private int addParamRow(GridPane grid, VBox longValues, int row, String label, String type, String rawValue) {
+        String value = formatByType(type, rawValue);
+        if (value.isEmpty()) return row;
+        if ("channel_list".equals(type) || value.length() > 60) {
+            Label valLbl = lbl(value, TEXT_SUB, 11, FontWeight.NORMAL, false);
+            valLbl.setWrapText(true);
+            valLbl.setMaxWidth(760);
+            longValues.getChildren().add(new VBox(2,
+                lbl(label, TEXT_MUTED, 11, FontWeight.NORMAL, false), valLbl));
+            return row;
+        }
+        grid.add(lbl(label, TEXT_MUTED, 11, FontWeight.NORMAL, false), 0, row);
+        grid.add(lbl(value, TEXT_SUB,   11, FontWeight.NORMAL, false), 1, row);
+        return row + 1;
+    }
+
+    private static String formatByType(String type, String rawArgs) {
+        switch (type) {
+            case "path":
+            case "string":
+                return rawArgs.replaceAll("^\"|\"$", "");
+            case "bool":
+                return rawArgs.equalsIgnoreCase("true") ? "Yes" : rawArgs.equalsIgnoreCase("false") ? "No" : rawArgs;
+            case "int":
+            case "raw":
+                return rawArgs;
+            case "channel_list": {
+                Matcher cm = CHANNEL_EXTRACTOR.matcher(rawArgs);
+                List<String> names = new ArrayList<>();
+                while (cm.find()) names.add(cm.group(1));
+                if (names.isEmpty()) return rawArgs.isBlank() || rawArgs.equals("[]") ? "All channels" : rawArgs;
+                return names.size() + " channel(s): " + String.join(", ", names); // full list, never truncated
+            }
+            default:
+                return rawArgs;
+        }
+    }
+
+    /** e.g. "qupath.ext.instanseg.core.InstanSeg" → "InstanSeg" */
+    private static String extensionDisplayName(String fqcn) {
+        int dot = fqcn.lastIndexOf('.');
+        return dot >= 0 ? fqcn.substring(dot + 1) : fqcn;
+    }
+
+    /** Parses a fluent ".method(args)\n    .method(args)\n    ..." builder chain, one call per line. */
+    private static LinkedHashMap<String, String> parseBuilderChain(String script) {
+        LinkedHashMap<String, String> out = new LinkedHashMap<>();
+        for (String rawLine : script.split("\n")) {
+            Matcher m = EXT_CHAIN_CALL.matcher(rawLine.trim());
+            if (m.matches()) out.putIfAbsent(m.group(1), m.group(2).trim());
+        }
+        return out;
+    }
+
+    /** Best-guess label for a parameter not covered by any declared schema. */
+    private static String fallbackLabel(String key) {
+        return switch (key) {
+            case "modelPath"          -> "Model";
+            case "device"             -> "Device";
+            case "nThreads"           -> "Threads";
+            case "tileDims"           -> "Tile size";
+            case "interTilePadding"   -> "Tile padding";
+            case "outputType"         -> "Output type";
+            case "makeMeasurements"   -> "Make measurements";
+            case "randomColors"       -> "Random colors";
+            case "inputChannels"      -> "Input channels";
+            case "outputChannels"     -> "Output channels";
+            default -> Character.toUpperCase(key.charAt(0)) + key.substring(1).replaceAll("([A-Z])", " $1");
+        };
+    }
+
+    /** Best-guess type for a parameter not covered by any declared schema. */
+    private static String fallbackType(String key) {
+        return switch (key) {
+            case "modelPath"                                  -> "path";
+            case "device", "outputType"                       -> "string";
+            case "makeMeasurements", "randomColors"            -> "bool";
+            case "inputChannels"                              -> "channel_list";
+            case "tileDims", "interTilePadding", "nThreads"    -> "int";
+            default -> "raw";
+        };
     }
 
     // ── Card 4 — Classifiers Pixel ────────────────────────────────────────────
@@ -1910,7 +2228,7 @@ public class QTraceDashboard {
         return out;
     }
 
-    private String truncate(String s, int max) {
+    private static String truncate(String s, int max) {
         if (s == null || s.length() <= max) return s != null ? s : "";
         return s.substring(0, max - 1) + "…";
     }
