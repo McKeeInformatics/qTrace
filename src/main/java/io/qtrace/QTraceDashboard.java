@@ -113,7 +113,7 @@ public class QTraceDashboard {
     }
 
     private static final String[] COL_NAMES = {
-        "Sample", "ROI", "Status", "Region", "BV (aSMA+)", "Tau", "✓ Validated",
+        "Sample", "ROI", "Status", "Region", "Annotations", "✓ Validated",
         "Alignment", "Segmentation", "Classifiers", "Steps", "🛡"
     };
 
@@ -123,8 +123,7 @@ public class QTraceDashboard {
         new SimpleDoubleProperty(52),   // ROI
         new SimpleDoubleProperty(110),  // Status
         new SimpleDoubleProperty(86),   // Region
-        new SimpleDoubleProperty(74),   // BV (aSMA+)
-        new SimpleDoubleProperty(52),   // Tau
+        new SimpleDoubleProperty(84),   // Annotations
         new SimpleDoubleProperty(162),  // ✓ Validated
         new SimpleDoubleProperty(126),  // Alignment
         new SimpleDoubleProperty(88),   // Segmentation
@@ -680,9 +679,8 @@ public class QTraceDashboard {
                     ? String.valueOf(r.get("status_index").getAsInt()) : "9";
             }
             case 3  -> getRegionFromRow(rd);
-            case 4  -> hasBvFromRow(rd)  ? "0" : "1";
-            case 5  -> hasTauFromRow(rd) ? "0" : "1";
-            case 6  -> {
+            case 4  -> String.format("%09d", getAnnotationCountFromRow(rd));
+            case 5  -> {
                 JsonObject s = latestSession(rd.qtrace());
                 if (s == null) yield "z";
                 JsonObject val = jsonObj(s, "validation");
@@ -739,15 +737,10 @@ public class QTraceDashboard {
         String region    = getRegionFromRow(data);
         boolean hasRegion = !region.isEmpty();
 
-        // Col 3 — BV (aSMA+)
-        int    bvCount  = getBvCountFromRow(data);
-        String bvText   = bvCount  > 0 ? "●  " + bvCount  : "–";
-        String bvColor  = bvCount  > 0 ? GREEN : TEXT_MUTED;
-
-        // Col 4 — Tau
-        int    tauCount = getTauCountFromRow(data);
-        String tauText  = tauCount > 0 ? "●  " + tauCount : "–";
-        String tauColor = tauCount > 0 ? GREEN : TEXT_MUTED;
+        // Col 4 — Annotations
+        int    annCount = getAnnotationCountFromRow(data);
+        String annText  = annCount > 0 ? String.valueOf(annCount) : "—";
+        String annColor = annCount > 0 ? TEXT_SUB : TEXT_MUTED;
 
         // Col 5 — ✓ Validated
         String valText, valColor;
@@ -804,11 +797,11 @@ public class QTraceDashboard {
             }
         }
 
-        // Col 10 — Steps
+        // Col 9 — Steps
         String stepsText = (hasSession && session.has("steps_captured"))
             ? String.valueOf(session.get("steps_captured").getAsInt()) : "—";
 
-        // Col 11 — 🛡 Signature
+        // Col 10 — 🛡 Signature
         String shieldText, shieldColor;
         {
             JsonObject val = hasSession ? jsonObj(session, "validation") : null;
@@ -864,14 +857,13 @@ public class QTraceDashboard {
             tcell(roi,       hasTrace ? TEXT_SUB : TEXT_MUTED, 1),
             tcell(statusText, statusColor, 2),
             tcell(hasRegion ? region : "(unknown)", hasRegion ? TEXT_SUB : TEXT_MUTED, 3, !hasRegion),
-            tcell(bvText,    bvColor,    4),
-            tcell(tauText,   tauColor,   5),
-            tcell(valText,   valColor,   6),
-            tcell(alignText, alignColor,  7),
-            tcell(segText,   segColor,    8),
-            tcell(clfText,   clfColor,    9),
-            tcell(stepsText,  TEXT_MUTED,  10),
-            tcell(shieldText, shieldColor, 11)
+            tcell(annText,   annColor,   4),
+            tcell(valText,   valColor,   5),
+            tcell(alignText, alignColor,  6),
+            tcell(segText,   segColor,    7),
+            tcell(clfText,   clfColor,    8),
+            tcell(stepsText,  TEXT_MUTED,  9),
+            tcell(shieldText, shieldColor, 10)
         );
 
         row.setOnMouseEntered(e -> { if (row != selectedRow) row.setStyle(bgHover); });
@@ -2102,6 +2094,12 @@ public class QTraceDashboard {
 
     private boolean hasBvFromRow(RowData rd)  { return getBvCountFromRow(rd)  > 0; }
     private boolean hasTauFromRow(RowData rd) { return getTauCountFromRow(rd) > 0; }
+
+    private int getAnnotationCountFromRow(RowData rd) {
+        JsonObject ann = latestAnnotations(rd);
+        if (ann == null || !ann.has("total") || ann.get("total").isJsonNull()) return 0;
+        return ann.get("total").getAsInt();
+    }
 
     private JsonObject latestAnnotations(RowData rd) {
         JsonObject session = latestSession(rd.qtrace());

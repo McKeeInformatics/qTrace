@@ -1,3 +1,10 @@
+## What's new in v1.0.12
+
+### Added — Dashboard "Annotations" column
+The Dashboard table now shows a per-image **Annotations** column with the total annotation count from the latest session, sortable like the other columns.
+
+---
+
 ## What's new in v1.0.11
 
 ### Added — Dashboard "Extensions" card
@@ -31,7 +38,7 @@ Opening the Dashboard while an image is open in QuPath now automatically selects
 
 ## Installation
 
-Drop `qtrace-core-1.0.11.jar` into your QuPath extensions folder:
+Drop `qtrace-core-1.0.12.jar` into your QuPath extensions folder:
 
 | Platform | Path |
 |---|---|
