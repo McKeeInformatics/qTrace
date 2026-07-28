@@ -37,6 +37,7 @@ import javafx.scene.text.FontWeight;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.projects.ProjectImageEntry;
 
 import io.qtrace.chain.CanonicalJson;
 
@@ -940,6 +941,104 @@ public class QTraceDashboard {
         return null;
     }
 
+    // ── Add Metadata ──────────────────────────────────────────────────────────
+
+    private ProjectImageEntry<?> resolveEntryForImage(String imageName) {
+        var project = qupath.getProject();
+        if (project == null) return null;
+        return project.getImageList().stream()
+            .filter(e -> namesMatch(e.getImageName(), imageName))
+            .findFirst()
+            .orElse(null);
+    }
+
+    /** Distinct metadata keys already used anywhere in the project, plus the default suggestions. */
+    private List<String> collectExistingMetadataKeys() {
+        Set<String> keys = new TreeSet<>();
+        keys.add("Training");
+        keys.add("Test");
+        var project = qupath.getProject();
+        if (project != null) {
+            for (ProjectImageEntry<?> e : project.getImageList()) {
+                keys.addAll(e.getMetadataKeys());
+            }
+        }
+        return new ArrayList<>(keys);
+    }
+
+    private void showAddMetadataDialog() {
+        if (selectedData == null) return;
+        ProjectImageEntry<?> entry = resolveEntryForImage(selectedData.imageName());
+        if (entry == null) return;
+
+        Stage dialog = new Stage();
+        dialog.initOwner(stage);
+        dialog.initModality(Modality.APPLICATION_MODAL);
+        dialog.setTitle("Metadata");
+
+        Label header = lbl("Set metadata for " + entry.getImageName(), TEXT_MAIN, 12, FontWeight.BOLD, false);
+
+        Label keyLabel = lbl("New key", TEXT_SUB, 11, FontWeight.NORMAL, false);
+        ComboBox<String> keyBox = new ComboBox<>();
+        keyBox.setEditable(true);
+        keyBox.getItems().setAll(collectExistingMetadataKeys());
+        keyBox.setMaxWidth(Double.MAX_VALUE);
+
+        Label valueLabel = lbl("New value", TEXT_SUB, 11, FontWeight.NORMAL, false);
+        TextField valueField = new TextField();
+
+        Label currentLabel = lbl("Current metadata", TEXT_SUB, 11, FontWeight.NORMAL, false);
+        TextArea currentArea = new TextArea();
+        currentArea.setEditable(false);
+        currentArea.setPrefRowCount(4);
+        currentArea.setWrapText(true);
+
+        Runnable refreshCurrent = () -> currentArea.setText(formatMetadataMap(entry.getMetadataMap()));
+        refreshCurrent.run();
+
+        Button okBtn = new Button("OK");
+        Button cancelBtn = new Button("Cancel");
+        okBtn.setDefaultButton(true);
+        cancelBtn.setCancelButton(true);
+        okBtn.setOnAction(ev -> {
+            String key = keyBox.getEditor().getText() == null ? "" : keyBox.getEditor().getText().trim();
+            String value = valueField.getText() == null ? "" : valueField.getText().trim();
+            if (!key.isEmpty()) {
+                entry.putMetadataValue(key, value);
+                var project = qupath.getProject();
+                if (project != null) {
+                    try { project.syncChanges(); } catch (Exception ignored) {}
+                }
+                autoScan();
+            }
+            dialog.close();
+        });
+        cancelBtn.setOnAction(ev -> dialog.close());
+
+        HBox buttonRow = new HBox(8, cancelBtn, okBtn);
+        buttonRow.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox root = new VBox(8, header, keyLabel, keyBox, valueLabel, valueField, currentLabel, currentArea, buttonRow);
+        root.setPadding(new Insets(14));
+        root.setStyle("-fx-background-color:" + BG_CARD + ";");
+
+        Scene scene = new Scene(root, 380, 340);
+        dialog.setScene(scene);
+        dialog.showAndWait();
+    }
+
+    private static String formatMetadataMap(Map<String, String> map) {
+        if (map == null || map.isEmpty()) return "{}";
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        for (var e : map.entrySet()) {
+            if (!first) sb.append(", ");
+            sb.append(e.getKey()).append(':').append(e.getValue());
+            first = false;
+        }
+        return sb.append('}').toString();
+    }
+
     // ── Populate detail (format 2.0) ──────────────────────────────────────────
 
     private void populate(JsonObject root) {
@@ -1038,6 +1137,23 @@ public class QTraceDashboard {
 
         if (img != null) {
             Label nameLabel = lbl("🖼  " + str(img, "name", "(inconnu)"), TEXT_MAIN, 13, FontWeight.BOLD, false);
+
+            Button metadataBtn = new Button("🏷 Add Metadata");
+            metadataBtn.setStyle(
+                "-fx-background-color:transparent;-fx-text-fill:" + TEXT_SUB + ";" +
+                "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
+                "-fx-border-color:" + TEXT_SUB + ";-fx-border-radius:4;-fx-background-radius:4;");
+            metadataBtn.setTooltip(new Tooltip("Add or edit project metadata for this image"));
+            metadataBtn.setOnMouseEntered(ev -> metadataBtn.setStyle(
+                "-fx-background-color:#2a2a3a;-fx-text-fill:" + TEXT_SUB + ";" +
+                "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
+                "-fx-border-color:" + TEXT_SUB + ";-fx-border-radius:4;-fx-background-radius:4;"));
+            metadataBtn.setOnMouseExited(ev -> metadataBtn.setStyle(
+                "-fx-background-color:transparent;-fx-text-fill:" + TEXT_SUB + ";" +
+                "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
+                "-fx-border-color:" + TEXT_SUB + ";-fx-border-radius:4;-fx-background-radius:4;"));
+            metadataBtn.setOnAction(ev -> showAddMetadataDialog());
+
             Button openBtn = new Button("📂 Open .qtrace");
             openBtn.setStyle(
                 "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";" +
@@ -1072,7 +1188,7 @@ public class QTraceDashboard {
 
             Region sp = new Region();
             HBox.setHgrow(sp, Priority.ALWAYS);
-            HBox titleRow = new HBox(6, nameLabel, sp, openBtn, deleteBtn);
+            HBox titleRow = new HBox(6, nameLabel, sp, metadataBtn, openBtn, deleteBtn);
             titleRow.setAlignment(Pos.CENTER_LEFT);
             imageCardContent.getChildren().add(titleRow);
 

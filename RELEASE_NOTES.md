@@ -1,3 +1,10 @@
+## What's new in v1.0.13
+
+### Added — Dashboard "Add Metadata" button
+A new **Add Metadata** button sits next to "Open .qtrace" in the Image & Validation card. It opens a small dialog to set a project image metadata key/value pair directly from the Dashboard — the key field suggests keys already in use across the project (plus "Training"/"Test" as defaults), but you can also type a new one.
+
+---
+
 ## What's new in v1.0.12
 
 ### Added — Dashboard "Annotations" column
