@@ -533,21 +533,10 @@ public class QTraceExporter {
                 // Vertex count for polygons / polylines / point lists
                 int nPts = roi.getNumPoints();
                 if (nPts > 0) d.addProperty("num_points", nPts);
-                // For lines: explicit start/end; for point annotations: full coordinate list
-                String roiName = roi.getRoiName();
-                if ("Line".equals(roiName) || "Points".equals(roiName)
-                 || "Polygon".equals(roiName) || "Polyline".equals(roiName)
-                 || "Geometry".equals(roiName)) {
-                    var pts = roi.getAllPoints();
-                    JsonArray ptsArr = new JsonArray();
-                    for (var p : pts) {
-                        JsonObject pt = new JsonObject();
-                        pt.addProperty("x", p.getX());
-                        pt.addProperty("y", p.getY());
-                        ptsArr.add(pt);
-                    }
-                    d.add("points", ptsArr);
-                }
+                // Full coordinate geometry is not embedded here — it's redundant with
+                // geojson_file (below) and unused by both compliance signing (which only
+                // covers qpdata_sha256, never per-vertex geometry) and replay (which
+                // re-runs the classifier/step rather than redrawing stored points).
             }
             details.add(d);
         }
