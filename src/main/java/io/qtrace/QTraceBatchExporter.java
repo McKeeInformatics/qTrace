@@ -123,12 +123,22 @@ public class QTraceBatchExporter {
     private static Optional<BatchConfig> showPreflight(Stage owner, int count) {
         Dialog<BatchConfig> dlg = new Dialog<>();
         dlg.initOwner(owner);
-        dlg.setTitle("QTrace — Batch Export");
+        dlg.setTitle("Batch Project - Generate all .qTrace / image");
         dlg.setHeaderText("Batch export — " + count + " image(s)\nValidation stamp applied to all images.");
 
-        TextField validatorFld = new TextField(QTraceConfig.get().getValidatorName());
+        // Certified identity (valid Compliance license) — locked, not editable.
+        // Core (no license) — free text, defaults to the configured validator name.
+        QTracePlugin entitledPlugin = QTracePluginManager.getEntitled();
+        LicenseInfo  activeLicense  = entitledPlugin != null ? entitledPlugin.getActiveLicenseInfo() : null;
+
+        TextField validatorFld = new TextField(
+            activeLicense != null ? activeLicense.name() : QTraceConfig.get().getValidatorName());
         validatorFld.setPromptText("Dr. Lastname / Analyst ID");
         validatorFld.setPrefWidth(280);
+        if (activeLicense != null) {
+            validatorFld.setEditable(false);
+            validatorFld.setTooltip(new Tooltip("Locked — identity certified by your qTrace license."));
+        }
 
         ComboBox<String> scopeBox = new ComboBox<>(FXCollections.observableArrayList(
             "Full Workflow", "Image QC", "Segmentation",
@@ -161,7 +171,7 @@ public class QTraceBatchExporter {
         dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
         Button okBtn = (Button) dlg.getDialogPane().lookupButton(ButtonType.OK);
-        okBtn.setText("Start Batch Export");
+        okBtn.setText("Start Process");
         okBtn.setDisable(validatorFld.getText().trim().isEmpty());
         validatorFld.textProperty().addListener((obs, o, n) ->
             okBtn.setDisable(n == null || n.trim().isEmpty()));
@@ -189,7 +199,7 @@ public class QTraceBatchExporter {
         stage.setWidth(540); stage.setHeight(420);
         stage.setResizable(true);
 
-        Label title = lbl("Batch Export — " + total + " image(s)", TEXT_MAIN, 13, true);
+        Label title = lbl(total + " image(s) to process", TEXT_MAIN, 13, true);
 
         ProgressBar bar = new ProgressBar(0);
         bar.setId("bar"); bar.setMaxWidth(Double.MAX_VALUE);

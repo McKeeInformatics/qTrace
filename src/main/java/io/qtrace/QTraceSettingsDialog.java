@@ -421,6 +421,11 @@ public class QTraceSettingsDialog {
     }
 
     private static void updateLicenseStatus(Label statusLbl, String path, TextField tfValidator) {
+        // Unlocked by default — only a verified, non-expired license re-locks it below.
+        // Otherwise a stamp could be signed under someone else's certified name.
+        tfValidator.setEditable(true);
+        tfValidator.setTooltip(null);
+
         if (path == null || path.isBlank()) {
             statusLbl.setText("No license loaded.");
             statusLbl.setTextFill(Color.web(TEXT_MUTED));
@@ -448,7 +453,11 @@ public class QTraceSettingsDialog {
             statusLbl.setText("✓ Verified — " + info.name() + " · " + info.institution()
                 + " · valid until " + info.expiresAtFormatted());
             statusLbl.setTextFill(Color.web(GREEN));
-            if (tfValidator.getText().isBlank()) tfValidator.setText(info.name());
+            // Certified identity — bound to the license, not freely editable.
+            tfValidator.setText(info.name());
+            tfValidator.setEditable(false);
+            tfValidator.setTooltip(new javafx.scene.control.Tooltip(
+                "Locked — identity certified by your qTrace license."));
         } catch (Exception ex) {
             statusLbl.setText("Could not read license file.");
             statusLbl.setTextFill(Color.web(RED));
