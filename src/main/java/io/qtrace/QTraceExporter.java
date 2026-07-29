@@ -301,6 +301,9 @@ public class QTraceExporter {
         // Manual detection corrections (audit-only — not replayable)
         session.add("manual_detection_corrections", buildDetectionCorrectionsArray());
 
+        // Manual annotation corrections (audit-only — not replayable)
+        session.add("manual_annotation_corrections", buildAnnotationCorrectionsArray());
+
         // Loaded QuPath extensions at export time
         if (extensions != null && extensions.size() > 0)
             session.add("extensions", extensions);
@@ -446,6 +449,12 @@ public class QTraceExporter {
     private JsonArray buildDetectionCorrectionsArray() {
         JsonArray arr = new JsonArray();
         for (JsonObject rec : logger.getManualDetectionCorrections()) arr.add(rec);
+        return arr;
+    }
+
+    private JsonArray buildAnnotationCorrectionsArray() {
+        JsonArray arr = new JsonArray();
+        for (JsonObject rec : logger.getManualAnnotationCorrections()) arr.add(rec);
         return arr;
     }
 

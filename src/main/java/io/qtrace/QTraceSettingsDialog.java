@@ -252,7 +252,7 @@ public class QTraceSettingsDialog {
         sep4.setStyle("-fx-background-color: " + BORDER + ";");
 
         CheckBox chkDetectionNote = new CheckBox(
-            "Prompt for a note when detections are manually deleted or split");
+            "Prompt for a note when detections or annotations are manually deleted (or detections split)");
         chkDetectionNote.setSelected(cfg.isPromptDetectionNote());
         chkDetectionNote.setTextFill(Color.web(TEXT_SUB));
         chkDetectionNote.setWrapText(true);

@@ -142,6 +142,14 @@ public class ActionLogger implements WorkflowListener {
     private final List<JsonObject> manualDetectionCorrections = new ArrayList<>();
     private final List<JsonObject> pendingRemovedDetections   = new ArrayList<>();
     private final List<JsonObject> pendingAddedDetections     = new ArrayList<>();
+
+    // Annotation correction audit — same justification prompt as detections,
+    // e.g. for regions manually deleted after a pixel classifier run.
+    private final List<JsonObject> manualAnnotationCorrections = new ArrayList<>();
+    private final List<JsonObject> pendingRemovedAnnotations   = new ArrayList<>();
+    private volatile boolean       annotationBatchPending      = false;
+    private volatile long          lastAnnotationEventTime     = 0;
+    private final List<JsonObject> lastSelectedAnnotations     = new ArrayList<>();
     private volatile boolean       detectionBatchPending      = false;
     private volatile long          lastDetectionEventTime     = 0;
     private static final long      DETECTION_BATCH_WINDOW_MS  = 400;
@@ -234,6 +242,30 @@ public class ActionLogger implements WorkflowListener {
             }
             if (any) scheduleDetectionBatch();
         }
+
+        // Manual annotation deletion — justification prompt, same two cases as detections
+        // above (e.g. regions manually cleaned up after a pixel classifier "Create objects" run).
+        if (type == PathObjectHierarchyEvent.HierarchyEventType.REMOVED && !scriptRunning) {
+            boolean any = false;
+            for (PathObject obj : changed) {
+                if (obj.isAnnotation()) { pendingRemovedAnnotations.add(serializeDetectionEvent(obj)); any = true; }
+            }
+            if (any) scheduleAnnotationBatch();
+        }
+
+        if (type == PathObjectHierarchyEvent.HierarchyEventType.OTHER_STRUCTURE_CHANGE
+                && !scriptRunning && changed.isEmpty() && !lastSelectedAnnotations.isEmpty()) {
+            Set<String> remaining = currentImageData.getHierarchy().getAnnotationObjects()
+                .stream().map(o -> o.getID().toString()).collect(Collectors.toSet());
+            List<JsonObject> deleted = lastSelectedAnnotations.stream()
+                .filter(j -> !remaining.contains(j.get("uuid").getAsString()))
+                .collect(Collectors.toList());
+            lastSelectedAnnotations.clear();
+            if (!deleted.isEmpty()) {
+                pendingRemovedAnnotations.addAll(deleted);
+                scheduleAnnotationBatch();
+            }
+        }
     };
 
     public void setPanel(QTracePanel p) { this.panel = p; }
@@ -281,9 +313,12 @@ public class ActionLogger implements WorkflowListener {
         imageData.getHierarchy().addListener(hierarchyListener);
         selectionListener = (selected, deselected, allSelected) -> {
             lastSelectedDetections.clear();
+            lastSelectedAnnotations.clear();
             if (allSelected != null)
-                for (PathObject obj : allSelected)
+                for (PathObject obj : allSelected) {
                     if (obj.isDetection()) lastSelectedDetections.add(serializeDetectionEvent(obj));
+                    else if (obj.isAnnotation()) lastSelectedAnnotations.add(serializeDetectionEvent(obj));
+                }
         };
         imageData.getHierarchy().getSelectionModel().addPathObjectSelectionListener(selectionListener);
         startClassifierWatcher();
@@ -333,6 +368,7 @@ public class ActionLogger implements WorkflowListener {
         }
         selectionListener = null;
         lastSelectedDetections.clear();
+        lastSelectedAnnotations.clear();
         currentImageData      = null;
         imageHash             = null;
         lastKnownStepCount    = 0;
@@ -345,6 +381,9 @@ public class ActionLogger implements WorkflowListener {
         pendingRemovedDetections.clear();
         pendingAddedDetections.clear();
         detectionBatchPending = false;
+        manualAnnotationCorrections.clear();
+        pendingRemovedAnnotations.clear();
+        annotationBatchPending = false;
 
         if (panel != null) panel.setRecordingActive(false);
         if (panel != null) panel.setRecordReady(false);
@@ -596,6 +635,10 @@ public class ActionLogger implements WorkflowListener {
         return Collections.unmodifiableList(manualDetectionCorrections);
     }
 
+    public List<JsonObject> getManualAnnotationCorrections() {
+        return Collections.unmodifiableList(manualAnnotationCorrections);
+    }
+
     // ── Detection correction tracking ─────────────────────────────────────────
 
     private void scheduleDetectionBatch() {
@@ -668,6 +711,64 @@ public class ActionLogger implements WorkflowListener {
         if (panel != null) panel.log(msg);
     }
 
+    // ── Annotation correction tracking ──────────────────────────────────────
+
+    private void scheduleAnnotationBatch() {
+        lastAnnotationEventTime = System.currentTimeMillis();
+        if (annotationBatchPending) return;
+        annotationBatchPending = true;
+        Thread t = new Thread(() -> {
+            try {
+                while (System.currentTimeMillis() - lastAnnotationEventTime < DETECTION_BATCH_WINDOW_MS)
+                    Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            Platform.runLater(this::processAnnotationBatch);
+        }, "qtrace-annotation-batch");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void processAnnotationBatch() {
+        annotationBatchPending = false;
+        if (pendingRemovedAnnotations.isEmpty()) return;
+
+        List<JsonObject> removed = new ArrayList<>(pendingRemovedAnnotations);
+        pendingRemovedAnnotations.clear();
+
+        String author = QTraceController.currentContributor();
+
+        if (QTraceConfig.get().isPromptDetectionNote()) {
+            String heading = removed.size() + " annotation" + (removed.size() > 1 ? "s" : "") + " manually deleted";
+            showCorrectionNoteDialog("qTrace — Annotation correction", heading,
+                note -> recordAnnotationCorrection(removed, author, note));
+        } else {
+            recordAnnotationCorrection(removed, author, "");
+        }
+    }
+
+    private void recordAnnotationCorrection(List<JsonObject> removed, String author, String note) {
+        JsonObject record = new JsonObject();
+        record.addProperty("type",      "deletion");
+        record.addProperty("timestamp", Instant.now().toString());
+        record.addProperty("author",    author);
+        record.addProperty("n_deleted", removed.size());
+        if (note != null && !note.isBlank()) record.addProperty("note", note);
+
+        JsonArray deletedArr = new JsonArray();
+        removed.forEach(deletedArr::add);
+        record.add("deleted", deletedArr);
+
+        manualAnnotationCorrections.add(record);
+        if (panel != null) panel.setRecordReady(true);
+
+        String msg = "Annotation" + (removed.size() > 1 ? "s" : "") + " deleted: " + removed.size();
+        if (note != null && !note.isBlank()) msg += " — " + note;
+        if (panel != null) panel.log(msg);
+    }
+
     private void showDetectionNoteDialog(String type, int nDeleted, int nAdded,
                                           Consumer<String> onDone) {
         String heading = type.equals("split")
@@ -675,10 +776,14 @@ public class ActionLogger implements WorkflowListener {
                 + nAdded + " fragment" + (nAdded > 1 ? "s" : "")
             : nDeleted + " detection" + (nDeleted > 1 ? "s" : "") + " manually deleted";
 
+        showCorrectionNoteDialog("qTrace — Detection correction", heading, onDone);
+    }
+
+    private void showCorrectionNoteDialog(String dialogTitle, String heading, Consumer<String> onDone) {
         Stage dlg = new Stage();
         dlg.initOwner(qupath.getStage());
         dlg.initModality(Modality.WINDOW_MODAL);
-        dlg.setTitle("qTrace — Detection correction");
+        dlg.setTitle(dialogTitle);
         dlg.setResizable(false);
 
         Label headLbl = new Label(heading);
