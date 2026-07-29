@@ -43,6 +43,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -203,6 +204,75 @@ public class QTraceController {
             else if (attached)
                 panel.log("qTrace recording — waiting for first action.");
         });
+        refreshPushAvailability();
+    }
+
+    /**
+     * Enables the "Upload" button whenever a .qtcert already exists on disk for the
+     * currently open image — not only right after a fresh stamp in this session.
+     * Scans every case_&lt;id&gt;/certs/*.qtcert under the export dir for one whose
+     * subject.image_sha256 matches the open image, keeping the most recently issued.
+     */
+    private void refreshPushAvailability() {
+        if (panel == null) return;
+        QTracePlugin ep = QTracePluginManager.getEntitled();
+        if (ep == null) return; // Upload button doesn't exist without Compliance
+        try {
+            var imageData = logger != null ? logger.getCurrentImageData() : null;
+            String imageHash = logger != null ? logger.getImageHash() : null;
+            if (imageData == null || imageHash == null) {
+                panel.setPushEnabled(false);
+                return;
+            }
+            String imageName = imageData.getServer().getMetadata().getName();
+            String base = imageName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            Path exportDir  = QTraceConfig.get().getExportDir();
+            Path qtracePath = exportDir.resolve(base + ".qtrace");
+            if (!Files.exists(qtracePath) || !Files.isDirectory(exportDir)) {
+                panel.setPushEnabled(false);
+                return;
+            }
+
+            Path bestCert = null;
+            Instant bestTime = null;
+            try (var caseDirs = Files.list(exportDir)) {
+                for (Path caseDir : (Iterable<Path>) caseDirs
+                        .filter(p -> Files.isDirectory(p) && p.getFileName().toString().startsWith("case_"))
+                        ::iterator) {
+                    Path certsDir = caseDir.resolve("certs");
+                    if (!Files.isDirectory(certsDir)) continue;
+                    try (var certFiles = Files.list(certsDir)) {
+                        for (Path certFile : (Iterable<Path>) certFiles
+                                .filter(p -> p.toString().endsWith(".qtcert"))::iterator) {
+                            try {
+                                JsonObject cert = JsonParser.parseString(Files.readString(certFile)).getAsJsonObject();
+                                JsonObject subject = cert.has("subject") ? cert.getAsJsonObject("subject") : null;
+                                String certImageHash = subject != null && subject.has("image_sha256")
+                                    && !subject.get("image_sha256").isJsonNull()
+                                    ? subject.get("image_sha256").getAsString() : null;
+                                if (!imageHash.equals(certImageHash)) continue;
+                                Instant t = cert.has("issued_at")
+                                    ? Instant.parse(cert.get("issued_at").getAsString()) : Instant.EPOCH;
+                                if (bestTime == null || t.isAfter(bestTime)) {
+                                    bestTime = t;
+                                    bestCert = certFile;
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            }
+
+            if (bestCert != null && Files.exists(bestCert.getParent().getParent().resolve("chain.jsonl"))) {
+                lastQtracePath = qtracePath;
+                lastCertPath   = bestCert;
+                panel.setPushEnabled(true);
+            } else {
+                panel.setPushEnabled(false);
+            }
+        } catch (Exception e) {
+            panel.setPushEnabled(false);
+        }
     }
 
     public void showDashboard() {
@@ -533,8 +603,10 @@ public class QTraceController {
                     logger.attach(newData);
                     fireRecordingState(newData != null);
                 }
-                if (panel != null && panel.isShowing())
+                if (panel != null && panel.isShowing()) {
                     Platform.runLater(panel::refreshStatus);
+                    refreshPushAvailability();
+                }
             }
 
             @Override public void visibleRegionChanged(QuPathViewer v, java.awt.Shape s) {}
