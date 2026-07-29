@@ -539,7 +539,7 @@ public class QTracePanel {
         btn.setContentDisplay(ContentDisplay.TOP);
         btn.setGraphicTextGap(3);
         btn.setFont(Font.font("System", 10.5));
-        btn.setTextFill(Color.web(TEXT_FAINT));
+        btn.setTextFill(Color.web(TEXT_MUTED));
         btn.setTooltip(new Tooltip(tooltipText));
         String idleStyle  = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
         String hoverStyle = "-fx-background-color: " + BG_ELEVATED + "; -fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
@@ -553,7 +553,7 @@ public class QTracePanel {
         btn.setOnMouseExited(e -> {
             if (btn.isDisabled()) return;
             btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
-            btn.setTextFill(Color.web(TEXT_FAINT));
+            btn.setTextFill(Color.web(TEXT_MUTED));
             btn.setStyle(idleStyle);
         });
         return btn;
