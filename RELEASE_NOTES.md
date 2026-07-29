@@ -1,3 +1,22 @@
+## What's new in v1.0.14
+
+### Redesigned — Panel toolbar
+Icon-only glyphs with hover-only tooltips left users guessing which button did what. The toolbar now shows labeled, grouped vector icons: **Stamp** (was "Record" — capture itself is passive, this validates & stamps), **Upload**/**Replay**/**Version(s)**/**Report** (Workspace & Analysis, Compliance only), **Dashboard**/**Import** (always available). A **Recording**/**Paused** status (top-right, next to the title) replaces the old ambiguous record button semantics, and a certified-license badge under the title shows "Certified for {name} — {id} · until {date}" in gold when a Compliance license is active, or "Core edition" in gray otherwise.
+
+### Added — Manual annotation correction tracking
+Manual annotation deletions now prompt for a justification note and are recorded in the `.qtrace`, mirroring the existing detection-correction audit trail (same dialog, same Settings toggle). Audit-only — not replayable.
+
+### Added — Validator identity locked to certified license
+The validator name field in Settings and the Batch Export dialog now locks to the license holder's certified name (read-only, with an explanatory tooltip) whenever a valid Compliance license is active, so a stamp can no longer be signed under someone else's identity.
+
+### Added — Upload auto-enables for already-stamped images
+The Upload button previously only enabled right after a fresh stamp in the current session. It now scans `case_<id>/certs/*.qtcert` under the export directory on image change, matching by image hash, so a previously-stamped image is upload-ready again without re-stamping.
+
+### Changed — Smaller `.qtrace` exports
+Per-vertex point/polygon coordinate arrays are no longer embedded in the `.qtrace` JSON — they were redundant with the accompanying `geojson_file` and unused by both compliance signing (which only covers `qpdata_sha256`) and replay (which re-runs the step rather than redrawing stored points).
+
+---
+
 ## What's new in v1.0.13
 
 ### Added — Dashboard "Add Metadata" button
