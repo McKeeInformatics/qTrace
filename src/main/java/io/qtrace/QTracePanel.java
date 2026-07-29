@@ -20,22 +20,28 @@
 package io.qtrace;
 
 import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
+import javafx.scene.Group;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Circle;
+import javafx.scene.shape.*;
 import javafx.scene.text.*;
+import javafx.scene.transform.Scale;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import java.util.function.Function;
 import qupath.lib.gui.QuPathGUI;
 
 public class QTracePanel {
@@ -52,6 +58,17 @@ public class QTracePanel {
     private static final String PEACH      = "#fab387";
     private static final String RED        = "#f38ba8";
 
+    // Toolbar redesign — CTA + functional group accents
+    private static final String BG_ELEVATED = "#26263a";
+    private static final String TEXT_FAINT  = "#4a4a5e";
+    private static final String CTA_TEAL       = "#2dd4bf";
+    private static final String CTA_TEAL_SOFT  = "rgba(45,212,191,0.14)";
+    private static final String CTA_TEAL_BORDER = "rgba(45,212,191,0.35)";
+    private static final String GROUP_WORKSPACE = "#8B5CF6";
+    private static final String GROUP_TOOLS     = "#10B981";
+    private static final String GROUP_ADMIN     = "#9CA3AF";
+    private static final String GOLD            = "#d9b34d";
+
     private final Stage stage;
     private final QTraceController controller;
 
@@ -63,9 +80,14 @@ public class QTracePanel {
     private Label    preExistingLabel;
     private Label    corrCountLabel;
 
-    // Record button (header)
+    // Capture status — top-right, on the title's line (passive, non-clickable)
+    private Circle   captureDot;
+    private Label    captureLabel;
+    private Timeline captureBlink;
+
+    // Record button (header) — CTA "Stamp"
     private Button   btnRecord;
-    // Cloud push button (Compliance only)
+    // Cloud push button (Compliance only) — "Upload"
     private Button   btnPush;
 
     // Log
@@ -83,11 +105,11 @@ public class QTracePanel {
         stage.setMinHeight(340);
         stage.setHeight(460);
         if (QTracePluginManager.isEntitled()) {
-            stage.setMinWidth(460);
-            stage.setWidth(540);
+            stage.setMinWidth(560);
+            stage.setWidth(560);
         } else {
-            stage.setMinWidth(300);
-            stage.setWidth(340);
+            stage.setMinWidth(340);
+            stage.setWidth(360);
         }
         Image logo = loadLogo();
         if (logo != null) stage.getIcons().add(logo);
@@ -119,11 +141,14 @@ public class QTracePanel {
 
     // ── Header ───────────────────────────────────────────────────────────────
 
-    private HBox buildHeader() {
-        HBox header = new HBox(8);
-        header.setAlignment(Pos.CENTER_LEFT);
+    private VBox buildHeader() {
+        VBox header = new VBox(4);
 
-        ImageView logoView = logoView(28);
+        // ── Line 1: logo + title + passive capture status (top-right, title's line) ──
+        HBox topLine = new HBox(10);
+        topLine.setAlignment(Pos.CENTER_LEFT);
+
+        ImageView logoView = logoView(26);
 
         String edition = QTracePluginManager.hasCompliance()
             ? "Compliance" + QTraceController.entitlementSuffix()
@@ -132,176 +157,155 @@ public class QTracePanel {
         title.setFont(Font.font("System", FontWeight.BOLD, 18));
         title.setFill(Color.web(TEXT_MAIN));
 
+        Region topSpacer = new Region();
+        HBox.setHgrow(topSpacer, Priority.ALWAYS);
+
+        HBox captureStatus = buildCaptureStatus();
+
+        Button settingsBtn = iconOnlyButton(glyphIcon("⚙"), QTraceI18n.t("btn.settings.tooltip"), Color.web(GROUP_ADMIN));
+        settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(stage));
+
+        topLine.getChildren().addAll(logoView, title, topSpacer, captureStatus, settingsBtn);
+
+        // ── Line 2: subtitle + license badge, indented under the title ──
         Text sub = new Text("Workflow Provenance — v" + QTraceController.getDisplayVersion());
         sub.setFont(Font.font("System", 11));
         sub.setFill(Color.web(TEXT_MUTED));
 
-        // Compliance header line: green "✓ Name" when licensed & active,
-        // amber "⚠ License expired — renew" when the JAR is present but not entitled.
-        String licenseeLine = null;
-        boolean licenseWarn = false;
+        VBox metaBlock = new VBox(1, sub, buildLicenseBadge());
+        metaBlock.setPadding(new Insets(0, 0, 0, 36));
+
+        header.getChildren().addAll(topLine, metaBlock, buildToolbarRow());
+        return header;
+    }
+
+    // ── Capture status (passive — Recording / Paused) ───────────────────────────
+
+    private HBox buildCaptureStatus() {
+        captureDot = new Circle(3.2, Color.web(TEXT_MUTED));
+        captureLabel = styledLabel("Paused", TEXT_MUTED, FontWeight.BOLD, 10);
+        HBox box = new HBox(5, captureDot, captureLabel);
+        box.setAlignment(Pos.CENTER_RIGHT);
+        return box;
+    }
+
+    private void startCaptureBlink() {
+        if (captureBlink != null) captureBlink.stop();
+        captureBlink = new Timeline(
+            new KeyFrame(Duration.ZERO,           new KeyValue(captureDot.opacityProperty(), 1.0)),
+            new KeyFrame(Duration.millis(1200),   new KeyValue(captureDot.opacityProperty(), 0.35)),
+            new KeyFrame(Duration.millis(2400),   new KeyValue(captureDot.opacityProperty(), 1.0))
+        );
+        captureBlink.setCycleCount(Timeline.INDEFINITE);
+        captureBlink.play();
+    }
+
+    private void stopCaptureBlink() {
+        if (captureBlink != null) { captureBlink.stop(); captureBlink = null; }
+        if (captureDot != null) captureDot.setOpacity(1.0);
+    }
+
+    // ── License badge (medal icon + discreet text) ──────────────────────────────
+
+    private HBox buildLicenseBadge() {
         QTracePlugin entitled = QTracePluginManager.getEntitled();
-        if (entitled != null) {
+        String text;
+        String iconColor;
+        boolean urgent = false; // keep the text itself colored for warning/error states
+
+        if (entitled != null && entitled.getActiveLicenseInfo() != null) {
             LicenseInfo li = entitled.getActiveLicenseInfo();
-            if (li != null) licenseeLine = "✓ " + li.name();
+            text = "Certified for " + li.name() + " — " + li.validatorKeyShort()
+                 + "  ·  until " + li.expiresAtFormatted().replace("-", "/");
+            iconColor = GOLD;
         } else if (QTracePluginManager.hasCompliance()) {
-            licenseeLine = "⚠ " + QTraceI18n.t("license.inactive.header");
-            licenseWarn = true;
-        }
-        boolean licenseError = QTraceController.entitlementIsError(); // invalid signature → red
-        Text licenseText = licenseeLine != null ? new Text(licenseeLine) : null;
-        if (licenseText != null) {
-            licenseText.setFont(Font.font("System", FontWeight.BOLD, 11));
-            licenseText.setFill(Color.web(licenseError ? RED : licenseWarn ? PEACH : GREEN));
+            text = QTraceI18n.t("license.inactive.header");
+            iconColor = QTraceController.entitlementIsError() ? RED : PEACH;
+            urgent = true;
+        } else {
+            text = "Core edition";
+            iconColor = TEXT_MUTED;
         }
 
-        VBox titleBlock = licenseText != null
-            ? new VBox(1, title, sub, licenseText)
-            : new VBox(1, title, sub);
-        titleBlock.setAlignment(Pos.CENTER_LEFT);
+        Group icon = scaledIcon(iconMedal(Color.web(iconColor)), 11);
+        Label label = styledLabel(text, urgent ? iconColor : TEXT_MUTED, FontWeight.NORMAL, 13);
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox badge = new HBox(4, icon, label);
+        badge.setAlignment(Pos.CENTER_LEFT);
+        return badge;
+    }
 
-        // ◉ Record your Trace — primary action button
-        btnRecord = new Button("◉");
-        btnRecord.setFont(Font.font("System", FontWeight.BOLD, 16));
-        btnRecord.setTextFill(Color.web(TEXT_MUTED));
-        Tooltip recordTip = new Tooltip(QTraceI18n.t("btn.record.tooltip"));
+    // ── Toolbar row (single line, CTA + functional groups) ──────────────────────
+
+    private HBox buildToolbarRow() {
+        HBox row = new HBox(9);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(6, 0, 0, 0));
+
+        // ⚡ Stamp — CTA. Validates & stamps the current trace (capture itself is passive).
+        btnRecord = new Button(QTraceI18n.t("btn.stamp.caption"));
+        btnRecord.setGraphic(scaledIcon(iconStamp(Color.web(CTA_TEAL)), 17));
+        btnRecord.setContentDisplay(ContentDisplay.LEFT);
+        btnRecord.setGraphicTextGap(7);
+        btnRecord.setFont(Font.font("System", FontWeight.BOLD, 13));
+        btnRecord.setTextFill(Color.web(CTA_TEAL));
+        Tooltip recordTip = new Tooltip(QTraceI18n.t("btn.stamp.tooltip"));
         recordTip.setWrapText(true);
         recordTip.setMaxWidth(260);
         btnRecord.setTooltip(recordTip);
         btnRecord.setDisable(true);
+        btnRecord.setOpacity(0.45);
         btnRecord.setStyle(
-            "-fx-background-color: transparent;"
+            "-fx-background-color: " + CTA_TEAL_SOFT + ";"
+          + "-fx-background-radius: 7;"
+          + "-fx-border-color: " + CTA_TEAL_BORDER + ";"
+          + "-fx-border-radius: 7;"
           + "-fx-cursor: hand;"
-          + "-fx-padding: 0 4 0 4;"
+          + "-fx-padding: 6 12 6 10;"
         );
-        btnRecord.setOnMouseEntered(e -> {
-            if (!btnRecord.isDisabled()) btnRecord.setTextFill(Color.web("#ff6680"));
-        });
-        btnRecord.setOnMouseExited(e -> {
-            if (!btnRecord.isDisabled()) btnRecord.setTextFill(Color.web(RED));
-        });
         btnRecord.setOnAction(e -> controller.recordTrace());
+        row.getChildren().add(btnRecord);
 
-        Button dashboard = new Button("⊞");
-        dashboard.setFont(Font.font("System", 14));
-        dashboard.setTextFill(Color.web(TEXT_MUTED));
-        dashboard.setTooltip(new Tooltip("Open Dashboard — inspect any .qtrace file"));
-        dashboard.setStyle(
-            "-fx-background-color: transparent;"
-          + "-fx-cursor: hand;"
-          + "-fx-padding: 0 4 0 4;"
-        );
-        dashboard.setOnMouseEntered(e -> dashboard.setTextFill(Color.web(BLUE)));
-        dashboard.setOnMouseExited(e  -> dashboard.setTextFill(Color.web(TEXT_MUTED)));
-        dashboard.setOnAction(e -> controller.showDashboard());
-
-        Button batchBtn = new Button("⇩");
-        batchBtn.setFont(Font.font("System", 14));
-        batchBtn.setTextFill(Color.web(TEXT_MUTED));
-        batchBtn.setTooltip(new Tooltip("Batch Import — generate .qtrace for all project's images"));
-        batchBtn.setStyle(
-            "-fx-background-color: transparent;"
-          + "-fx-cursor: hand;"
-          + "-fx-padding: 0 4 0 4;"
-        );
-        batchBtn.setOnMouseEntered(e -> batchBtn.setTextFill(Color.web(GREEN)));
-        batchBtn.setOnMouseExited(e  -> batchBtn.setTextFill(Color.web(TEXT_MUTED)));
-        batchBtn.setOnAction(e -> controller.startBatchExport());
-
-        Button reset = new Button("↺");
-        reset.setFont(Font.font("System", 14));
-        reset.setTextFill(Color.web(TEXT_MUTED));
-        reset.setTooltip(new Tooltip("Reset — clear captured history, restart tracking from now"));
-        reset.setStyle(
-            "-fx-background-color: transparent;"
-          + "-fx-cursor: hand;"
-          + "-fx-padding: 0 4 0 4;"
-        );
-        reset.setOnMouseEntered(e -> reset.setTextFill(Color.web(RED)));
-        reset.setOnMouseExited(e  -> reset.setTextFill(Color.web(TEXT_MUTED)));
-        reset.setOnAction(e -> controller.resetCapture());
-
-        Button gear = new Button("⚙");
-        gear.setFont(Font.font("System", 13));
-        gear.setTextFill(Color.web(TEXT_MUTED));
-        gear.setTooltip(new Tooltip("Export path settings"));
-        gear.setStyle(
-            "-fx-background-color: transparent;"
-          + "-fx-cursor: hand;"
-          + "-fx-padding: 0 4 0 4;"
-        );
-        gear.setOnMouseEntered(e -> gear.setTextFill(Color.web(TEXT_MAIN)));
-        gear.setOnMouseExited(e  -> gear.setTextFill(Color.web(TEXT_MUTED)));
-        gear.setOnAction(e -> QTraceSettingsDialog.show(stage));
-
-        // Cloud workspace push + Replay + Graph — Compliance, only when licensed & active.
+        // Workspace & Analyse — Compliance only, when licensed & active.
         // When the license is inactive the panel degrades to the Core button set.
         if (QTracePluginManager.isEntitled()) {
-            btnPush = new Button("☁");
-            btnPush.setFont(Font.font("System", 14));
-            btnPush.setTextFill(Color.web(TEXT_MUTED));
-            btnPush.setTooltip(new Tooltip(
-                "Push to workspace — upload this certificate to your qtrace.ca workspace for Bitcoin anchoring"));
-            btnPush.setStyle(
-                "-fx-background-color: transparent;"
-              + "-fx-cursor: hand;"
-              + "-fx-padding: 0 4 0 4;"
-            );
+            row.getChildren().add(vseparator());
+
+            btnPush = iconButton(iconFactory(this::iconUpload), QTraceI18n.t("btn.upload.caption"),
+                QTraceI18n.t("btn.upload.tooltip"), Color.web(GROUP_WORKSPACE));
             btnPush.setDisable(true);
-            btnPush.setOnMouseEntered(e -> { if (!btnPush.isDisabled()) btnPush.setTextFill(Color.web(BLUE)); });
-            btnPush.setOnMouseExited(e  -> { if (!btnPush.isDisabled()) btnPush.setTextFill(Color.web(TEXT_MUTED)); });
+            btnPush.setOpacity(0.45);
             btnPush.setOnAction(e -> controller.pushToWorkspace());
 
-            Button btnReplay = new Button("▶");
-            btnReplay.setFont(Font.font("System", FontWeight.BOLD, 13));
-            btnReplay.setTextFill(Color.web(GREEN));
-            btnReplay.setTooltip(new Tooltip("Replay from workspace — load a qtc_ bundle into the Script Editor"));
-            btnReplay.setStyle(
-                "-fx-background-color: transparent;"
-              + "-fx-cursor: hand;"
-              + "-fx-padding: 0 4 0 4;"
-            );
-            btnReplay.setOnMouseEntered(e -> btnReplay.setTextFill(Color.web(TEXT_MAIN)));
-            btnReplay.setOnMouseExited(e  -> btnReplay.setTextFill(Color.web(GREEN)));
+            Button btnReplay = iconButton(iconFactory(this::iconReplay), QTraceI18n.t("btn.replay.caption"),
+                QTraceI18n.t("btn.replay.tooltip"), Color.web(GROUP_WORKSPACE));
             btnReplay.setOnAction(e -> controller.openReplayDialog());
 
-            // ⑃ Commit graph — visualize the .qtrace version history (contributors per commit)
-            Button btnGraph = new Button("⑃");
-            btnGraph.setFont(Font.font("System", FontWeight.BOLD, 14));
-            btnGraph.setTextFill(Color.web(TEXT_MUTED));
-            btnGraph.setTooltip(new Tooltip(QTraceI18n.t("btn.graph.tooltip")));
-            btnGraph.setStyle(
-                "-fx-background-color: transparent;"
-              + "-fx-cursor: hand;"
-              + "-fx-padding: 0 4 0 4;"
-            );
-            btnGraph.setOnMouseEntered(e -> btnGraph.setTextFill(Color.web(BLUE)));
-            btnGraph.setOnMouseExited(e  -> btnGraph.setTextFill(Color.web(TEXT_MUTED)));
+            row.getChildren().addAll(btnPush, btnReplay);
+            row.getChildren().add(vseparator());
+
+            Button btnGraph = iconButton(iconFactory(this::iconVersions), QTraceI18n.t("btn.versions.caption"),
+                QTraceI18n.t("btn.versions.tooltip"), Color.web(GROUP_WORKSPACE));
             btnGraph.setOnAction(e -> controller.showCommitGraph());
 
-            // ▤ Activity report — per-contributor LLM summary of the .qtrace
-            //   (geometric glyph, not an emoji — emojis don't render in JavaFX's default font)
-            Button btnReport = new Button("▤");
-            btnReport.setFont(Font.font("System", FontWeight.BOLD, 14));
-            btnReport.setTextFill(Color.web(TEXT_MUTED));
-            btnReport.setTooltip(new Tooltip(QTraceI18n.t("btn.report.tooltip")));
-            btnReport.setStyle(
-                "-fx-background-color: transparent;"
-              + "-fx-cursor: hand;"
-              + "-fx-padding: 0 4 0 4;"
-            );
-            btnReport.setOnMouseEntered(e -> btnReport.setTextFill(Color.web(BLUE)));
-            btnReport.setOnMouseExited(e  -> btnReport.setTextFill(Color.web(TEXT_MUTED)));
+            Button btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),
+                QTraceI18n.t("btn.report.tooltip"), Color.web(GROUP_WORKSPACE));
             btnReport.setOnAction(e -> controller.generateActivityReport());
 
-            header.getChildren().addAll(logoView, titleBlock, spacer, btnRecord, btnPush, btnReplay, btnGraph, btnReport, dashboard, batchBtn, reset, gear);
-        } else {
-            header.getChildren().addAll(logoView, titleBlock, spacer, btnRecord, dashboard, batchBtn, reset, gear);
+            row.getChildren().addAll(btnGraph, btnReport);
         }
-        return header;
+
+        // Consultation & Traitement — always available, Core + Compliance.
+        row.getChildren().add(vseparator());
+        Button dashboardBtn = iconButton(iconFactory(this::iconDashboard), QTraceI18n.t("btn.dashboard.caption"),
+            QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
+        Button importBtn = iconButton(iconFactory(this::iconImport), QTraceI18n.t("btn.import.caption"),
+            QTraceI18n.t("btn.import.tooltip"), Color.web(GROUP_TOOLS));
+        dashboardBtn.setOnAction(e -> controller.showDashboard());
+        importBtn.setOnAction(e -> controller.startBatchExport());
+        row.getChildren().addAll(dashboardBtn, importBtn);
+
+        return row;
     }
 
     // ── Status section ───────────────────────────────────────────────────────
@@ -481,6 +485,277 @@ public class QTracePanel {
         return lbl;
     }
 
+    // ── Toolbar button factory (icon on top, caption below, hover/disabled aware) ──
+
+    private Region vseparator() {
+        Region sep = new Region();
+        sep.setPrefWidth(1);
+        sep.setMaxWidth(1);
+        sep.setPrefHeight(24);
+        sep.setMaxHeight(24);
+        sep.setStyle("-fx-background-color: " + BORDER + ";");
+        return sep;
+    }
+
+    /** Wraps a vector icon factory (Color → Group, 24-unit viewBox) into a Node factory at toolbar icon size. */
+    private Function<Color, Node> iconFactory(Function<Color, Group> vector) {
+        return color -> scaledIcon(vector.apply(color), 18);
+    }
+
+    /** Adapter for a unicode glyph (Settings ⚙) that doesn't need a redrawn vector icon. */
+    private Function<Color, Node> glyphIcon(String glyph) {
+        return color -> {
+            Label l = new Label(glyph);
+            l.setFont(Font.font("System", FontWeight.BOLD, 16));
+            l.setTextFill(color);
+            return l;
+        };
+    }
+
+    /** Icon-only button (no caption) — used for the Settings gear, top-right of the header. */
+    private Button iconOnlyButton(Function<Color, Node> iconFactory, String tooltipText, Color hoverColor) {
+        Button btn = new Button();
+        btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+        btn.setTooltip(new Tooltip(tooltipText));
+        String idleStyle  = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 3;";
+        String hoverStyle = "-fx-background-color: " + BG_ELEVATED + "; -fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 3;";
+        btn.setStyle(idleStyle);
+        btn.setOnMouseEntered(e -> {
+            if (btn.isDisabled()) return;
+            btn.setGraphic(iconFactory.apply(hoverColor));
+            btn.setStyle(hoverStyle);
+        });
+        btn.setOnMouseExited(e -> {
+            if (btn.isDisabled()) return;
+            btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+            btn.setStyle(idleStyle);
+        });
+        return btn;
+    }
+
+    private Button iconButton(Function<Color, Node> iconFactory, String captionText, String tooltipText, Color hoverColor) {
+        Button btn = new Button(captionText);
+        btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+        btn.setContentDisplay(ContentDisplay.TOP);
+        btn.setGraphicTextGap(3);
+        btn.setFont(Font.font("System", 10.5));
+        btn.setTextFill(Color.web(TEXT_FAINT));
+        btn.setTooltip(new Tooltip(tooltipText));
+        String idleStyle  = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
+        String hoverStyle = "-fx-background-color: " + BG_ELEVATED + "; -fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
+        btn.setStyle(idleStyle);
+        btn.setOnMouseEntered(e -> {
+            if (btn.isDisabled()) return;
+            btn.setGraphic(iconFactory.apply(hoverColor));
+            btn.setTextFill(Color.web(TEXT_SUB));
+            btn.setStyle(hoverStyle);
+        });
+        btn.setOnMouseExited(e -> {
+            if (btn.isDisabled()) return;
+            btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+            btn.setTextFill(Color.web(TEXT_FAINT));
+            btn.setStyle(idleStyle);
+        });
+        return btn;
+    }
+
+    private Group scaledIcon(Group inner, double targetSize) {
+        inner.getTransforms().add(new Scale(targetSize / 24.0, targetSize / 24.0, 0, 0));
+        return new Group(inner);
+    }
+
+    // ── Vector icon primitives ───────────────────────────────────────────────────
+
+    private static Line ln(double x1, double y1, double x2, double y2, Color c, double sw) {
+        Line l = new Line(x1, y1, x2, y2);
+        l.setStroke(c);
+        l.setStrokeWidth(sw);
+        l.setStrokeLineCap(StrokeLineCap.ROUND);
+        return l;
+    }
+
+    private static Circle circ(double cx, double cy, double r, Color c, double sw, boolean filled) {
+        Circle circle = new Circle(cx, cy, r);
+        if (filled) {
+            circle.setFill(c);
+            circle.setStroke(null);
+        } else {
+            circle.setFill(Color.TRANSPARENT);
+            circle.setStroke(c);
+            circle.setStrokeWidth(sw);
+        }
+        return circle;
+    }
+
+    private static Rectangle rect(double x, double y, double w, double h, double arc, Color c, double sw) {
+        Rectangle r = new Rectangle(x, y, w, h);
+        r.setArcWidth(arc);
+        r.setArcHeight(arc);
+        r.setFill(Color.TRANSPARENT);
+        r.setStroke(c);
+        r.setStrokeWidth(sw);
+        return r;
+    }
+
+    private static Path openPath(Color c, double sw, double... coords) {
+        Path p = new Path();
+        p.getElements().add(new MoveTo(coords[0], coords[1]));
+        for (int i = 2; i < coords.length; i += 2) p.getElements().add(new LineTo(coords[i], coords[i + 1]));
+        p.setStroke(c);
+        p.setStrokeWidth(sw);
+        p.setStrokeLineCap(StrokeLineCap.ROUND);
+        p.setStrokeLineJoin(StrokeLineJoin.ROUND);
+        p.setFill(Color.TRANSPARENT);
+        return p;
+    }
+
+    private static Polygon triangle(Color c, double... coords) {
+        Polygon t = new Polygon(coords);
+        t.setFill(c);
+        t.setStroke(null);
+        return t;
+    }
+
+    // ── Vector icons (24-unit viewBox, recolorable) ──────────────────────────────
+
+    private Group iconStamp(Color c) {
+        Group g = new Group();
+        g.getChildren().addAll(
+            rect(3, 3, 13, 16, 4, c, 1.7),
+            circ(9.5, 9, 3.1, c, 1.7, false),
+            openPath(c, 1.7, 8, 9, 9.1, 10.1, 11.1, 7.6),
+            ln(9.5, 12.1, 9.5, 17, c, 1.7),
+            ln(15.3, 15.3, 19.5, 19.5, c, 1.7),
+            circ(18.9, 14.8, 1.9, c, 1.6, false)
+        );
+        return g;
+    }
+
+    private Group iconUpload(Color c) {
+        Group g = new Group();
+        Path cloud = new Path(
+            new MoveTo(7, 17.3),
+            new ArcTo(4, 4, 0, 6.5, 9.33, false, true),
+            new ArcTo(5.5, 5.5, 0, 17.2, 7.9, false, true),
+            new ArcTo(4.25, 4.25, 0, 16.5, 17.3, false, true),
+            new LineTo(7, 17.3),
+            new ClosePath()
+        );
+        cloud.setStroke(c);
+        cloud.setStrokeWidth(1.7);
+        cloud.setFill(Color.TRANSPARENT);
+        cloud.setStrokeLineCap(StrokeLineCap.ROUND);
+        cloud.setStrokeLineJoin(StrokeLineJoin.ROUND);
+        g.getChildren().addAll(
+            cloud,
+            ln(12, 15, 12, 9, c, 1.7),
+            openPath(c, 1.7, 9.3, 11.3, 12, 8.6, 14.7, 11.3)
+        );
+        return g;
+    }
+
+    private Group iconReplay(Color c) {
+        Group g = new Group();
+        Path arc = new Path(new MoveTo(6.6, 5.4), new ArcTo(8, 8, 0, 15.3, 18.4, true, false));
+        arc.setStroke(c);
+        arc.setStrokeWidth(2.2);
+        arc.setFill(Color.TRANSPARENT);
+        arc.setStrokeLineCap(StrokeLineCap.ROUND);
+        g.getChildren().addAll(
+            arc,
+            triangle(c, 13.4, 4.1, 16.7, 5.6, 15.7, 9.0),
+            triangle(c, 9.2, 9.1, 9.2, 15.8, 14.9, 12.45)
+        );
+        return g;
+    }
+
+    private Group iconVersions(Color c) {
+        Group g = new Group();
+        Path page2 = new Path(
+            new MoveTo(7, 8.8), new LineTo(18, 8.8), new LineTo(21, 11.8), new LineTo(21, 21.5), new LineTo(17.5, 21.5)
+        );
+        page2.setStroke(c);
+        page2.setStrokeWidth(1.5);
+        page2.setFill(Color.TRANSPARENT);
+        page2.setOpacity(0.5);
+        page2.setStrokeLineCap(StrokeLineCap.ROUND);
+        page2.setStrokeLineJoin(StrokeLineJoin.ROUND);
+
+        Path page1 = new Path(
+            new MoveTo(4.5, 6.8), new LineTo(13.5, 6.8), new LineTo(16.5, 9.8),
+            new LineTo(16.5, 19.5), new LineTo(4.5, 19.5), new ClosePath()
+        );
+        page1.setStroke(c);
+        page1.setStrokeWidth(1.5);
+        page1.setFill(Color.TRANSPARENT);
+        page1.setStrokeLineCap(StrokeLineCap.ROUND);
+        page1.setStrokeLineJoin(StrokeLineJoin.ROUND);
+
+        g.getChildren().addAll(
+            page2, page1,
+            ln(6.8, 12.3, 13.0, 12.3, c, 1.5),
+            ln(6.8, 15.2, 13.0, 15.2, c, 1.5),
+            ln(6.8, 18.1, 11.2, 18.1, c, 1.5)
+        );
+        return g;
+    }
+
+    private Group iconReport(Color c) {
+        Group g = new Group();
+        g.getChildren().addAll(
+            rect(4.5, 3.5, 15, 18, 3, c, 1.6),
+            rect(9, 2, 6, 3, 1.5, c, 1.6),
+            rect(7.4, 8.4, 2, 2, 0.6, c, 1.6),
+            ln(11.3, 9.4, 17.5, 9.4, c, 1.6),
+            rect(7.4, 12.4, 2, 2, 0.6, c, 1.6),
+            ln(11.3, 13.4, 17.5, 13.4, c, 1.6),
+            rect(7.4, 16.4, 2, 2, 0.6, c, 1.6),
+            ln(11.3, 17.4, 17.5, 17.4, c, 1.6)
+        );
+        return g;
+    }
+
+    private Group iconImport(Color c) {
+        Group g = new Group();
+        g.getChildren().addAll(
+            circ(12, 12, 9.3, c, 1.7, false),
+            ln(12, 7.2, 12, 14.2, c, 1.7),
+            openPath(c, 1.7, 8.6, 11.2, 12, 14.6, 15.4, 11.2),
+            ln(8, 16.6, 16, 16.6, c, 1.7)
+        );
+        return g;
+    }
+
+    private Group iconDashboard(Color c) {
+        Group g = new Group();
+        g.getChildren().addAll(
+            rect(2, 3, 16, 14, 3, c, 1.5),
+            ln(5.2, 6.4, 9.6, 6.4, c, 1.5),
+            ln(5.2, 9, 8.4, 9, c, 1.5),
+            ln(5.2, 11.6, 9.1, 11.6, c, 1.5),
+            openPath(c, 1.5, 12, 10.6, 13.8, 8.9, 15.3, 10.1, 17.3, 7.9),
+            circ(17.2, 6.1, 1.15, c, 0, true),
+            ln(5.6, 13.6, 5.6, 15.0, c, 1.5),
+            ln(8, 12.4, 8, 15.0, c, 1.5),
+            ln(10.4, 13.1, 10.4, 15.0, c, 1.5),
+            circ(16.5, 16.5, 5, c, 1.4, false),
+            circ(16.5, 16.5, 2.7, c, 1.4, false),
+            circ(16.5, 16.5, 0.9, c, 0, true)
+        );
+        return g;
+    }
+
+    private Group iconMedal(Color c) {
+        Group g = new Group();
+        g.getChildren().addAll(
+            openPath(c, 1.6, 7, 15.4, 4.7, 20.4, 8.3, 19.4, 10, 22.4, 12, 17.8),
+            openPath(c, 1.6, 17, 15.4, 19.3, 20.4, 15.7, 19.4, 14, 22.4, 12, 17.8),
+            circ(12, 10, 7.3, c, 1.6, false),
+            openPath(c, 1.6, 8.8, 10.2, 10.8, 12.2, 14.8, 8.0)
+        );
+        return g;
+    }
+
     // ── Logo helpers ─────────────────────────────────────────────────────────
 
     static Image loadLogo() {
@@ -517,10 +792,10 @@ public class QTracePanel {
         Platform.runLater(() -> {
             stage.setTitle(QTraceController.getEditionLabel());
             if (QTracePluginManager.isEntitled()) {
-                stage.setMinWidth(460);
-                if (stage.getWidth() < 460) stage.setWidth(540);
+                stage.setMinWidth(560);
+                if (stage.getWidth() < 560) stage.setWidth(560);
             } else {
-                stage.setMinWidth(300);
+                stage.setMinWidth(340);
             }
             stage.setScene(new Scene(buildRoot()));
             refreshStatus();
@@ -587,7 +862,7 @@ public class QTracePanel {
         if (btnPush == null) return;
         Platform.runLater(() -> {
             btnPush.setDisable(!enabled);
-            btnPush.setTextFill(Color.web(enabled ? BLUE : TEXT_MUTED));
+            btnPush.setOpacity(enabled ? 1.0 : 0.45);
         });
     }
 
@@ -605,26 +880,34 @@ public class QTracePanel {
         });
     }
 
-    /** Toggle recording indicator dot. */
+    /** Toggle recording indicator dot (status row) and the passive Recording/Paused badge (header). */
     public void setRecordingActive(boolean active) {
         Platform.runLater(() -> {
             if (active) {
                 statusDot.setFill(Color.web(GREEN));
                 statusLabel.setText("Recording");
                 statusLabel.setTextFill(Color.web(GREEN));
+                captureDot.setFill(Color.web(RED));
+                captureLabel.setText("Recording");
+                captureLabel.setTextFill(Color.web(RED));
+                startCaptureBlink();
             } else {
                 statusDot.setFill(Color.web(TEXT_MUTED));
                 statusLabel.setText("Idle — awaiting recording");
                 statusLabel.setTextFill(Color.web(TEXT_SUB));
+                captureDot.setFill(Color.web(TEXT_MUTED));
+                captureLabel.setText("Paused");
+                captureLabel.setTextFill(Color.web(TEXT_MUTED));
+                stopCaptureBlink();
             }
         });
     }
 
-    /** Enable the ◉ Record button once steps are captured. */
+    /** Enable the "Stamp" CTA once steps are captured. */
     public void setRecordReady(boolean ready) {
         Platform.runLater(() -> {
             btnRecord.setDisable(!ready);
-            btnRecord.setTextFill(Color.web(ready ? RED : TEXT_MUTED));
+            btnRecord.setOpacity(ready ? 1.0 : 0.45);
         });
     }
 
