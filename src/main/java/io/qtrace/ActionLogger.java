@@ -92,6 +92,10 @@ public class ActionLogger implements WorkflowListener {
 
     private final QuPathGUI qupath;
     private QTracePanel panel;
+    private Runnable onHashReady;
+
+    /** Called once the background SHA-256 of the current image finishes (see computeHashAsync). */
+    public void setOnHashReady(Runnable r) { this.onHashReady = r; }
 
     private final List<JsonObject> capturedSteps = new ArrayList<>();
     private int lastKnownStepCount = 0;
@@ -473,6 +477,7 @@ public class ActionLogger implements WorkflowListener {
                 }
                 imageHash = HexFormat.of().formatHex(digest.digest());
                 if (panel != null) panel.log("SHA-256: " + imageHash.substring(0, 16) + "...");
+                if (onHashReady != null) onHashReady.run();
             } catch (Exception e) {
                 if (panel != null) panel.log("WARNING: hash error — " + e.getMessage());
             }

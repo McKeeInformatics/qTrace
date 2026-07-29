@@ -164,6 +164,9 @@ public class QTraceController {
         this.qupath = qupath;
         // Logger starts immediately — panel-less, silent until panel is attached
         this.logger = new ActionLogger(qupath, null);
+        // Upload availability depends on the image SHA-256, computed asynchronously;
+        // re-check once it's ready instead of leaving the button stuck disabled.
+        logger.setOnHashReady(this::refreshPushAvailability);
         ImageData<BufferedImage> current = qupath.getImageData();
         if (current != null) {
             logger.attach(current);
