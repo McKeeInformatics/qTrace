@@ -25,6 +25,7 @@ import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -135,10 +136,12 @@ public class QTraceBatchExporter {
             activeLicense != null ? activeLicense.name() : QTraceConfig.get().getValidatorName());
         validatorFld.setPromptText("Dr. Lastname / Analyst ID");
         validatorFld.setPrefWidth(280);
-        if (activeLicense != null) {
-            validatorFld.setEditable(false);
-            validatorFld.setTooltip(new Tooltip("Locked — identity certified by your qTrace license."));
-        }
+
+        // Certified identity → gold badge with certificate info, non-editable.
+        // Core (no license) → plain editable text field.
+        Node validatorNode = activeLicense != null
+            ? buildCertifiedBadge(activeLicense)
+            : validatorFld;
 
         ComboBox<String> scopeBox = new ComboBox<>(FXCollections.observableArrayList(
             "Full Workflow", "Image QC", "Segmentation",
@@ -161,7 +164,7 @@ public class QTraceBatchExporter {
         grid.setHgap(12); grid.setVgap(10);
         grid.setPadding(new Insets(20, 20, 10, 20));
         int r = 0;
-        grid.add(new Label("Validator *"), 0, r); grid.add(validatorFld,   1, r++);
+        grid.add(new Label("Validator *"), 0, r); grid.add(validatorNode,  1, r++);
         grid.add(new Label("Scope"),       0, r); grid.add(scopeBox,       1, r++);
         grid.add(new Label("Confidence"),  0, r); grid.add(confidenceBox,  1, r++);
         grid.add(new Label("Notes"),       0, r); grid.add(notesFld,       1, r++);
@@ -187,6 +190,41 @@ public class QTraceBatchExporter {
             );
         });
         return dlg.showAndWait();
+    }
+
+    /** Gold badge shown in place of the Validator field when identity is certified. */
+    private static Node buildCertifiedBadge(LicenseInfo license) {
+        Label check = new Label("✓");
+        check.setFont(Font.font("System", FontWeight.BOLD, 13));
+        check.setStyle("-fx-text-fill: #6b4c00;");
+
+        Label nameLbl = new Label(license.name());
+        nameLbl.setFont(Font.font("System", FontWeight.BOLD, 12));
+        nameLbl.setStyle("-fx-text-fill: #3a2a00;");
+
+        Label certLbl = new Label(license.institution() + " · valid until " + license.expiresAtFormatted());
+        certLbl.setFont(Font.font("System", 10));
+        certLbl.setStyle("-fx-text-fill: #6b4c00;");
+
+        VBox textBox = new VBox(1, nameLbl, certLbl);
+
+        HBox badge = new HBox(8, check, textBox);
+        badge.setAlignment(Pos.CENTER_LEFT);
+        badge.setPadding(new Insets(6, 12, 6, 12));
+        badge.setPrefWidth(280);
+        badge.setStyle(
+            "-fx-background-color: linear-gradient(to bottom, #ffe9a8, #f0c343);"
+          + "-fx-background-radius: 6;"
+          + "-fx-border-color: #b8860b;"
+          + "-fx-border-radius: 6;"
+          + "-fx-border-width: 1;"
+        );
+        Tooltip.install(badge, new Tooltip(
+            "Locked — identity certified by your qTrace license.\n"
+          + "Institution: " + license.institution() + "\n"
+          + "Valid until: " + license.expiresAtFormatted()
+        ));
+        return badge;
     }
 
     // ── Progress stage ─────────────────────────────────────────────────────────
