@@ -5,6 +5,9 @@ QuPath's "Pixel classifier training images" dialog lets a classifier train on an
 
 qTrace now applies a strict compliance rule: never guess silently. It records "current image only" without asking *only* when that's actually certain — a single-image project, or no other project image holding any annotation at all. The moment another image has **any** annotation, a confirmation dialog opens: the active image is locked and checked, images whose annotations match the classifier's classes are pre-checked as a suggestion, and everything else stays visible and toggleable — a matching class never substitutes for explicit human confirmation. The confirmed list is stamped as `training_images` in the `.qtrace`/TPC JSON and shown in the Dashboard's Pixel Classifier card.
 
+### Added — Dashboard loading overlay
+Opening the Dashboard on a project with several/large `.qtrace` files left the table and detail cards visibly empty for a moment while the background scan ran — easy to mistake for a broken or frozen window. A semi-transparent overlay with a spinner and "Loading data…" now covers the table/detail area for the duration of the scan.
+
 ### Fixed — Upload availability recheck
 The Upload button could stay disabled after opening an image whose SHA-256 hash was still being computed in the background, since nothing re-triggered the check once the hash landed. It now re-checks automatically as soon as the hash is ready.
 
