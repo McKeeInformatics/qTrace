@@ -147,6 +147,8 @@ public class QTraceDashboard {
     private volatile boolean    scanning = false;
     private volatile String     pendingScanSummary = "";
     private HBox     selectedRow;
+    private StackPane mainAreaStack;
+    private VBox       loadingOverlay;
     private RowData  selectedData;
     private boolean  sortAsc     = true;
     private int     sortColIdx  = 0;
@@ -279,8 +281,27 @@ public class QTraceDashboard {
         HBox mainArea = new HBox(0, filterPanelNode, filterPanelSep, right);
         VBox.setVgrow(mainArea, Priority.ALWAYS);
 
-        root.getChildren().addAll(header, scanPathLabel, sep(), mainArea);
+        loadingOverlay = buildLoadingOverlay();
+        mainAreaStack = new StackPane(mainArea, loadingOverlay);
+        VBox.setVgrow(mainAreaStack, Priority.ALWAYS);
+
+        root.getChildren().addAll(header, scanPathLabel, sep(), mainAreaStack);
         return root;
+    }
+
+    private VBox buildLoadingOverlay() {
+        ProgressIndicator spinner = new ProgressIndicator();
+        spinner.setMaxSize(48, 48);
+        spinner.setStyle("-fx-progress-color:" + BLUE + ";");
+
+        Label loadingLbl = lbl("Loading data…", TEXT_MAIN, 13, FontWeight.BOLD, false);
+
+        VBox overlay = new VBox(12, spinner, loadingLbl);
+        overlay.setAlignment(Pos.CENTER);
+        overlay.setStyle("-fx-background-color: rgba(30,30,46,0.85);");
+        overlay.setVisible(false);
+        overlay.setManaged(false);
+        return overlay;
     }
 
     private void setFilterPanelVisible(boolean visible) {
@@ -454,6 +475,10 @@ public class QTraceDashboard {
         if (scanning) return;
         scanning = true;
         scanPathLabel.setText("⏳  Scanning .qtrace files…");
+        if (loadingOverlay != null) {
+            loadingOverlay.setVisible(true);
+            loadingOverlay.setManaged(true);
+        }
         Thread t = new Thread(() -> {
             loadAllRows();
             Platform.runLater(() -> {
@@ -465,6 +490,10 @@ public class QTraceDashboard {
                 renderRows();
                 selectCurrentImageRowIfAny();
                 scanning = false;
+                if (loadingOverlay != null) {
+                    loadingOverlay.setVisible(false);
+                    loadingOverlay.setManaged(false);
+                }
             });
         }, "qtrace-dashboard-scan");
         t.setDaemon(true);
