@@ -411,6 +411,9 @@ public class QTraceExporter {
             co.add("advanced_params",                   clf.advancedParams);
             co.add("classes",                           clf.classes);
             co.addProperty("n_training_regions",      clf.trainingAnnotationIds.size());
+            JsonArray trainingImagesArr = new JsonArray();
+            clf.trainingImages.forEach(trainingImagesArr::add);
+            co.add("training_images",                 trainingImagesArr);
             co.addProperty("training_geojson",        clf.trainingGeojsonFile);
             co.addProperty("tpc_file",                clf.tpcFilePath);
             co.addProperty("fidelity",                clf.fidelity().name());

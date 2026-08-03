@@ -1847,16 +1847,26 @@ public class QTraceDashboard {
             }
         }
 
+        List<String> trainingImages = clf.has("training_images") && clf.get("training_images").isJsonArray()
+            ? toStrings(clf.getAsJsonArray("training_images")) : List.of();
+
         boolean geoOk = geoJson != null && !"null".equals(geoJson) && !geoJson.isBlank();
         HBox trainRow = new HBox(6);
         trainRow.setAlignment(Pos.CENTER_LEFT);
+        String trainLabel = "Training: " + nTrain + " regions"
+            + (trainingImages.size() > 1 ? " across " + trainingImages.size() + " image(s)" : "");
         trainRow.getChildren().addAll(
-            lbl("Training: " + nTrain + " regions", TEXT_MUTED, 11, FontWeight.NORMAL, false),
+            lbl(trainLabel, TEXT_MUTED, 11, FontWeight.NORMAL, false),
             lbl("→",                                 TEXT_MUTED, 11, FontWeight.NORMAL, false),
             lbl(geoOk ? geoJson : "(not exported)",
                 geoOk ? TEXT_SUB : TEXT_MUTED, 11, FontWeight.NORMAL, !geoOk)
         );
         card.getChildren().add(trainRow);
+        if (trainingImages.size() > 1) {
+            card.getChildren().add(lbl(
+                "Images: " + String.join(", ", trainingImages),
+                TEXT_MUTED, 11, FontWeight.NORMAL, true));
+        }
 
         boolean tpcOk = tpcFile != null && !"null".equals(tpcFile) && !tpcFile.isBlank();
         card.getChildren().add(lbl(

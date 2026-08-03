@@ -60,6 +60,8 @@ public class ClassifierRecord {
     public final String     trainingAnnotationHash;  // stable hash of the training set
     public       String     trainingGeojsonFile;     // relative path; null until exported
     public       String     tpcFilePath;             // TPC-*.json filename; null until written
+    public       List<String> trainingImages = new java.util.ArrayList<>();
+                                                      // project image names confirmed as training sources
 
     // ── Application (filled when classifier is applied to an image) ──────────
     public int appliedAtStepOrder = -1;

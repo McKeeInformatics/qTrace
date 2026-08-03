@@ -33,10 +33,13 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -61,6 +64,7 @@ import qupath.lib.plugins.workflow.ScriptableWorkflowStep;
 import qupath.lib.plugins.workflow.Workflow;
 import qupath.lib.plugins.workflow.WorkflowListener;
 import qupath.lib.plugins.workflow.WorkflowStep;
+import qupath.lib.projects.ProjectImageEntry;
 
 import java.awt.image.BufferedImage;
 import java.io.*;
@@ -116,6 +120,10 @@ public class ActionLogger implements WorkflowListener {
 
     private static final java.util.regex.Pattern CLASSIFIER_NAME_PATTERN =
         java.util.regex.Pattern.compile("^\\d{8}-[A-Z0-9]+-\\w+-.*$");
+
+    // Above this many project images, the per-save hierarchy scan (PC-MultiImage) is
+    // skipped for performance — the confirmation dialog still opens with nothing pre-checked.
+    private static final int TRAINING_SCAN_LIMIT = 150;
 
     // Alignment provenance (v0.5.19 / v0.5.20) ──────────────────────────────
     private volatile AlignmentRecord currentAlignment       = null;
@@ -1617,41 +1625,236 @@ public class ActionLogger implements WorkflowListener {
             if (panel != null) panel.log("  training  : " + training.size() + " region(s)");
             if (panel != null) panel.log("  sha256    : " + sha256.substring(0, 16) + "...");
 
-            // ── Export training GeoJSON (PC-4) ───────────────────────────────
-            Path trainingDir    = QTraceConfig.get().getTrainingDir();
-            Path classifierDir  = QTraceConfig.get().getClassifierDir();
-            try {
-                if (!training.isEmpty()) {
-                    String geoFname = exportTrainingAnnotations(name, training, trainingDir);
-                    record.trainingGeojsonFile = geoFname;
-                    if (panel != null) panel.log("  training GeoJSON: " + geoFname);
-                }
-            } catch (Exception e) {
-                if (panel != null) panel.log("  WARNING: training GeoJSON export failed — " + e.getMessage());
-            }
-
-            // ── Git commit classifier file (PC-5) ────────────────────────────
-            try {
-                Path dest = classifierDir.resolve("classifiers").resolve(name + ".json");
-                Files.createDirectories(dest.getParent());
-                Files.writeString(dest, json);
-                record.gitHash = new GitBridge(classifierDir).commit(dest,
-                    "QTrace classifier: " + name
-                    + " (user=" + user + ", img=" + sha256.substring(0,8) + ")");
-                if (panel != null) panel.log("  git       : " + record.gitHash);
-            } catch (Exception e) {
-                if (panel != null) panel.log("  WARNING: classifier Git commit failed — " + e.getMessage());
-            }
-
-            // ── TPC JSON (PC-TPC) ────────────────────────────────────────────
-            writeTpcJson(record);
-
-            // ── Enable Generate button — classifier data alone is worth exporting ─
-            if (panel != null) panel.setRecordReady(true);
+            // ── Resolve training image scope, then finish the save (PC-MultiImage) ──
+            String currentImageName = serverName(currentImageData);
+            resolveTrainingImages(record, currentImageName, resolvedImages ->
+                finishClassifierSave(record, training, name, user, resolvedImages));
 
         } catch (Exception e) {
             if (panel != null) panel.log("Classifier capture error: " + e.getMessage());
         }
+    }
+
+    // ── Training image scope (PC-MultiImage) ─────────────────────────────────
+    //
+    // A pixel classifier can be trained on annotations spread across several project
+    // images (the "Pixel classifier training images" dialog in QuPath). QuPath does not
+    // expose which images were selected through any public API or event — the selection
+    // lives in a private field of an internal, transient UI class with no stable hook.
+    //
+    // Compliance rule: we never guess silently. We only record "current image only"
+    // without asking when it is actually certain (single-image project, or no other
+    // image in the project holds any annotation at all). The moment another image has
+    // ANY annotation, the user must confirm the training set explicitly — a matching
+    // PathClass only pre-checks the box, it never substitutes for confirmation.
+
+    private void resolveTrainingImages(ClassifierRecord record, String currentImageName,
+                                        Consumer<List<String>> onResolved) {
+        var project = qupath.getProject();
+        if (project == null) {
+            onResolved.accept(List.of(currentImageName));
+            return;
+        }
+
+        List<ProjectImageEntry<BufferedImage>> entries;
+        try {
+            entries = new ArrayList<>(project.getImageList());
+        } catch (Exception e) {
+            onResolved.accept(List.of(currentImageName));
+            return;
+        }
+
+        if (entries.size() <= 1) {
+            onResolved.accept(List.of(currentImageName));
+            return;
+        }
+
+        Set<String> classNames = new HashSet<>();
+        if (record.classes != null)
+            for (JsonElement el : record.classes) classNames.add(el.getAsString());
+
+        // Hierarchy-only read (annotations/detections geometry) — no pixel data touched,
+        // so this stays cheap even for large slides. Off the FX thread regardless.
+        Thread scanThread = new Thread(() -> {
+            List<ProjectImageEntry<BufferedImage>> otherWithAnnotations = new ArrayList<>();
+            List<ProjectImageEntry<BufferedImage>> candidates = new ArrayList<>();
+            boolean scanLimited = entries.size() > TRAINING_SCAN_LIMIT;
+
+            if (!scanLimited) {
+                for (ProjectImageEntry<BufferedImage> entry : entries) {
+                    if (currentImageName.equals(entry.getImageName())) continue;
+                    if (!entry.hasImageData()) continue;
+                    try {
+                        Collection<PathObject> anns = entry.readHierarchy().getAnnotationObjects();
+                        if (anns.isEmpty()) continue;
+                        otherWithAnnotations.add(entry);
+                        boolean matches = anns.stream().anyMatch(a ->
+                            a.getPathClass() != null && classNames.contains(a.getPathClass().getName()));
+                        if (matches) candidates.add(entry);
+                    } catch (Exception e) {
+                        String imgName = entry.getImageName();
+                        if (panel != null) Platform.runLater(() -> panel.log(
+                            "  WARNING: could not scan '" + imgName + "' for training images — " + e.getMessage()));
+                    }
+                }
+            }
+
+            boolean needsConfirmation = scanLimited || !otherWithAnnotations.isEmpty();
+
+            Platform.runLater(() -> {
+                if (!needsConfirmation) {
+                    onResolved.accept(List.of(currentImageName));
+                    return;
+                }
+                if (panel != null) panel.log(scanLimited
+                    ? "  training images: project too large for auto-scan (" + entries.size()
+                        + " images) — confirmation required"
+                    : "  training images: other project images contain annotations — confirmation required");
+                showTrainingImagesConfirmDialog(record.name, currentImageName, entries, candidates, onResolved);
+            });
+        }, "qtrace-training-image-scan");
+        scanThread.setDaemon(true);
+        scanThread.start();
+    }
+
+    private void showTrainingImagesConfirmDialog(String classifierName, String currentImageName,
+            List<ProjectImageEntry<BufferedImage>> entries,
+            List<ProjectImageEntry<BufferedImage>> candidates,
+            Consumer<List<String>> onResolved) {
+
+        Stage dlg = new Stage();
+        dlg.initOwner(qupath.getStage());
+        dlg.initModality(Modality.WINDOW_MODAL);
+        dlg.setTitle("qTrace — Confirm training images");
+        dlg.setResizable(true);
+
+        Label headLbl = new Label("Confirm images used to train \"" + classifierName + "\"");
+        headLbl.setTextFill(Color.web("#cdd6f4"));
+        headLbl.setFont(Font.font("System", FontWeight.BOLD, 13));
+
+        Label promptLbl = new Label(
+            "qTrace found annotations in other project images. Confirm every image that "
+          + "contributed to this classifier's training set — an incomplete list makes the "
+          + "provenance record inaccurate. Pre-checked boxes are only a suggestion.");
+        promptLbl.setTextFill(Color.web("#a6adc8"));
+        promptLbl.setFont(Font.font("System", 11));
+        promptLbl.setWrapText(true);
+        promptLbl.setMaxWidth(420);
+
+        Set<String> candidateNames = candidates.stream()
+            .map(ProjectImageEntry::getImageName).collect(Collectors.toSet());
+
+        VBox listBox = new VBox(4);
+        Map<String, CheckBox> checkboxes = new LinkedHashMap<>();
+
+        CheckBox currentCb = new CheckBox(currentImageName + "  (active image — certain)");
+        currentCb.setSelected(true);
+        currentCb.setDisable(true);
+        currentCb.setStyle("-fx-text-fill: #a6e3a1; -fx-font-size: 11;");
+        listBox.getChildren().add(currentCb);
+
+        for (ProjectImageEntry<BufferedImage> entry : entries) {
+            String imgName = entry.getImageName();
+            if (imgName.equals(currentImageName)) continue;
+            boolean isCandidate = candidateNames.contains(imgName);
+            CheckBox cb = new CheckBox(imgName + (isCandidate ? "  (matching annotations found)" : ""));
+            cb.setSelected(isCandidate);
+            cb.setStyle("-fx-text-fill:" + (isCandidate ? "#f9e2af" : "#a6adc8") + "; -fx-font-size: 11;");
+            checkboxes.put(imgName, cb);
+            listBox.getChildren().add(cb);
+        }
+
+        ScrollPane scroll = new ScrollPane(listBox);
+        scroll.setFitToWidth(true);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        scroll.setStyle("-fx-background: #181825; -fx-background-color: #181825;");
+
+        Button btnSelectAll = new Button("Select All");
+        btnSelectAll.setFont(Font.font("System", 11));
+        btnSelectAll.setTextFill(Color.web("#a6adc8"));
+        btnSelectAll.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: #313244; -fx-border-radius: 4;");
+        btnSelectAll.setOnAction(e -> checkboxes.values().forEach(cb -> cb.setSelected(true)));
+
+        Button btnUnselectAll = new Button("Unselect All");
+        btnUnselectAll.setFont(Font.font("System", 11));
+        btnUnselectAll.setTextFill(Color.web("#a6adc8"));
+        btnUnselectAll.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: #313244; -fx-border-radius: 4;");
+        btnUnselectAll.setOnAction(e -> checkboxes.values().forEach(cb -> cb.setSelected(false)));
+
+        HBox selectRow = new HBox(8, btnSelectAll, btnUnselectAll);
+        selectRow.setAlignment(Pos.CENTER_LEFT);
+
+        Button btnConfirm = new Button("Confirm");
+        btnConfirm.setFont(Font.font("System", FontWeight.BOLD, 12));
+        btnConfirm.setPadding(new Insets(5, 16, 5, 16));
+        btnConfirm.setStyle(
+            "-fx-background-color: #89b4fa;"
+          + "-fx-text-fill: #1e1e2e;"
+          + "-fx-background-radius: 6;"
+          + "-fx-cursor: hand;"
+        );
+
+        HBox btnRow = new HBox(btnConfirm);
+        btnRow.setAlignment(Pos.CENTER_RIGHT);
+
+        VBox root = new VBox(10, headLbl, promptLbl, selectRow, scroll, btnRow);
+        root.setPadding(new Insets(20));
+        root.setStyle("-fx-background-color: #1e1e2e;");
+        root.setPrefWidth(460);
+        root.setPrefHeight(480);
+
+        btnConfirm.setOnAction(e -> {
+            List<String> selected = new ArrayList<>();
+            selected.add(currentImageName);
+            checkboxes.forEach((imgName, cb) -> { if (cb.isSelected()) selected.add(imgName); });
+            dlg.close();
+            onResolved.accept(selected);
+        });
+
+        Scene scene = new Scene(root, 460, 480);
+        dlg.setScene(scene);
+        dlg.setMinWidth(380);
+        dlg.setMinHeight(320);
+        dlg.showAndWait();
+    }
+
+    private void finishClassifierSave(ClassifierRecord record, List<PathObject> training,
+                                       String name, String user, List<String> trainingImages) {
+        record.trainingImages = trainingImages;
+        if (panel != null && trainingImages.size() > 1)
+            panel.log("  training images: " + String.join(", ", trainingImages));
+
+        // ── Export training GeoJSON (PC-4) ───────────────────────────────
+        Path trainingDir    = QTraceConfig.get().getTrainingDir();
+        Path classifierDir  = QTraceConfig.get().getClassifierDir();
+        try {
+            if (!training.isEmpty()) {
+                String geoFname = exportTrainingAnnotations(name, training, trainingDir);
+                record.trainingGeojsonFile = geoFname;
+                if (panel != null) panel.log("  training GeoJSON: " + geoFname);
+            }
+        } catch (Exception e) {
+            if (panel != null) panel.log("  WARNING: training GeoJSON export failed — " + e.getMessage());
+        }
+
+        // ── Git commit classifier file (PC-5) ────────────────────────────
+        try {
+            Path dest = classifierDir.resolve("classifiers").resolve(name + ".json");
+            Files.createDirectories(dest.getParent());
+            Files.writeString(dest, record.jsonContent);
+            record.gitHash = new GitBridge(classifierDir).commit(dest,
+                "QTrace classifier: " + name
+                + " (user=" + user + ", img=" + record.sha256.substring(0,8) + ")");
+            if (panel != null) panel.log("  git       : " + record.gitHash);
+        } catch (Exception e) {
+            if (panel != null) panel.log("  WARNING: classifier Git commit failed — " + e.getMessage());
+        }
+
+        // ── TPC JSON (PC-TPC) ────────────────────────────────────────────
+        writeTpcJson(record);
+
+        // ── Enable Generate button — classifier data alone is worth exporting ─
+        if (panel != null) panel.setRecordReady(true);
     }
 
     // ── TPC JSON writer (PC-TPC) ─────────────────────────────────────────────
@@ -1689,6 +1892,9 @@ public class ActionLogger implements WorkflowListener {
             root.addProperty("training_annotation_count", record.trainingAnnotationIds.size());
             root.addProperty("training_geojson",          record.trainingGeojsonFile != null ? record.trainingGeojsonFile : "");
             root.addProperty("training_annotation_hash",  record.trainingAnnotationHash);
+            JsonArray trainingImagesArr = new JsonArray();
+            record.trainingImages.forEach(trainingImagesArr::add);
+            root.add("training_images",                   trainingImagesArr);
             root.addProperty("image_name",                imageName);
             root.addProperty("image_sha256",              record.imageHashAtSave != null ? record.imageHashAtSave : "");
             root.addProperty("classifier_sha256",         record.sha256);
