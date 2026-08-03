@@ -1,3 +1,21 @@
+## What's new in v1.0.15
+
+### Added — Confirm multi-image pixel classifier training sets
+QuPath's "Pixel classifier training images" dialog lets a classifier train on annotations from several project images, but exposes that selection nowhere in its public API — it lives in a private field of a transient, internal UI class with no stable hook. qTrace previously only ever recorded the active image's annotations, silently missing every other image that contributed to training.
+
+qTrace now applies a strict compliance rule: never guess silently. It records "current image only" without asking *only* when that's actually certain — a single-image project, or no other project image holding any annotation at all. The moment another image has **any** annotation, a confirmation dialog opens: the active image is locked and checked, images whose annotations match the classifier's classes are pre-checked as a suggestion, and everything else stays visible and toggleable — a matching class never substitutes for explicit human confirmation. The confirmed list is stamped as `training_images` in the `.qtrace`/TPC JSON and shown in the Dashboard's Pixel Classifier card.
+
+### Fixed — Upload availability recheck
+The Upload button could stay disabled after opening an image whose SHA-256 hash was still being computed in the background, since nothing re-triggered the check once the hash landed. It now re-checks automatically as soon as the hash is ready.
+
+### Fixed — Icon button caption contrast
+Caption text under Dashboard/Import/Upload/Replay/Report/Versions used a near-invisible color against the panel background. Switched to a readable muted tone.
+
+### Changed — Gold badge for certified validator in Batch Export
+The Batch Export dialog now shows the same certified-identity badge (checkmark, name, institution, expiry) as the single-image stamp dialog, instead of a plain locked text field.
+
+---
+
 ## What's new in v1.0.14
 
 ### Redesigned — Panel toolbar
