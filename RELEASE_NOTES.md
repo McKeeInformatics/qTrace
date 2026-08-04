@@ -1,5 +1,11 @@
 ## What's new in v1.0.15
 
+### Added — Name filter in Confirm training images dialog
+The confirmation dialog for multi-image pixel classifier training sets can list every image in the project. A filter field now sits above the list — typing narrows the checkboxes down by image name (the active image stays pinned and visible regardless of the filter).
+
+### Fixed — Dashboard Annotations column truncated regardless of width
+The per-class annotation breakdown shown in the Dashboard table's Annotations column was hard-truncated to 24 characters before display, so widening the column never revealed more text. The column now shows as much as its width allows, like the other columns (full breakdown remains available via tooltip).
+
 ### Added — Confirm multi-image pixel classifier training sets
 QuPath's "Pixel classifier training images" dialog lets a classifier train on annotations from several project images, but exposes that selection nowhere in its public API — it lives in a private field of a transient, internal UI class with no stable hook. qTrace previously only ever recorded the active image's annotations, silently missing every other image that contributed to training.
 
