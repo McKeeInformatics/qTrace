@@ -215,14 +215,18 @@ public class QTraceDashboard {
         autoScan();
     }
 
-    /** On dashboard open, auto-select the row for the image currently open in QuPath, if any. */
-    private void selectCurrentImageRowIfAny() {
-        String currentName;
+    /** Name of the image currently open in QuPath, or null if none. */
+    private String getCurrentImageName() {
         try {
             var imageData = qupath.getImageData();
-            if (imageData == null) return;
-            currentName = imageData.getServer().getMetadata().getName();
-        } catch (Exception e) { return; }
+            if (imageData == null) return null;
+            return imageData.getServer().getMetadata().getName();
+        } catch (Exception e) { return null; }
+    }
+
+    /** On dashboard open, auto-select the row for the image currently open in QuPath, if any. */
+    private void selectCurrentImageRowIfAny() {
+        String currentName = getCurrentImageName();
         if (currentName == null || currentName.isEmpty()) return;
 
         for (int i = 0; i < filteredRows.size(); i++) {
@@ -741,16 +745,20 @@ public class QTraceDashboard {
             return;
         }
 
+        String currentImageName = getCurrentImageName();
+
         boolean alt = false;
         for (RowData data : filteredRows) {
-            tableRows.getChildren().add(buildTableRow(data, alt));
+            boolean isCurrent = currentImageName != null
+                && namesMatch(data.imageName(), currentImageName);
+            tableRows.getChildren().add(buildTableRow(data, alt, isCurrent));
             alt = !alt;
         }
     }
 
     // ── Table row builder ─────────────────────────────────────────────────────
 
-    private HBox buildTableRow(RowData data, boolean alt) {
+    private HBox buildTableRow(RowData data, boolean alt, boolean isCurrent) {
         JsonObject root    = data.qtrace();
         boolean hasTrace   = root != null;
         String  imageName  = data.imageName();
@@ -883,7 +891,7 @@ public class QTraceDashboard {
         String statusColor = statusLabel != null ? statusColor(statusLabel) : TEXT_MUTED;
 
         row.getChildren().addAll(
-            tcell(sample,    hasTrace ? TEXT_SUB : TEXT_MUTED, 0),
+            tcell(sample,    hasTrace ? TEXT_SUB : TEXT_MUTED, 0, false, isCurrent),
             tcell(roi,       hasTrace ? TEXT_SUB : TEXT_MUTED, 1),
             tcell(statusText, statusColor, 2),
             tcell(hasRegion ? region : "(unknown)", hasRegion ? TEXT_SUB : TEXT_MUTED, 3, !hasRegion),
@@ -914,15 +922,19 @@ public class QTraceDashboard {
     }
 
     private Label tcell(String text, String color, int colIdx) {
-        return tcell(text, color, colIdx, false);
+        return tcell(text, color, colIdx, false, false);
     }
 
     private Label tcell(String text, String color, int colIdx, boolean italic) {
+        return tcell(text, color, colIdx, italic, false);
+    }
+
+    private Label tcell(String text, String color, int colIdx, boolean italic, boolean bold) {
         Label l = new Label(text);
         l.setTextFill(Color.web(color));
         l.setFont(italic
             ? Font.font("System", FontPosture.ITALIC, 11)
-            : Font.font("System", 11));
+            : Font.font("System", bold ? FontWeight.BOLD : FontWeight.NORMAL, 11));
         l.prefWidthProperty().bind(colWidths[colIdx]);
         l.maxWidthProperty().bind(colWidths[colIdx]);
         l.setMinWidth(0);
