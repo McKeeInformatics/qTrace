@@ -894,7 +894,7 @@ public class QTraceDashboard {
         String statusColor = statusLabel != null ? statusColor(statusLabel) : TEXT_MUTED;
 
         row.getChildren().addAll(
-            tcell(sample,    hasTrace ? TEXT_SUB : TEXT_MUTED, 0, false, isCurrent),
+            tcell(sample,    isCurrent ? GREEN : (hasTrace ? TEXT_SUB : TEXT_MUTED), 0, false, isCurrent),
             tcell(roi,       hasTrace ? TEXT_SUB : TEXT_MUTED, 1),
             tcell(statusText, statusColor, 2),
             tcell(hasRegion ? region : "(unknown)", hasRegion ? TEXT_SUB : TEXT_MUTED, 3, !hasRegion),
