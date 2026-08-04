@@ -22,6 +22,9 @@ package io.qtrace;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.ScriptEditor;
@@ -45,6 +48,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -146,6 +150,14 @@ public class QTraceController {
     private ValidationStamp lastStamp    = null;
     private Path            lastCertPath  = null;  // written by exportReport(), used by pushToWorkspace()
     private Path            lastQtracePath = null;
+    // Captured-step count at the moment of lastStamp — imageHash alone (pixel content)
+    // doesn't change when new steps/annotations are added to the same image, so it can't
+    // tell "stamped" from "stamped, then more work happened" on its own.
+    private int              lastStampStepCount = -1;
+
+    // "Don't ask again this session" for the forgotten-stamp reminder — in-memory only,
+    // resets on QuPath restart by design.
+    private boolean skipStampReminder = false;
 
     // Recording state listeners (toolbar icon, etc.)
     private final List<Consumer<Boolean>> recordingListeners = new CopyOnWriteArrayList<>();
@@ -269,6 +281,11 @@ public class QTraceController {
             if (bestCert != null && Files.exists(bestCert.getParent().getParent().resolve("chain.jsonl"))) {
                 lastQtracePath = qtracePath;
                 lastCertPath   = bestCert;
+                // Cert may have been issued in a previous session (e.g. the day before) —
+                // reconstruct the in-memory stamp from it so pushToWorkspace() has data to send.
+                if (lastStamp == null || !imageHash.equals(lastStamp.imageHash())) {
+                    lastStamp = buildStampFromCert(bestCert);
+                }
                 panel.setPushEnabled(true);
             } else {
                 panel.setPushEnabled(false);
@@ -276,6 +293,41 @@ public class QTraceController {
         } catch (Exception e) {
             panel.setPushEnabled(false);
         }
+    }
+
+    /** Rebuilds a ValidationStamp from a .qtcert's embedded validation payload (cert issued in a prior session). */
+    private ValidationStamp buildStampFromCert(Path certFile) {
+        try {
+            JsonObject cert = JsonParser.parseString(Files.readString(certFile)).getAsJsonObject();
+            JsonObject payload = cert.getAsJsonObject("qtrace_payload");
+            JsonObject v = payload.getAsJsonObject("validation");
+            String statusLabel = str(v, "statusLabel", "1-In Progress");
+            int statusIndex = 1;
+            for (int i = 0; i < ValidationStamper.STATUS_LABELS.length; i++)
+                if (ValidationStamper.STATUS_LABELS[i].equals(statusLabel)) { statusIndex = i; break; }
+            return new ValidationStamp(
+                str(v, "validator", null),
+                Instant.parse(str(v, "timestamp", Instant.EPOCH.toString())),
+                str(v, "scope", null),
+                str(v, "confidence", null),
+                str(v, "notes", ""),
+                null, // gitHash — not embedded in the cert payload
+                str(v, "imageHash", null),
+                str(v, "qpdata_sha256", null),
+                str(v, "case_id", cert.has("case_id") ? cert.get("case_id").getAsString() : null),
+                str(v, "classifier_fidelity", null),
+                statusIndex,
+                statusLabel,
+                str(v, "signature", null),
+                str(v, "validatorKeyPub", null)
+            );
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String str(JsonObject o, String key, String def) {
+        return o != null && o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
     }
 
     public void showDashboard() {
@@ -602,14 +654,17 @@ public class QTraceController {
             public void imageDataChanged(QuPathViewer viewer,
                                          ImageData<BufferedImage> oldData,
                                          ImageData<BufferedImage> newData) {
-                if (logger != null) {
-                    logger.attach(newData);
-                    fireRecordingState(newData != null);
-                }
-                if (panel != null && panel.isShowing()) {
-                    Platform.runLater(panel::refreshStatus);
-                    refreshPushAvailability();
-                }
+                Runnable switchImage = () -> {
+                    if (logger != null) {
+                        logger.attach(newData);
+                        fireRecordingState(newData != null);
+                    }
+                    if (panel != null && panel.isShowing()) {
+                        Platform.runLater(panel::refreshStatus);
+                        refreshPushAvailability();
+                    }
+                };
+                if (!maybePromptForgottenStamp(oldData, switchImage)) switchImage.run();
             }
 
             @Override public void visibleRegionChanged(QuPathViewer v, java.awt.Shape s) {}
@@ -619,6 +674,50 @@ public class QTraceController {
                 fireRecordingState(false);
             }
         });
+    }
+
+    /**
+     * Warns when leaving an image that has captured actions but was never stamped —
+     * users routinely forget to Stamp before switching images, right when QuPath's
+     * own "save changes" prompt appears. Returns true if a (modal, async) reminder
+     * was shown, in which case {@code proceed} is invoked once the user has answered;
+     * returns false if there was nothing to warn about, so the caller should run
+     * {@code proceed} immediately.
+     */
+    private boolean maybePromptForgottenStamp(ImageData<BufferedImage> oldData, Runnable proceed) {
+        boolean hasSteps = logger != null && logger.hasSteps();
+        String  imageHash = logger != null ? logger.getImageHash() : null;
+        int     currentStepCount = logger != null ? logger.getCapturedSteps().size() : 0;
+        boolean alreadyStamped = imageHash != null && lastStamp != null
+            && imageHash.equals(lastStamp.imageHash())
+            && currentStepCount <= lastStampStepCount;
+
+        if (skipStampReminder || oldData == null || logger == null || !hasSteps) return false;
+        if (alreadyStamped) return false;
+
+        String imageName = oldData.getServer().getMetadata().getName();
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.initOwner(qupath.getStage());
+            alert.setTitle("qTrace — Unstamped image");
+            alert.setHeaderText("\"" + imageName + "\" wasn't stamped");
+            alert.setContentText(
+                "You captured actions on this image but never validated & stamped it. "
+              + "Stamp it now before continuing?");
+            ButtonType btnStamp   = new ButtonType("Stamp now", ButtonBar.ButtonData.OK_DONE);
+            ButtonType btnSkip    = new ButtonType("Continue without stamping", ButtonBar.ButtonData.CANCEL_CLOSE);
+            ButtonType btnDontAsk = new ButtonType("Don't ask again this session", ButtonBar.ButtonData.OTHER);
+            alert.getButtonTypes().setAll(btnStamp, btnSkip, btnDontAsk);
+
+            Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent() && result.get() == btnStamp) {
+                recordTrace();
+            } else if (result.isPresent() && result.get() == btnDontAsk) {
+                skipStampReminder = true;
+            }
+            proceed.run();
+        });
+        return true;
     }
 
     // ── Image helpers ────────────────────────────────────────────────────────
@@ -646,6 +745,7 @@ public class QTraceController {
             .ifPresentOrElse(
                 stamp -> {
                     lastStamp = stamp;
+                    lastStampStepCount = logger.getCapturedSteps().size();
                     if (panel != null) {
                         panel.log("Validation stamp recorded:");
                         panel.log("  validator  : " + stamp.validator());
@@ -996,6 +1096,7 @@ public class QTraceController {
         if (logger == null) return;
         logger.resetCapture();
         lastStamp = null;
+        lastStampStepCount = -1;
         if (panel != null) {
             panel.setValidated(false, "");
             panel.setRecordingActive(true);
