@@ -124,7 +124,7 @@ public class QTraceDashboard {
         new SimpleDoubleProperty(52),   // ROI
         new SimpleDoubleProperty(110),  // Status
         new SimpleDoubleProperty(86),   // Region
-        new SimpleDoubleProperty(84),   // Annotations
+        new SimpleDoubleProperty(160),  // Annotations
         new SimpleDoubleProperty(162),  // ✓ Validated
         new SimpleDoubleProperty(126),  // Alignment
         new SimpleDoubleProperty(88),   // Segmentation
@@ -776,8 +776,11 @@ public class QTraceDashboard {
         boolean hasRegion = !region.isEmpty();
 
         // Col 4 — Annotations
-        int    annCount = getAnnotationCountFromRow(data);
-        String annText  = annCount > 0 ? String.valueOf(annCount) : "—";
+        int    annCount    = getAnnotationCountFromRow(data);
+        String byClassText = getAnnotationsByClassText(data);
+        String annText  = annCount > 0
+            ? annCount + (byClassText.isEmpty() ? "" : " (" + truncate(byClassText, 24) + ")")
+            : "—";
         String annColor = annCount > 0 ? TEXT_SUB : TEXT_MUTED;
 
         // Col 5 — ✓ Validated
@@ -895,7 +898,7 @@ public class QTraceDashboard {
             tcell(roi,       hasTrace ? TEXT_SUB : TEXT_MUTED, 1),
             tcell(statusText, statusColor, 2),
             tcell(hasRegion ? region : "(unknown)", hasRegion ? TEXT_SUB : TEXT_MUTED, 3, !hasRegion),
-            tcell(annText,   annColor,   4),
+            annCell(annText, annColor, byClassText),
             tcell(valText,   valColor,   5),
             tcell(alignText, alignColor,  6),
             tcell(segText,   segColor,    7),
@@ -927,6 +930,13 @@ public class QTraceDashboard {
 
     private Label tcell(String text, String color, int colIdx, boolean italic) {
         return tcell(text, color, colIdx, italic, false);
+    }
+
+    /** Annotations cell (col 4) with a tooltip showing the full per-class breakdown. */
+    private Label annCell(String text, String color, String byClassText) {
+        Label l = tcell(text, color, 4);
+        if (!byClassText.isEmpty()) l.setTooltip(new Tooltip("By class: " + byClassText));
+        return l;
     }
 
     private Label tcell(String text, String color, int colIdx, boolean italic, boolean bold) {
@@ -2266,6 +2276,19 @@ public class QTraceDashboard {
         JsonObject ann = latestAnnotations(rd);
         if (ann == null || !ann.has("total") || ann.get("total").isJsonNull()) return 0;
         return ann.get("total").getAsInt();
+    }
+
+    /** Per-class annotation counts as "Class: n, Class: n", e.g. "Vessel: 8, Tau: 4". */
+    private String getAnnotationsByClassText(RowData rd) {
+        JsonObject ann = latestAnnotations(rd);
+        if (ann == null || !ann.has("by_class") || !ann.get("by_class").isJsonObject()) return "";
+        JsonObject byClass = ann.getAsJsonObject("by_class");
+        List<String> parts = new ArrayList<>();
+        for (var entry : byClass.entrySet()) {
+            int count = entry.getValue().getAsInt();
+            if (count > 0) parts.add(entry.getKey() + ": " + count);
+        }
+        return String.join(", ", parts);
     }
 
     private JsonObject latestAnnotations(RowData rd) {
