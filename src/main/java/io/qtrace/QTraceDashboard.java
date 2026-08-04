@@ -779,7 +779,7 @@ public class QTraceDashboard {
         int    annCount    = getAnnotationCountFromRow(data);
         String byClassText = getAnnotationsByClassText(data);
         String annText  = annCount > 0
-            ? annCount + (byClassText.isEmpty() ? "" : " (" + truncate(byClassText, 24) + ")")
+            ? annCount + (byClassText.isEmpty() ? "" : " (" + byClassText + ")")
             : "—";
         String annColor = annCount > 0 ? TEXT_SUB : TEXT_MUTED;
 
