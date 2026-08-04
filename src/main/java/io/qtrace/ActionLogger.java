@@ -1784,6 +1784,26 @@ public class ActionLogger implements WorkflowListener {
         HBox selectRow = new HBox(8, btnSelectAll, btnUnselectAll);
         selectRow.setAlignment(Pos.CENTER_LEFT);
 
+        TextField filterFld = new TextField();
+        filterFld.setPromptText("Filter image names…");
+        filterFld.setFont(Font.font("System", 11));
+        filterFld.setStyle(
+            "-fx-background-color: #181825;"
+          + "-fx-text-fill: #cdd6f4;"
+          + "-fx-prompt-text-fill: #6c7086;"
+          + "-fx-background-radius: 4;"
+          + "-fx-border-color: #313244;"
+          + "-fx-border-radius: 4;"
+        );
+        filterFld.textProperty().addListener((obs, oldVal, newVal) -> {
+            String needle = newVal == null ? "" : newVal.trim().toLowerCase();
+            checkboxes.forEach((imgName, cb) -> {
+                boolean visible = needle.isEmpty() || imgName.toLowerCase().contains(needle);
+                cb.setManaged(visible);
+                cb.setVisible(visible);
+            });
+        });
+
         Button btnConfirm = new Button("Confirm");
         btnConfirm.setFont(Font.font("System", FontWeight.BOLD, 12));
         btnConfirm.setPadding(new Insets(5, 16, 5, 16));
@@ -1797,7 +1817,7 @@ public class ActionLogger implements WorkflowListener {
         HBox btnRow = new HBox(btnConfirm);
         btnRow.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox root = new VBox(10, headLbl, promptLbl, selectRow, scroll, btnRow);
+        VBox root = new VBox(10, headLbl, promptLbl, selectRow, filterFld, scroll, btnRow);
         root.setPadding(new Insets(20));
         root.setStyle("-fx-background-color: #1e1e2e;");
         root.setPrefWidth(460);
