@@ -1,5 +1,8 @@
 ## What's new in v1.0.15
 
+### Added — Unstamped image reminder on image switch
+Users routinely forget to Stamp before switching to another image — right when QuPath's own "save changes" prompt appears. qTrace now checks, on every image change, whether the image being left has captured actions with no matching stamp (tracked by image hash plus step count, since new steps can be added to an image after it was already stamped once). If so, a reminder dialog offers to Stamp now, continue without stamping, or stop asking for the rest of the session.
+
 ### Added — Name filter in Confirm training images dialog
 The confirmation dialog for multi-image pixel classifier training sets can list every image in the project. A filter field now sits above the list — typing narrows the checkboxes down by image name (the active image stays pinned and visible regardless of the filter).
 
