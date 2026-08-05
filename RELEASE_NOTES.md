@@ -1,3 +1,10 @@
+## What's new in v1.0.16
+
+### Added — Annotated thumbnail on export and cloud Workspace push
+Exporting now also renders a small square JPEG thumbnail alongside the `.qtrace` file — a snapshot of the current QuPath viewer (channel colors, brightness/contrast, and any annotation/detection overlays), not raw server pixels, so it actually shows what the contributor was looking at rather than a dark, uncomposited render. Compliance's cloud Workspace push uploads it together with `.qtcert`/`chain.jsonl`/classifiers; the Workspace table and the certificate fiche on qtrace.ca now show this thumbnail instead of text-only rows.
+
+---
+
 ## What's new in v1.0.15
 
 ### Added — Unstamped image reminder on image switch

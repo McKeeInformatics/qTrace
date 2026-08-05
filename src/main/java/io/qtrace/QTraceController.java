@@ -28,6 +28,7 @@ import javafx.scene.control.ButtonType;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.ScriptEditor;
+import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.gui.viewer.QuPathViewerListener;
 import qupath.lib.images.ImageData;
@@ -150,6 +151,7 @@ public class QTraceController {
     private ValidationStamp lastStamp    = null;
     private Path            lastCertPath  = null;  // written by exportReport(), used by pushToWorkspace()
     private Path            lastQtracePath = null;
+    private Path            lastThumbnailPath = null;
     // Captured-step count at the moment of lastStamp — imageHash alone (pixel content)
     // doesn't change when new steps/annotations are added to the same image, so it can't
     // tell "stamped" from "stamped, then more work happened" on its own.
@@ -826,6 +828,19 @@ public class QTraceController {
                 panel.log("  CSV: " + csvFile.getFileName());
             }
 
+            lastThumbnailPath = null;
+            try {
+                var viewer = qupath.getViewer();
+                if (viewer != null && viewer.getImageData() != null) {
+                    var snapshot = GuiTools.makeViewerSnapshot(viewer);
+                    String base = outFile.getFileName().toString().replaceAll("\\.qtrace$", "");
+                    lastThumbnailPath = ThumbnailGenerator.generate(snapshot, outDir, base);
+                    if (panel != null) panel.log("  thumbnail: " + lastThumbnailPath.getFileName());
+                }
+            } catch (Exception e) {
+                if (panel != null) panel.log("  thumbnail: " + e.getMessage());
+            }
+
             // Compliance: build .qtcert chain-of-custody certificate (only when licensed & active)
             QTracePlugin ep = QTracePluginManager.getEntitled();
             lastQtracePath = outFile;
@@ -876,10 +891,11 @@ public class QTraceController {
             panel.log("  · chain.jsonl");
             for (ClassifierRecord clf : classifiers)
                 panel.log("  · classifiers/" + clf.name + ".json");
+            if (lastThumbnailPath != null) panel.log("  · thumbnail.jpg");
             panel.setPushEnabled(false);
             panel.startPushProgress();
         }
-        ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers)
+        ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers, lastThumbnailPath)
           .thenAccept(url -> {
               if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {
