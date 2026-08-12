@@ -108,8 +108,10 @@ public class QTracePanel {
             stage.setMinWidth(560);
             stage.setWidth(560);
         } else {
-            stage.setMinWidth(340);
-            stage.setWidth(360);
+            // Core toolbar now carries Dashboard + Import + Reset — widened from 340/360 so
+            // the extra icon button doesn't get squeezed or wrap onto a second line.
+            stage.setMinWidth(380);
+            stage.setWidth(400);
         }
         Image logo = loadLogo();
         if (logo != null) stage.getIcons().add(logo);
@@ -301,11 +303,33 @@ public class QTracePanel {
             QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
         Button importBtn = iconButton(iconFactory(this::iconImport), QTraceI18n.t("btn.import.caption"),
             QTraceI18n.t("btn.import.tooltip"), Color.web(GROUP_TOOLS));
+        Button resetBtn = iconButton(iconFactory(this::iconReset), QTraceI18n.t("btn.reset.caption"),
+            QTraceI18n.t("btn.reset.tooltip"), Color.web(RED));
         dashboardBtn.setOnAction(e -> controller.showDashboard());
         importBtn.setOnAction(e -> controller.startBatchExport());
-        row.getChildren().addAll(dashboardBtn, importBtn);
+        resetBtn.setOnAction(e -> confirmReset());
+        row.getChildren().addAll(dashboardBtn, importBtn, resetBtn);
 
         return row;
+    }
+
+    /**
+     * Reset is destructive (clears the whole capture, see ActionLogger#resetCapture) — always
+     * confirm before calling it, same as the "Unstamped image" guard elsewhere in this app.
+     */
+    private void confirmReset() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.initOwner(controller.getQuPath().getStage());
+        alert.setTitle("qTrace — Reset");
+        alert.setHeaderText("Reset will erase all of your traces.");
+        alert.setContentText("Are you sure you want to continue?");
+        ButtonType btnReset  = new ButtonType("Reset", ButtonBar.ButtonData.OK_DONE);
+        ButtonType btnCancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(btnCancel, btnReset);
+
+        alert.showAndWait().ifPresent(bt -> {
+            if (bt == btnReset) controller.resetCapture();
+        });
     }
 
     // ── Status section ───────────────────────────────────────────────────────
@@ -726,6 +750,26 @@ public class QTracePanel {
         return g;
     }
 
+    /** Circular "undo/refresh" arrow — reads as Reset at a glance, distinct from Import's downward arrow. */
+    private Group iconReset(Color c) {
+        Arc arc = new Arc(12, 12, 7.6, 7.6, 35, 275);
+        arc.setType(ArcType.OPEN);
+        arc.setFill(Color.TRANSPARENT);
+        arc.setStroke(c);
+        arc.setStrokeWidth(1.7);
+        arc.setStrokeLineCap(StrokeLineCap.ROUND);
+
+        Polygon arrowHead = new Polygon(
+            17.9, 5.9,
+            21.3, 6.9,
+            19.5, 9.9
+        );
+        arrowHead.setFill(c);
+
+        Group g = new Group(arc, arrowHead);
+        return g;
+    }
+
     private Group iconDashboard(Color c) {
         Group g = new Group();
         g.getChildren().addAll(
@@ -795,7 +839,8 @@ public class QTracePanel {
                 stage.setMinWidth(560);
                 if (stage.getWidth() < 560) stage.setWidth(560);
             } else {
-                stage.setMinWidth(340);
+                stage.setMinWidth(380);
+                if (stage.getWidth() < 380) stage.setWidth(400);
             }
             stage.setScene(new Scene(buildRoot()));
             refreshStatus();
