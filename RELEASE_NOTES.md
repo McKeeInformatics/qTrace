@@ -4,7 +4,7 @@
 
 qTrace could already regenerate a Groovy script from a `.qtrace` file — but you had to open it yourself in the Script Editor and click Run, with no way to know whether one step actually worked before the next one ran. The new **Player** executes the replay directly, step-by-step or continuously, with a real per-step status.
 
-![qTrace Player — Target image(s) batch running across a project](https://raw.githubusercontent.com/RomainTourte/qTrace/main/docs/screenshots/v1.1.0-player.png)
+![qTrace Player — Target image(s) batch running across a project](https://raw.githubusercontent.com/RomainTourte/qTrace-core/main/docs/screenshots/v1.1.0-player.png)
 
 Starting from an existing `.qtrace`, the Player lets you:
 
