@@ -1,3 +1,28 @@
+## What's new in v1.1.0
+
+### Added — Replay Player
+
+qTrace could already regenerate a Groovy script from a `.qtrace` file — but you had to open it yourself in the Script Editor and click Run, with no way to know whether one step actually worked before the next one ran. The new **Player** executes the replay directly, step-by-step or continuously, with a real per-step status.
+
+![qTrace Player — Target image(s) batch running across a project](https://raw.githubusercontent.com/RomainTourte/qTrace/main/docs/screenshots/v1.1.0-player.png)
+
+Starting from an existing `.qtrace`, the Player lets you:
+
+- **Replay step-by-step or continuously** — advance one instruction at a time (◀ ▶│) to inspect each effect on the image, or hit ▶ Play and let the whole pipeline run through, with each step's status (OK / failed / skipped) updated live
+- **Choose which instructions to replay** — every step in the trace has its own checkbox; you can uncheck whatever isn't relevant (an export, a step specific to the original environment) without touching the source file
+- **Automatically replay across multiple images in the project (Target image(s))** — check one or more images in the current project and hit Play: the Player opens each image in turn and replays the checked instructions against it, with no manual step in between. Useful for verifying that a pipeline behaves reproducibly across a whole batch of images, not just the one it was recorded on
+- **Check compatibility before running** — a pre-check panel automatically verifies file integrity, required extensions, referenced ML models, and the QuPath version, and warns if anything's missing before replaying
+- **Keep a record of every run** — each run produces a timestamped log (one per image, in a batch), with per-step detail and a final summary; a **Stamper** button lets you sign a run's result as proof of execution
+- **Export the replayed code** — the Export Code button assembles a standalone Groovy script from the checked instructions, reusable outside the Player (Script Editor, sharing)
+
+### Fixed — Apparent freeze during a long segmentation
+A heavy step (segmentation, cell detection) could block QuPath for several minutes to the point where the OS would show "Not Responding," even though the computation was genuinely progressing in the background. The Player now runs each step on a dedicated thread instead of the UI thread — matching what QuPath itself already does by default when running a script from the Script Editor.
+
+### Added — Reset button
+New button in the main panel to reset the current capture and start tracking from this point forward, without needing to close/reopen the image.
+
+---
+
 ## What's new in v1.0.16
 
 ### Added — Annotated thumbnail on export and cloud Workspace push
