@@ -478,7 +478,7 @@ public class QTraceDashboard {
     private void autoScan() {
         if (scanning) return;
         scanning = true;
-        scanPathLabel.setText("⏳  Scanning .qtrace files…");
+        scanPathLabel.setText(QTraceI18n.t("dashboard.scanning"));
         if (loadingOverlay != null) {
             loadingOverlay.setVisible(true);
             loadingOverlay.setManaged(true);
@@ -1047,8 +1047,8 @@ public class QTraceDashboard {
         Runnable refreshCurrent = () -> currentArea.setText(formatMetadataMap(entry.getMetadataMap()));
         refreshCurrent.run();
 
-        Button okBtn = new Button("OK");
-        Button cancelBtn = new Button("Cancel");
+        Button okBtn = new Button(QTraceI18n.t("dashboard.ok"));
+        Button cancelBtn = new Button(QTraceI18n.t("dashboard.cancel"));
         okBtn.setDefaultButton(true);
         cancelBtn.setCancelButton(true);
         okBtn.setOnAction(ev -> {
@@ -1189,7 +1189,7 @@ public class QTraceDashboard {
         if (img != null) {
             Label nameLabel = lbl("🖼  " + str(img, "name", "(inconnu)"), TEXT_MAIN, 13, FontWeight.BOLD, false);
 
-            Button metadataBtn = new Button("🏷 Add Metadata");
+            Button metadataBtn = new Button(QTraceI18n.t("dashboard.addMetadata"));
             metadataBtn.setStyle(
                 "-fx-background-color:transparent;-fx-text-fill:" + TEXT_SUB + ";" +
                 "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
@@ -1205,7 +1205,7 @@ public class QTraceDashboard {
                 "-fx-border-color:" + TEXT_SUB + ";-fx-border-radius:4;-fx-background-radius:4;"));
             metadataBtn.setOnAction(ev -> showAddMetadataDialog());
 
-            Button openBtn = new Button("📂 Open .qtrace");
+            Button openBtn = new Button(QTraceI18n.t("dashboard.openQtrace"));
             openBtn.setStyle(
                 "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";" +
                 "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
@@ -1221,7 +1221,7 @@ public class QTraceDashboard {
                 "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;"));
             openBtn.setOnAction(ev -> openQtraceFileWithDefaultApp());
 
-            Button deleteBtn = new Button("🗑 Delete .qtrace");
+            Button deleteBtn = new Button(QTraceI18n.t("dashboard.deleteQtrace"));
             deleteBtn.setStyle(
                 "-fx-background-color:transparent;-fx-text-fill:#e05252;" +
                 "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
@@ -1296,7 +1296,7 @@ public class QTraceDashboard {
         }
 
         // Toggle button
-        Button toggleBtn = new Button("▼  " + (validatedSessions.size() - 1) + " previous contributor(s)");
+        Button toggleBtn = new Button(String.format(QTraceI18n.t("dashboard.prevContributors"), validatedSessions.size() - 1));
         toggleBtn.setStyle(
             "-fx-background-color: transparent; -fx-border-color: " + BORDER + ";" +
             "-fx-border-radius: 4; -fx-text-fill: " + BLUE + "; -fx-font-size: 11px;" +
@@ -2522,7 +2522,7 @@ public class QTraceDashboard {
         scroll.setStyle("-fx-background-color:" + BG_SURFACE + ";-fx-background:" + BG_SURFACE + ";");
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
-        Button clearAll = new Button("Clear all filters");
+        Button clearAll = new Button(QTraceI18n.t("dashboard.clearFilters"));
         clearAll.setMaxWidth(Double.MAX_VALUE);
         clearAll.setStyle(
             "-fx-background-color:" + BG_CARD + ";"

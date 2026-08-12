@@ -27,7 +27,6 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import qupath.lib.gui.QuPathGUI;
 
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -156,11 +155,20 @@ public final class QTraceLicenseGate {
         });
     }
 
+    // Never use java.awt.Desktop here: initializing AWT inside the JavaFX/GTK
+    // process can crash the JVM on Linux. xdg-open/open/cmd start don't touch AWT.
     private static void browse(String url) {
         new Thread(() -> {
             try {
-                if (java.awt.Desktop.isDesktopSupported())
-                    java.awt.Desktop.getDesktop().browse(new URI(url));
+                String os = System.getProperty("os.name", "").toLowerCase();
+                ProcessBuilder pb;
+                if (os.contains("linux"))
+                    pb = new ProcessBuilder("xdg-open", url);
+                else if (os.contains("mac"))
+                    pb = new ProcessBuilder("open", url);
+                else
+                    pb = new ProcessBuilder("cmd", "/c", "start", url);
+                pb.start();
             } catch (Exception ignored) {}
         }, "qtrace-portal-browse").start();
     }

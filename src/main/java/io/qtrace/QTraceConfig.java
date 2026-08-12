@@ -50,6 +50,7 @@ public class QTraceConfig {
     private String exportDir;
     private String classifierDir;
     private String trainingDir;
+    private String lastReplayBrowseDir; // last folder the Compliance Player's "Browse" opened from
     private String validatorName;
     private String licensePath;
     private String pinHash;       // SHA-256 hex of the user's PIN, null = no PIN set
@@ -84,11 +85,18 @@ public class QTraceConfig {
     public Path getClassifierDir()  { return resolve(classifierDir);   }
     public Path getTrainingDir()    { return resolve(trainingDir);     }
 
+    /** Where the Player's "Browse" should start — the last folder it was used from, or the configured export dir until then. */
+    public Path getLastReplayBrowseDir() {
+        return (lastReplayBrowseDir != null && !lastReplayBrowseDir.isBlank())
+            ? Path.of(lastReplayBrowseDir) : getExportDir();
+    }
+
     // ── Path setters ─────────────────────────────────────────────────────────
 
     public void setExportDir(String p)      { this.exportDir       = blank(p); }
     public void setClassifierDir(String p)  { this.classifierDir   = blank(p); }
     public void setTrainingDir(String p)    { this.trainingDir     = blank(p); }
+    public void setLastReplayBrowseDir(String p) { this.lastReplayBrowseDir = blank(p); }
 
     // ── Validator ─────────────────────────────────────────────────────────────
 

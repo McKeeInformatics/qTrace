@@ -1106,6 +1106,18 @@ public class QTraceController {
         }
     }
 
+    /**
+     * Same as {@link #openEntry(ProjectImageEntry)}, but static — for callers (e.g. the
+     * Compliance Player's multi-image batch replay) that have a {@link QuPathGUI} but no
+     * {@link QTraceController} instance. Must be called on the JavaFX thread.
+     */
+    public static void openEntryOn(QuPathGUI qupath, ProjectImageEntry<?> entry) {
+        try {
+            Method m = findMethodWithParam(qupath.getClass(), "openImageEntry", ProjectImageEntry.class);
+            if (m != null) m.invoke(qupath, entry);
+        } catch (Exception ignored) {}
+    }
+
     // ── Reset ────────────────────────────────────────────────────────────────
 
     public void resetCapture() {

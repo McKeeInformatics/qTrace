@@ -71,7 +71,6 @@ import java.io.*;
 import java.util.Arrays;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.*;
 import java.util.Base64;
@@ -477,13 +476,7 @@ public class ActionLogger implements WorkflowListener {
                     if (panel != null) panel.log("WARNING: image file not found on disk — hash skipped.");
                     return;
                 }
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                try (InputStream fis = new FileInputStream(file)) {
-                    byte[] buf = new byte[65536];
-                    int n;
-                    while ((n = fis.read(buf)) != -1) digest.update(buf, 0, n);
-                }
-                imageHash = HexFormat.of().formatHex(digest.digest());
+                imageHash = io.qtrace.chain.Hashing.sha256Hex(file.toPath());
                 if (panel != null) panel.log("SHA-256: " + imageHash.substring(0, 16) + "...");
                 if (onHashReady != null) onHashReady.run();
             } catch (Exception e) {
@@ -2211,10 +2204,8 @@ public class ActionLogger implements WorkflowListener {
 
     // ── Generic SHA-256 ──────────────────────────────────────────────────────
 
-    private static String computeSha256Bytes(byte[] bytes) throws Exception {
-        MessageDigest d = MessageDigest.getInstance("SHA-256");
-        d.update(bytes);
-        return HexFormat.of().formatHex(d.digest());
+    private static String computeSha256Bytes(byte[] bytes) {
+        return io.qtrace.chain.Hashing.sha256Hex(bytes);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

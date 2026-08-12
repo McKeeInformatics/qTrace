@@ -44,13 +44,25 @@ public final class StampSigner {
     private StampSigner() {}
 
     /**
-     * Signs the stamp's canonical payload and returns the signature as base64url.
+     * Signs a {@link ValidationStamp}'s canonical payload. Thin wrapper over
+     * {@link #signPayload(String)} — kept for call-site clarity where a ValidationStamp
+     * is already in hand.
+     */
+    public static String sign(ValidationStamp stamp) {
+        return signPayload(stamp.canonicalPayload());
+    }
+
+    /**
+     * Signs an arbitrary canonical JSON payload and returns the signature as base64url.
+     * Generic across stamp record types (ValidationStamp, ReplayStamp, ...) — every stamp's
+     * {@code canonicalPayload()} produces RFC 8785 (JCS) canonical JSON, so signing only ever
+     * needs the resulting string, never the record shape.
      * Priority:
      *   1. In-memory decrypted key from Compliance plugin (passphrase-unlocked).
      *   2. Key file on disk (legacy path via QTraceConfig / ~/.qTrace/qtrace-signing.key).
      * Returns null silently if no signing key is available.
      */
-    public static String sign(ValidationStamp stamp) {
+    public static String signPayload(String canonicalPayload) {
         // Compliance installed but license inactive → degrade to Core: no certification at all.
         if (QTracePluginManager.hasCompliance() && !QTracePluginManager.isEntitled()) return null;
 
@@ -65,7 +77,7 @@ public final class StampSigner {
                         .generatePrivate(new PKCS8EncodedKeySpec(derBytes));
                     Signature sig = Signature.getInstance("Ed25519");
                     sig.initSign(privateKey);
-                    sig.update(stamp.canonicalPayload().getBytes(StandardCharsets.UTF_8));
+                    sig.update(canonicalPayload.getBytes(StandardCharsets.UTF_8));
                     return Base64.getUrlEncoder().withoutPadding().encodeToString(sig.sign());
                 } catch (Exception e) {
                     String msg = e.getClass().getSimpleName() + ": " + e.getMessage();
@@ -97,7 +109,7 @@ public final class StampSigner {
 
             Signature sig = Signature.getInstance("Ed25519");
             sig.initSign(privateKey);
-            sig.update(stamp.canonicalPayload().getBytes(StandardCharsets.UTF_8));
+            sig.update(canonicalPayload.getBytes(StandardCharsets.UTF_8));
 
             return Base64.getUrlEncoder().withoutPadding().encodeToString(sig.sign());
         } catch (Exception e) {

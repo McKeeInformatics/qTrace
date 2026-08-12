@@ -36,7 +36,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -348,11 +347,8 @@ public final class QTraceUpdater {
         return resp.body();
     }
 
-    private static String sha256Hex(byte[] data) throws Exception {
-        byte[] d = MessageDigest.getInstance("SHA-256").digest(data);
-        StringBuilder sb = new StringBuilder(d.length * 2);
-        for (byte x : d) sb.append(String.format("%02x", x));
-        return sb.toString();
+    private static String sha256Hex(byte[] data) {
+        return io.qtrace.chain.Hashing.sha256Hex(data);
     }
 
     private static void info(QuPathGUI qupath, String msg)  { alert(qupath, Alert.AlertType.INFORMATION, msg); }
