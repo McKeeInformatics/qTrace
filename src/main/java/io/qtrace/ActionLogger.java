@@ -144,6 +144,22 @@ public class ActionLogger implements WorkflowListener {
 
     // Manual annotation dedup — UUID → index in capturedSteps
     private final Map<UUID, Integer> annotationStepIndex = new HashMap<>();
+    // Belt-and-suspenders dedup for the SAME purpose, keyed by the 8-hex UUID suffix embedded
+    // in each fragment's "_obj_<suffix>" variable name, maintained ONLY inside workflowUpdated()
+    // — see the comment there for why annotationStepIndex alone isn't reliable during a fast
+    // drag (many CHANGE_OTHER events per second, e.g. moving a rectangle/ellipse).
+    private final Map<String, Integer> manualAnnotationLatestIndex = new HashMap<>();
+    private static final java.util.regex.Pattern OBJ_VAR_SUFFIX =
+        java.util.regex.Pattern.compile("_obj_([0-9a-f]{8})");
+    // Debounce for manual annotation geometry edits: a click-drag move/resize fires one
+    // CHANGE_OTHER hierarchy event per intermediate frame (up to 200+ for one drag). Capturing
+    // on every event made "steps captured" climb by the same amount live, even though the
+    // manualAnnotationLatestIndex dedup above already retired all but the last one at export
+    // time. This coalesces a whole drag gesture into a single capture, fired ~ANNOTATION_MOVE_DEBOUNCE_MS
+    // after the last event for that object — same polling-thread pattern as scheduleDetectionBatch().
+    private final Map<UUID, Long> annotationMoveLastEventTime  = new ConcurrentHashMap<>();
+    private final Set<UUID>       annotationMoveDebouncePending = ConcurrentHashMap.newKeySet();
+    private static final long     ANNOTATION_MOVE_DEBOUNCE_MS  = 400;
     // UUIDs of annotations that already existed when qTrace attached — never re-capture these
     private final Set<UUID> snapshotAnnotationIds = new HashSet<>();
     // Script fragments of deleted annotations — filtered out by MetaScriptGenerator
@@ -180,7 +196,7 @@ public class ActionLogger implements WorkflowListener {
         // New manual annotation drawn
         if (type == PathObjectHierarchyEvent.HierarchyEventType.ADDED && !scriptRunning) {
             for (PathObject obj : changed) {
-                if (obj.isAnnotation()) captureManualAnnotation(obj);
+                if (obj.isAnnotation()) scheduleAnnotationCapture(obj);
             }
         }
 
@@ -195,7 +211,7 @@ public class ActionLogger implements WorkflowListener {
         // Annotation properties changed (name, class, color, description, locked)
         if (type == PathObjectHierarchyEvent.HierarchyEventType.OTHER_STRUCTURE_CHANGE && !scriptRunning) {
             for (PathObject obj : changed) {
-                if (obj.isAnnotation()) refreshAnnotationCapture(obj);
+                if (obj.isAnnotation()) scheduleAnnotationCapture(obj);
             }
             if (!knownClassifiers.isEmpty()) checkTrainingIntegrity(changed);
         }
@@ -205,15 +221,7 @@ public class ActionLogger implements WorkflowListener {
           || type == PathObjectHierarchyEvent.HierarchyEventType.CHANGE_CLASSIFICATION)
           && !scriptRunning) {
             for (PathObject obj : changed) {
-                if (!obj.isAnnotation()) continue;
-                UUID uuid = obj.getID();
-                if (annotationStepIndex.containsKey(uuid)) {
-                    refreshAnnotationCapture(obj);
-                } else if (snapshotAnnotationIds.contains(uuid)) {
-                    // Pre-existing annotation modified for the first time — start tracking it
-                    snapshotAnnotationIds.remove(uuid);
-                    captureManualAnnotation(obj);
-                }
+                if (obj.isAnnotation()) scheduleAnnotationCapture(obj);
             }
         }
 
@@ -386,6 +394,9 @@ public class ActionLogger implements WorkflowListener {
         manualAnnotationCount = 0;
         capturedSteps.clear();
         annotationStepIndex.clear();
+        manualAnnotationLatestIndex.clear();
+        annotationMoveDebouncePending.clear();
+        annotationMoveLastEventTime.clear();
         snapshotAnnotationIds.clear();
         deletedFragments.clear();
         manualDetectionCorrections.clear();
@@ -418,6 +429,7 @@ public class ActionLogger implements WorkflowListener {
                 detectClassifierFromScript(s.getScript());
                 detectCellIntensityFromScript(s.getScript());
             }
+            retirePreviousManualAnnotationStep(json, capturedSteps.size() - 1);
         }
         lastKnownStepCount = newSize;
         // Detection correction batches are already guarded by !scriptRunning in hierarchyListener,
@@ -535,6 +547,54 @@ public class ActionLogger implements WorkflowListener {
                "if (_obj_" + varSuffix + " != null) addObject(_obj_" + varSuffix + ")";
     }
 
+    // ── Debounced entry point for all manual annotation capture ────────────────
+
+    /**
+     * Coalesces repeated hierarchy events for the same annotation (a click-drag move fires one
+     * CHANGE_OTHER per intermediate frame) into a single capture, taken once the object has been
+     * quiet for {@link #ANNOTATION_MOVE_DEBOUNCE_MS}. Reads the object's CURRENT state at fire
+     * time (not whatever it was when this was scheduled), so the single resulting step always
+     * reflects the final settled position — never an intermediate one.
+     */
+    private void scheduleAnnotationCapture(PathObject obj) {
+        UUID uuid = obj.getID();
+        annotationMoveLastEventTime.put(uuid, System.currentTimeMillis());
+        if (!annotationMoveDebouncePending.add(uuid)) return; // already debouncing this object
+
+        Thread t = new Thread(() -> {
+            try {
+                while (true) {
+                    Long last = annotationMoveLastEventTime.get(uuid);
+                    if (last == null) return; // cancelled — e.g. the annotation was deleted
+                    if (System.currentTimeMillis() - last >= ANNOTATION_MOVE_DEBOUNCE_MS) break;
+                    Thread.sleep(50);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            Platform.runLater(() -> {
+                if (!annotationMoveDebouncePending.remove(uuid)) return; // cancelled just before we ran
+                annotationMoveLastEventTime.remove(uuid);
+                captureSettledAnnotation(obj);
+            });
+        }, "qtrace-annotation-debounce");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void captureSettledAnnotation(PathObject obj) {
+        UUID uuid = obj.getID();
+        if (annotationStepIndex.containsKey(uuid)) {
+            refreshAnnotationCapture(obj);
+        } else if (snapshotAnnotationIds.contains(uuid)) {
+            snapshotAnnotationIds.remove(uuid);
+            captureManualAnnotation(obj);
+        } else {
+            captureManualAnnotation(obj);
+        }
+    }
+
     // ── captureManualAnnotation ───────────────────────────────────────────────
 
     private void captureManualAnnotation(PathObject obj) {
@@ -593,6 +653,8 @@ public class ActionLogger implements WorkflowListener {
 
     private void onAnnotationRemoved(PathObject obj) {
         UUID uuid = obj.getID();
+        annotationMoveDebouncePending.remove(uuid);
+        annotationMoveLastEventTime.remove(uuid);
         if (snapshotAnnotationIds.contains(uuid)) return;
         Integer idx = annotationStepIndex.remove(uuid);
         if (idx == null) return;
@@ -611,6 +673,35 @@ public class ActionLogger implements WorkflowListener {
         if (j.has("script_fragment") && !j.get("script_fragment").isJsonNull()) {
             deletedFragments.add(j.get("script_fragment").getAsString());
         }
+    }
+
+    /**
+     * Retires the previous captured step for the same annotation (if any), keeping only the
+     * latest geometry/position per object active for export — same intent as the
+     * {@code retireStep(existingIdx)} calls in {@link #captureManualAnnotation}/
+     * {@link #refreshAnnotationCapture}, but driven from here instead, where it's actually safe.
+     *
+     * Those two methods read {@code annotationStepIndex.get(uuid)} — set by a PREVIOUS call to
+     * {@code capturedSteps.size() - 1} — and reuse that value later. That's fine when calls are
+     * spaced out, but during a fast click-and-drag (a rectangle/ellipse fires a CHANGE_OTHER
+     * hierarchy event per intermediate frame — up to 200+ for one drag), reentrant/overlapping
+     * calls can leave that bookkeeping pointing at a stale index, and every retirement attempt
+     * then either targets the wrong entry or silently retires nothing. The exported `.qtrace`
+     * ends up with every intermediate drag position still marked active, and replay recreates
+     * the object once per frame instead of just at its final position.
+     *
+     * This runs inline in the loop that's the single place `capturedSteps` actually grows, so
+     * "index of the step we just added" is never in question — no cross-call timing to get
+     * wrong. Keyed by the 8-hex suffix already embedded in the fragment's `_obj_<suffix>`
+     * variable name (see {@code buildAnnotationFragment}) rather than the full UUID, since that's
+     * all a fragment exposes without re-parsing its embedded GeoJSON.
+     */
+    private void retirePreviousManualAnnotationStep(JsonObject json, int newIdx) {
+        if (!json.has("script_fragment") || json.get("script_fragment").isJsonNull()) return;
+        java.util.regex.Matcher m = OBJ_VAR_SUFFIX.matcher(json.get("script_fragment").getAsString());
+        if (!m.find()) return;
+        Integer prevIdx = manualAnnotationLatestIndex.put(m.group(1), newIdx);
+        if (prevIdx != null) retireStep(prevIdx);
     }
 
     // ── Manual annotation counter ─────────────────────────────────────────────
@@ -880,6 +971,9 @@ public class ActionLogger implements WorkflowListener {
 
         capturedSteps.clear();
         annotationStepIndex.clear();
+        manualAnnotationLatestIndex.clear();
+        annotationMoveDebouncePending.clear();
+        annotationMoveLastEventTime.clear();
         deletedFragments.clear();
         cellIntensityRecords.clear();
         preExistingStepCount  = 0;
