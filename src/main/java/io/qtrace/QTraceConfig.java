@@ -41,6 +41,9 @@ public class QTraceConfig {
     private static final Path DEFAULT_DIR =
         Path.of(System.getProperty("user.home"), "Documents", "QuPath", "scripts", "qtrace");
 
+    private static final Path DEFAULT_LOGS_DIR =
+        Path.of(System.getProperty("user.home"), ".qTrace", "replay-logs");
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     // Singleton
@@ -51,6 +54,8 @@ public class QTraceConfig {
     private String classifierDir;
     private String trainingDir;
     private String lastReplayBrowseDir; // last folder the Compliance Player's "Browse" opened from
+    private String logsDir; // Player replay logs — null = ~/.qTrace/replay-logs/
+    private Boolean useProjectFolder; // when true, store everything under <project>/qTrace/ instead of the paths above
     private String validatorName;
     private String licensePath;
     private String pinHash;       // SHA-256 hex of the user's PIN, null = no PIN set
@@ -67,6 +72,9 @@ public class QTraceConfig {
 
     // Detection correction audit — null = prompt by default
     private Boolean promptDetectionNote;
+
+    // Unstamped-image reminder on image close/switch — null = prompt by default
+    private Boolean promptUnstampedReminder;
 
     private QTraceConfig() {}
 
@@ -91,12 +99,28 @@ public class QTraceConfig {
             ? Path.of(lastReplayBrowseDir) : getExportDir();
     }
 
+    /** Where the Player writes replay logs when Project Folder mode is off — falls back to ~/.qTrace/replay-logs/. */
+    public Path getLogsDir() {
+        return (logsDir != null && !logsDir.isBlank()) ? Path.of(logsDir) : DEFAULT_LOGS_DIR;
+    }
+
     // ── Path setters ─────────────────────────────────────────────────────────
 
     public void setExportDir(String p)      { this.exportDir       = blank(p); }
     public void setClassifierDir(String p)  { this.classifierDir   = blank(p); }
     public void setTrainingDir(String p)    { this.trainingDir     = blank(p); }
     public void setLastReplayBrowseDir(String p) { this.lastReplayBrowseDir = blank(p); }
+    public void setLogsDir(String p)        { this.logsDir         = blank(p); }
+
+    // ── Project Folder mode ───────────────────────────────────────────────────
+
+    /**
+     * When enabled, the Player (and eventually other qTrace output) stores everything under
+     * {@code <project>/qTrace/} — created on demand with subfolders per kind of output
+     * ({@code Logs/} today) — instead of the paths configured above. Default: off.
+     */
+    public boolean isUseProjectFolder()        { return useProjectFolder != null && useProjectFolder; }
+    public void    setUseProjectFolder(boolean b) { this.useProjectFolder = b; }
 
     // ── Validator ─────────────────────────────────────────────────────────────
 
@@ -146,11 +170,18 @@ public class QTraceConfig {
     public boolean isPromptDetectionNote()           { return promptDetectionNote == null || promptDetectionNote; }
     public void    setPromptDetectionNote(boolean b) { this.promptDetectionNote = b; }
 
+    // ── Unstamped-image reminder ──────────────────────────────────────────────
+
+    /** Whether to prompt to stamp when unstamped modifications are detected while closing/switching an image. Default: yes. */
+    public boolean isPromptUnstampedReminder()           { return promptUnstampedReminder == null || promptUnstampedReminder; }
+    public void    setPromptUnstampedReminder(boolean b) { this.promptUnstampedReminder = b; }
+
     // ── Raw string getters (for the dialog text fields) ───────────────────────
 
     public String rawExportDir()      { return exportDir       != null ? exportDir       : ""; }
     public String rawClassifierDir()  { return classifierDir   != null ? classifierDir   : ""; }
     public String rawTrainingDir()    { return trainingDir     != null ? trainingDir     : ""; }
+    public String rawLogsDir()        { return logsDir         != null ? logsDir         : ""; }
 
     public static String defaultDirString() { return DEFAULT_DIR.toString(); }
 

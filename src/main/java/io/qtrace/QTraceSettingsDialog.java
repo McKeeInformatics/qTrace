@@ -69,6 +69,7 @@ public class QTraceSettingsDialog {
         TextField tfExport      = pathField(cfg.rawExportDir());
         TextField tfClassifier  = pathField(cfg.rawClassifierDir());
         TextField tfTraining    = pathField(cfg.rawTrainingDir());
+        TextField tfLogs        = pathField(cfg.rawLogsDir());
 
         GridPane grid = new GridPane();
         grid.setHgap(8);
@@ -87,12 +88,36 @@ public class QTraceSettingsDialog {
         addRow(grid, 0, ".qtrace + CSV export",        tfExport,      dlg);
         addRow(grid, 1, "Classifier Git tracking",     tfClassifier,  dlg);
         addRow(grid, 2, "Training GeoJSON",            tfTraining,    dlg);
+        addRow(grid, 3, "Player replay logs",          tfLogs,        dlg);
 
         // Hint
-        Label hint = new Label("Leave blank to use default: " + QTraceConfig.defaultDirString());
+        Label hint = new Label("Leave blank to use default: " + QTraceConfig.defaultDirString()
+            + "  (replay logs default to ~/.qTrace/replay-logs/)");
         hint.setTextFill(Color.web(TEXT_MUTED));
         hint.setFont(Font.font("System", 10));
         hint.setWrapText(true);
+
+        // ── Project Folder mode — overrides the paths above with <project>/qTrace/ ──────────
+        CheckBox chkProjectFolder = new CheckBox("Use Project Folder");
+        chkProjectFolder.setSelected(cfg.isUseProjectFolder());
+        chkProjectFolder.setTextFill(Color.web(TEXT_SUB));
+
+        Label projectFolderHint = new Label(
+            "When enabled, qTrace stores its output under <project folder>/qTrace/ instead of the "
+          + "paths above (created automatically, with a Logs/ subfolder for the Player — more "
+          + "subfolders as other qTrace output moves to this scheme). Falls back to the paths "
+          + "above when no QuPath project is open.");
+        projectFolderHint.setTextFill(Color.web(TEXT_MUTED));
+        projectFolderHint.setFont(Font.font("System", 10));
+        projectFolderHint.setWrapText(true);
+        projectFolderHint.setMaxWidth(440);
+
+        VBox projectFolderBox = new VBox(4, chkProjectFolder, projectFolderHint);
+        projectFolderBox.setPadding(new Insets(0, 20, 8, 20));
+
+        // Today Project Folder mode only redirects the Player's logs (export/classifier/training
+        // paths above are unaffected) — only that field's row reflects the override.
+        tfLogs.disableProperty().bind(chkProjectFolder.selectedProperty());
         hint.setMaxWidth(440);
 
         // ── Validator section ──────────────────────────────────────────────────
@@ -265,7 +290,21 @@ public class QTraceSettingsDialog {
         detectionNoteHint.setWrapText(true);
         detectionNoteHint.setMaxWidth(440);
 
-        VBox captureBox = new VBox(6, chkDetectionNote, detectionNoteHint);
+        CheckBox chkUnstampedReminder = new CheckBox(
+            "Prompt for a note if modifications not stamped has been detected when you are closing an image");
+        chkUnstampedReminder.setSelected(cfg.isPromptUnstampedReminder());
+        chkUnstampedReminder.setTextFill(Color.web(TEXT_SUB));
+        chkUnstampedReminder.setWrapText(true);
+
+        Label unstampedReminderHint = new Label(
+            "When disabled, closing or switching away from an image with unstamped modifications "
+          + "happens silently — no prompt, and the stamp is potentially lost.");
+        unstampedReminderHint.setTextFill(Color.web(TEXT_MUTED));
+        unstampedReminderHint.setFont(Font.font("System", 11));
+        unstampedReminderHint.setWrapText(true);
+        unstampedReminderHint.setMaxWidth(440);
+
+        VBox captureBox = new VBox(6, chkDetectionNote, detectionNoteHint, chkUnstampedReminder, unstampedReminderHint);
         captureBox.setPadding(new Insets(4, 20, 8, 20));
 
         // ── Buttons ────────────────────────────────────────────────────────────
@@ -277,10 +316,13 @@ public class QTraceSettingsDialog {
             tfExport.clear();
             tfClassifier.clear();
             tfTraining.clear();
+            tfLogs.clear();
+            chkProjectFolder.setSelected(false);
             tfValidator.clear();
             tfLicense.clear();
             updateLicenseStatus(licenseStatusLbl, "", tfValidator);
             chkDetectionNote.setSelected(true);
+            chkUnstampedReminder.setSelected(true);
         });
 
         btnCancel.setOnAction(e -> dlg.close());
@@ -289,11 +331,14 @@ public class QTraceSettingsDialog {
             cfg.setExportDir(tfExport.getText());
             cfg.setClassifierDir(tfClassifier.getText());
             cfg.setTrainingDir(tfTraining.getText());
+            cfg.setLogsDir(tfLogs.getText());
+            cfg.setUseProjectFolder(chkProjectFolder.isSelected());
             cfg.setValidatorName(tfValidator.getText());
             cfg.setLicensePath(tfLicense.getText());
             cfg.setReportConfirmBeforeSend(chkReportConfirm.isSelected());
             if (langBox.getValue() != null) cfg.setReportLanguage(langBox.getValue());
             cfg.setPromptDetectionNote(chkDetectionNote.isSelected());
+            cfg.setPromptUnstampedReminder(chkUnstampedReminder.isSelected());
             cfg.save();
             dlg.close();
         });
@@ -305,7 +350,7 @@ public class QTraceSettingsDialog {
         // ── Root ───────────────────────────────────────────────────────────────
         VBox root = new VBox(0,
             sectionTitle("Export Path Configuration"),
-            grid, hint,
+            grid, hint, projectFolderBox,
             sep,
             sectionTitle("Validator"),
             validatorGrid, validatorHint,

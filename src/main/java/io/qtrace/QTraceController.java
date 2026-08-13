@@ -694,7 +694,8 @@ public class QTraceController {
             && imageHash.equals(lastStamp.imageHash())
             && currentStepCount <= lastStampStepCount;
 
-        if (skipStampReminder || oldData == null || logger == null || !hasSteps) return false;
+        if (skipStampReminder || !QTraceConfig.get().isPromptUnstampedReminder()
+            || oldData == null || logger == null || !hasSteps) return false;
         if (alreadyStamped) return false;
 
         String imageName = oldData.getServer().getMetadata().getName();
