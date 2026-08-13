@@ -10,7 +10,7 @@ Starting from an existing `.qtrace`, the Player lets you:
 - **Choose which instructions to replay** — every step in the trace has its own checkbox; you can uncheck whatever isn't relevant (an export, a step specific to the original environment) without touching the source file
 - **Automatically replay across multiple images in the project (Target image(s))** — check one or more images in the current project and hit Play: the Player opens each image in turn and replays the checked instructions against it, with no manual step in between. Useful for verifying that a pipeline behaves reproducibly across a whole batch of images, not just the one it was recorded on
 - **Check compatibility before running** — a pre-check panel automatically verifies file integrity, required extensions, referenced ML models, and the QuPath version, and warns if anything's missing before replaying
-- **Keep a record of every run** — each run produces a timestamped log (one per image, in a batch), with per-step detail and a final summary; a **Stamper** button lets you sign a run's result as proof of execution
+- **Keep a record of every run** — each run produces a timestamped log (one per image, in a batch), with per-step detail and a final summary; a **Stamp** button lets you sign a run's result as proof of execution
 - **Export the replayed code** — the Export Code button assembles a standalone Groovy script from the checked instructions, reusable outside the Player (Script Editor, sharing)
 
 ### Fixed — Apparent freeze during a long segmentation
