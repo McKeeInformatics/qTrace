@@ -176,6 +176,8 @@ public class QTraceDashboard {
     private final VBox alignmentCardContent;
     private final VBox segmentationCardContent;
     private final VBox extensionsCardContent;
+    private final VBox loadedExtensionsCardContent;
+    private final VBox externalFilesCardContent;
     private final VBox classifiersCardContent;
     private final VBox cellIntensityCardContent;
     private final VBox annotationsCardContent;
@@ -205,6 +207,8 @@ public class QTraceDashboard {
         alignmentCardContent            = new VBox(6);
         segmentationCardContent         = new VBox(6);
         extensionsCardContent           = new VBox(6);
+        loadedExtensionsCardContent     = new VBox(6);
+        externalFilesCardContent        = new VBox(6);
         classifiersCardContent          = new VBox(6);
         cellIntensityCardContent        = new VBox(6);
         annotationsCardContent          = new VBox(6);
@@ -457,6 +461,8 @@ public class QTraceDashboard {
             wrapCard("🔗  Alignement",                     alignmentCardContent),
             wrapCard("🔬  Segmentation",                   segmentationCardContent),
             wrapCard("🧩  Extensions",                     extensionsCardContent),
+            wrapCard("💻  Loaded Extensions (machine)",    loadedExtensionsCardContent),
+            wrapCard("📁  External Files",                 externalFilesCardContent),
             wrapCard("🧠  Classifiers Pixel",              classifiersCardContent),
             wrapCard("📊  Cell Intensity Classifications", cellIntensityCardContent),
             wrapCard("👤  Annotations",                    annotationsCardContent),
@@ -1099,6 +1105,8 @@ public class QTraceDashboard {
         buildAlignmentCard(session);
         buildSegmentationCard(session);
         buildExtensionsCard(session);
+        buildLoadedExtensionsCard(session);
+        buildExternalFilesCard(root, session);
         buildClassifiersCard(session);
         buildCellIntensityCard(session);
         buildAnnotationsCard(root);
@@ -1111,6 +1119,8 @@ public class QTraceDashboard {
         setPlaceholder(alignmentCardContent,            "");
         setPlaceholder(segmentationCardContent,         "");
         setPlaceholder(extensionsCardContent,           "");
+        setPlaceholder(loadedExtensionsCardContent,     "");
+        setPlaceholder(externalFilesCardContent,        "");
         setPlaceholder(classifiersCardContent,          "");
         setPlaceholder(cellIntensityCardContent,        "");
         setPlaceholder(annotationsCardContent,          "");
@@ -1806,6 +1816,116 @@ public class QTraceDashboard {
             case "inputChannels"                              -> "channel_list";
             case "tileDims", "interTilePadding", "nThreads"    -> "int";
             default -> "raw";
+        };
+    }
+
+    // ── Card — Loaded Extensions (machine) ──────────────────────────────────────
+    // session.extensions[] — QuPath extensions loaded on the machine that produced
+    // this export (name + version, when the extension exposes getVersion()).
+    // See QTraceController.collectLoadedExtensions().
+
+    private void buildLoadedExtensionsCard(JsonObject session) {
+        loadedExtensionsCardContent.getChildren().clear();
+
+        JsonArray exts = (session != null && session.has("extensions") && session.get("extensions").isJsonArray())
+            ? session.getAsJsonArray("extensions") : null;
+
+        if (exts == null || exts.size() == 0) {
+            setPlaceholder(loadedExtensionsCardContent, "No extension inventory recorded for this session");
+            return;
+        }
+
+        for (var el : exts) {
+            JsonObject ext = el.getAsJsonObject();
+            String name    = str(ext, "name", "(unknown)");
+            String version = str(ext, "version", null);
+            HBox row = new HBox(8);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getChildren().add(lbl("🧩 " + name, TEXT_MAIN, 12, FontWeight.NORMAL, false));
+            row.getChildren().add(lbl(version != null ? "v" + version : "(version unknown)",
+                version != null ? TEXT_MUTED : PEACH, 11, FontWeight.NORMAL, version == null));
+            loadedExtensionsCardContent.getChildren().add(row);
+        }
+    }
+
+    // ── Card — External Files ────────────────────────────────────────────────
+    // Companion files produced alongside this .qtrace. Reads a future
+    // session.external_files[] manifest when present (forward-compatible with
+    // an exporter that writes {type, filename, path, sha256}); until then, falls
+    // back to what's already derivable: the annotations GeoJSON filename and a
+    // sibling thumbnail found on disk next to the .qtrace file.
+
+    private void buildExternalFilesCard(JsonObject root, JsonObject session) {
+        externalFilesCardContent.getChildren().clear();
+        List<HBox> rows = new ArrayList<>();
+
+        JsonArray manifest = (session != null && session.has("external_files")
+                && session.get("external_files").isJsonArray())
+            ? session.getAsJsonArray("external_files") : null;
+
+        if (manifest != null) {
+            for (var el : manifest) {
+                JsonObject f = el.getAsJsonObject();
+                String type = str(f, "type", "file");
+                String name = str(f, "filename", str(f, "path", "(unnamed)"));
+                String path = str(f, "path", null);
+                rows.add(externalFileRow(type, name, path != null ? new File(path) : null));
+            }
+        } else {
+            JsonObject annotations = jsonObj(session, "annotations");
+            String geojson = annotations != null ? str(annotations, "geojson_file", "") : "";
+            if (geojson != null && !geojson.isBlank())
+                rows.add(externalFileRow("annotations", geojson, null));
+
+            File qtraceFile = (selectedData != null) ? selectedData.qtraceFile() : null;
+            if (qtraceFile != null) {
+                String base = qtraceFile.getName().replaceAll("\\.qtrace$", "");
+                File thumb = new File(qtraceFile.getParentFile(), base + ".thumbnail.jpg");
+                if (thumb.isFile()) rows.add(externalFileRow("thumbnail", thumb.getName(), thumb));
+            }
+        }
+
+        if (rows.isEmpty()) {
+            setPlaceholder(externalFilesCardContent,
+                "No companion files recorded yet for this session");
+            return;
+        }
+
+        boolean first = true;
+        for (HBox row : rows) {
+            if (!first) externalFilesCardContent.getChildren().add(sep());
+            first = false;
+            externalFilesCardContent.getChildren().add(row);
+        }
+    }
+
+    private HBox externalFileRow(String type, String filename, File resolvedFile) {
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getChildren().add(lbl(externalFileIcon(type) + " " + filename, TEXT_MAIN, 12, FontWeight.NORMAL, false));
+        row.getChildren().add(lbl("(" + type + ")", TEXT_MUTED, 11, FontWeight.NORMAL, true));
+        if (resolvedFile != null && resolvedFile.isFile()) {
+            Region sp = new Region();
+            HBox.setHgrow(sp, Priority.ALWAYS);
+            Button openBtn = new Button(QTraceI18n.t("dashboard.openQtrace"));
+            openBtn.setStyle(
+                "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";" +
+                "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
+                "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;");
+            openBtn.setOnAction(ev -> openWithOs(resolvedFile));
+            row.getChildren().addAll(sp, openBtn);
+        }
+        return row;
+    }
+
+    private String externalFileIcon(String type) {
+        return switch (type) {
+            case "thumbnail"   -> "🖼";
+            case "annotations" -> "📐";
+            case "cert"        -> "📜";
+            case "import"      -> "📥";
+            case "csv"         -> "📊";
+            default            -> "📄";
         };
     }
 
