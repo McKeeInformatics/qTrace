@@ -1,3 +1,18 @@
+## What's new in v1.1.1
+
+### Changed — Replay Player polish
+- Default window height now matches the Dashboard's (was noticeably shorter)
+- Pre-check now lands above the Target image(s) block instead of below it, so the config check is seen before picking target images
+- Target image(s) block now opens to a usable size (~4 rows) instead of a sliver of 1-2 rows, while staying freely resizable
+- "Target image(s) — none open" reworded to "Target image(s) — Select at least one image"
+- The CONSOLE header is now simply "Activity log"
+- Step durations under 5 seconds now show in milliseconds (e.g. "3120ms") instead of rounding down to whole seconds under MM:SS, which hid real differences between similarly-fast steps
+
+### Changed — License badge
+The panel's certified-license badge drops the validator key fingerprint next to the name ("Certified for NAME — KEY · until DATE" becomes "Certified for NAME · until DATE"). Hovering the name now shows the license holder's platform account email in a tooltip.
+
+---
+
 ## What's new in v1.1.0
 
 ### Added — Replay Player
