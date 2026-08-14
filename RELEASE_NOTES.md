@@ -1,3 +1,14 @@
+## What's new in v1.1.2
+
+### Added — Import objects from file, captured properly
+`File > Import objects from file` used to fall through the generic annotation listener and get mislabeled as individual "Manual annotation" entries — no record of the source file, and imported detections weren't captured at all. It's now its own step ("Import objects from file: <name>"), recorded in the `.qtrace` with the file's sha256 and object count. A companion copy of the imported file is written next to the export and resolved by name only when the Replay Player replays that step — no dependency on the original file's path. On Compliance, the companion file is pushed to the cloud Workspace bucket alongside classifiers and the thumbnail, and shows up as a downloadable link on the certificate page.
+
+### Added — Dashboard: Loaded Extensions & External Files cards
+- **Loaded Extensions** shows the name/version of every QuPath extension active on the machine that produced a session's export — captured since early on, never surfaced anywhere until now.
+- **External Files** lists companion artifacts for the selected session (thumbnail, `.qtcert`, master CSV, imported object files, annotations GeoJSON). Backed by a new `external_files[]` manifest written incrementally as each artifact is generated; sessions exported before this manifest existed still show their thumbnail via an on-disk fallback.
+
+---
+
 ## What's new in v1.1.1
 
 ### Changed — Replay Player polish
