@@ -292,6 +292,10 @@ public class QTraceExporter {
         // Object classifiers
         session.add("object_classifiers", buildObjectClassifiersArray());
 
+        // Imported object files (File > Import objects from file) — writes each companion
+        // file into outputDir next to the .qtrace, same call site as ThumbnailGenerator.
+        session.add("imported_object_files", buildImportedFilesArray(outputDir));
+
         // Cell intensity classifications
         session.add("cell_intensity_classifications", buildCellIntensityArray());
 
@@ -428,6 +432,33 @@ public class QTraceExporter {
     private JsonArray buildObjectClassifiersArray() {
         JsonArray arr = new JsonArray();
         for (JsonObject obj : logger.getKnownObjectClassifiers()) arr.add(obj);
+        return arr;
+    }
+
+    /**
+     * Writes each imported file's cached bytes out as a companion file next to the
+     * .qtrace (same call site/convention as ThumbnailGenerator writing the thumbnail),
+     * and records its metadata. Replay resolves the companion file by name only —
+     * see ActionLogger.recordFileImport() for the fragment that reads it back.
+     */
+    private JsonArray buildImportedFilesArray(Path outputDir) {
+        JsonArray arr = new JsonArray();
+        for (ImportedObjectFileRecord rec : logger.getImportedFiles().values()) {
+            try {
+                Files.write(outputDir.resolve(rec.companionFilename), rec.content);
+            } catch (IOException e) {
+                continue; // skip metadata entry too — a dangling reference is worse than an omission
+            }
+            JsonObject io = new JsonObject();
+            io.addProperty("original_filename", rec.name);
+            io.addProperty("companion_file",    rec.companionFilename);
+            io.addProperty("source_path",       rec.sourcePath);
+            io.addProperty("sha256",            rec.sha256);
+            io.addProperty("n_objects",         rec.objectCount);
+            io.addProperty("imported_at",       rec.importedAt.toString());
+            io.addProperty("imported_by",       rec.importedByUser);
+            arr.add(io);
+        }
         return arr;
     }
 
