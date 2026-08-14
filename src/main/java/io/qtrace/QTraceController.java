@@ -27,11 +27,13 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.commands.InteractiveObjectImporter;
 import qupath.lib.gui.scripting.ScriptEditor;
 import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.gui.viewer.QuPathViewerListener;
 import qupath.lib.images.ImageData;
+import qupath.lib.io.PathIO;
 import qupath.lib.objects.PathObject;
 import qupath.lib.plugins.workflow.DefaultScriptableWorkflowStep;
 
@@ -869,6 +871,64 @@ public class QTraceController {
         }
     }
 
+    // ── Import objects from file (menu hook) ──────────────────────────────────
+
+    /**
+     * Replaces the "File > Import objects from file" menu item's action with our own,
+     * so we get the chosen File reference directly instead of only seeing the resulting
+     * PathObjectHierarchyEvent (which carries no information about its source file).
+     * Matched by text — QuPath exposes no stable id for this Action from extension code.
+     * Called once at startup from QTraceExtension.installExtension().
+     */
+    public void hookImportObjectsMenuItem(QuPathGUI qupath) {
+        var fileMenu = qupath.getMenu("File", false);
+        if (fileMenu == null) return;
+        javafx.scene.control.MenuItem item = findMenuItemByText(fileMenu.getItems(), "import objects from file");
+        if (item == null) return;
+
+        item.setOnAction(e -> {
+            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+            chooser.setTitle("Choose file to import");
+            List<String> exts = PathIO.getObjectFileExtensions(true);
+            if (!exts.isEmpty()) {
+                String[] patterns = exts.stream().map(ext -> "*" + ext).toArray(String[]::new);
+                chooser.getExtensionFilters().add(
+                    new javafx.stage.FileChooser.ExtensionFilter("QuPath objects", patterns));
+            }
+            File file = chooser.showOpenDialog(qupath.getStage());
+            if (file == null) return;
+
+            ImageData<BufferedImage> imageData = qupath.getImageData();
+            if (imageData == null) return;
+
+            int before = imageData.getHierarchy().getAllObjects(false).size();
+            logger.setImportInProgress(true);
+            boolean ok;
+            try {
+                ok = InteractiveObjectImporter.promptToImportObjectsFromFile(imageData, file);
+            } finally {
+                logger.setImportInProgress(false);
+            }
+            if (ok) {
+                int after = imageData.getHierarchy().getAllObjects(false).size();
+                logger.recordFileImport(file, Math.max(0, after - before));
+                syncPanelState();
+            }
+        });
+    }
+
+    private javafx.scene.control.MenuItem findMenuItemByText(
+            List<javafx.scene.control.MenuItem> items, String textLower) {
+        for (javafx.scene.control.MenuItem item : items) {
+            if (item.getText() != null && item.getText().toLowerCase().contains(textLower)) return item;
+            if (item instanceof javafx.scene.control.Menu sub) {
+                javafx.scene.control.MenuItem found = findMenuItemByText(sub.getItems(), textLower);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
     // ── Cloud workspace push (Compliance) ────────────────────────────────────
 
     public void pushToWorkspace() {
@@ -885,6 +945,7 @@ public class QTraceController {
             return;
         }
         java.util.Collection<ClassifierRecord> classifiers = logger.getKnownClassifiers().values();
+        java.util.Collection<ImportedObjectFileRecord> importedFiles = logger.getImportedFiles().values();
         if (panel != null) {
             panel.log("☁ Pushing to workspace…");
             panel.log("  · " + lastQtracePath.getFileName());
@@ -892,11 +953,13 @@ public class QTraceController {
             panel.log("  · chain.jsonl");
             for (ClassifierRecord clf : classifiers)
                 panel.log("  · classifiers/" + clf.name + ".json");
+            for (ImportedObjectFileRecord imp : importedFiles)
+                panel.log("  · imports/" + imp.companionFilename);
             if (lastThumbnailPath != null) panel.log("  · thumbnail.jpg");
             panel.setPushEnabled(false);
             panel.startPushProgress();
         }
-        ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers, lastThumbnailPath)
+        ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers, lastThumbnailPath, importedFiles)
           .thenAccept(url -> {
               if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {

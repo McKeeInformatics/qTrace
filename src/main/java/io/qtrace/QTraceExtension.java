@@ -79,6 +79,9 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         if (best != null) QTracePluginManager.register(best);
 
         controller = new QTraceController(qupath);
+        // Deferred like the toolbar button below — the File menu's items aren't
+        // guaranteed to be fully populated until QuPath finishes its own layout.
+        Platform.runLater(() -> controller.hookImportObjectsMenuItem(qupath));
 
         // ── Extensions menu ────────────────────────────────────────────────────
         var menu = qupath.getMenu("Extensions>QTrace", true);

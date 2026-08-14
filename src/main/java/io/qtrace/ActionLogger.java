@@ -120,6 +120,14 @@ public class ActionLogger implements WorkflowListener {
     private static final java.util.regex.Pattern CLASSIFIER_NAME_PATTERN =
         java.util.regex.Pattern.compile("^\\d{8}-[A-Z0-9]+-\\w+-.*$");
 
+    // Imported object files (File > Import objects from file) ──────────────────
+    private final Map<String, ImportedObjectFileRecord> knownImportedFiles = new ConcurrentHashMap<>();
+    // Set true for the duration of a hooked import, so the hierarchyListener's ADDED handler
+    // doesn't also capture each incoming object individually as a "Manual annotation" — the
+    // import gets its own single, correctly-labeled step via recordFileImport() instead.
+    private volatile boolean importInProgress = false;
+    private int importCounter = 0; // disambiguates companion filenames across imports in one session
+
     // Above this many project images, the per-save hierarchy scan (PC-MultiImage) is
     // skipped for performance — the confirmation dialog still opens with nothing pre-checked.
     private static final int TRAINING_SCAN_LIMIT = 150;
@@ -193,8 +201,9 @@ public class ActionLogger implements WorkflowListener {
 
         Collection<PathObject> changed = event.getChangedObjects();
 
-        // New manual annotation drawn
-        if (type == PathObjectHierarchyEvent.HierarchyEventType.ADDED && !scriptRunning) {
+        // New manual annotation drawn — skipped during a hooked file import, which is
+        // captured as a single "Import objects from file" step by recordFileImport() instead.
+        if (type == PathObjectHierarchyEvent.HierarchyEventType.ADDED && !scriptRunning && !importInProgress) {
             for (PathObject obj : changed) {
                 if (obj.isAnnotation()) scheduleAnnotationCapture(obj);
             }
@@ -378,6 +387,8 @@ public class ActionLogger implements WorkflowListener {
         knownObjectClassifiers.clear();
         objClassifierWarnedAt.clear();
         cellIntensityRecords.clear();
+        knownImportedFiles.clear();
+        importCounter = 0;
         if (currentImageData != null) {
             currentImageData.getHierarchy().removeListener(hierarchyListener);
             currentImageData.getHistoryWorkflow().removeWorkflowListener(this);
@@ -1004,6 +1015,67 @@ public class ActionLogger implements WorkflowListener {
 
     public Map<String, ClassifierRecord> getKnownClassifiers() {
         return Collections.unmodifiableMap(knownClassifiers);
+    }
+
+    // ── Imported object files (File > Import objects from file) ────────────────
+
+    /** Toggled around the hooked import call so the generic ADDED handler doesn't
+     *  also capture each incoming object as a separate "Manual annotation". */
+    public void setImportInProgress(boolean inProgress) { this.importInProgress = inProgress; }
+
+    public Map<String, ImportedObjectFileRecord> getImportedFiles() {
+        return Collections.unmodifiableMap(knownImportedFiles);
+    }
+
+    /**
+     * Records a completed "Import objects from file" event: caches the file's bytes
+     * (so a later cloud push doesn't depend on the original path still existing),
+     * and adds a single scriptable step to the workflow history so it flows through
+     * the normal capturedSteps pipeline like any other step.
+     */
+    public void recordFileImport(java.io.File file, int objectCount) {
+        if (currentImageData == null || file == null) return;
+        try {
+            byte[] rawBytes = Files.readAllBytes(file.toPath());
+            String sha256   = computeSha256Bytes(rawBytes);
+            String user     = QTraceController.currentContributor();
+
+            importCounter++;
+            String imageBase = currentImageData.getServer().getMetadata().getName()
+                .replaceAll("[^a-zA-Z0-9._-]", "_");
+            String origExt = file.getName().contains(".")
+                ? file.getName().substring(file.getName().lastIndexOf('.'))
+                : "";
+            String companionFilename = imageBase + ".import_" + importCounter + origExt;
+
+            ImportedObjectFileRecord record = new ImportedObjectFileRecord(
+                file.getName(), companionFilename, file.getAbsolutePath(),
+                rawBytes, sha256, objectCount, Instant.now(), user);
+            knownImportedFiles.put(companionFilename, record);
+
+            String fragment =
+                "// Replay: import objects from file (" + record.name + ")\n" +
+                "def _srcDir_" + importCounter + " = (binding.hasVariable('_qtraceSourceDir')) ? binding.getVariable('_qtraceSourceDir') : null\n" +
+                "def _importFile_" + importCounter + " = _srcDir_" + importCounter
+                    + " ? new File(_srcDir_" + importCounter + " as String, \"" + companionFilename + "\") : null\n" +
+                "if (_importFile_" + importCounter + " != null && _importFile_" + importCounter + ".exists()) {\n" +
+                "    def _importedObjs_" + importCounter + " = qupath.lib.io.PathIO.readObjects(_importFile_" + importCounter + ")\n" +
+                "    addObjects(_importedObjs_" + importCounter + ")\n" +
+                "    println \"Imported \" + _importedObjs_" + importCounter + ".size() + \" objects from " + companionFilename + "\"\n" +
+                "} else {\n" +
+                "    println \"WARNING: import companion file not found for replay: " + companionFilename + "\"\n" +
+                "}";
+
+            var step = new DefaultScriptableWorkflowStep("Import objects from file: " + record.name, fragment);
+            currentImageData.getHistoryWorkflow().addStep(step);
+
+            if (panel != null) {
+                panel.log("[Import] " + record.name + " — " + objectCount + " object(s), sha256 "
+                    + sha256.substring(0, 16) + "...");
+            }
+        } catch (Exception e) {
+            if (panel != null) panel.log("WARNING: could not capture file import — " + e.getMessage());
+        }
     }
 
     public List<JsonObject> getKnownObjectClassifiers() {
