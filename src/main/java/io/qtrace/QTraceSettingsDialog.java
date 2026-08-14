@@ -140,18 +140,31 @@ public class QTraceSettingsDialog {
         validatorGrid.setPadding(new Insets(4, 20, 12, 20));
         validatorGrid.getColumnConstraints().addAll(labelCol, fieldCol);
 
-        Label validatorLbl = new Label("Nom du validateur");
+        Label validatorLbl = new Label("Validator's name");
         validatorLbl.setTextFill(Color.web(TEXT_SUB));
         validatorLbl.setFont(Font.font("System", FontWeight.NORMAL, 12));
         validatorGrid.add(validatorLbl, 0, 0);
         validatorGrid.add(tfValidator,  1, 0);
 
-        Label validatorHint = new Label(
-            "Si renseigné, pré-remplit le champ \"Validator\" dans la popup Validate & Stamp (modifiable à tout moment).");
-        validatorHint.setTextFill(Color.web(TEXT_MUTED));
-        validatorHint.setFont(Font.font("System", 10));
-        validatorHint.setWrapText(true);
-        validatorHint.setMaxWidth(440);
+        Label emailLbl = new Label("Account email");
+        emailLbl.setTextFill(Color.web(TEXT_SUB));
+        emailLbl.setFont(Font.font("System", FontWeight.NORMAL, 12));
+        TextField tfEmail = new TextField();
+        tfEmail.setPromptText("—");
+        tfEmail.setPrefHeight(30);
+        tfEmail.setEditable(false);
+        tfEmail.setDisable(true);
+        tfEmail.setStyle(
+            "-fx-background-color: " + BG_SURFACE + ";"
+          + "-fx-text-fill: " + TEXT_MAIN + ";"
+          + "-fx-prompt-text-fill: " + TEXT_MUTED + ";"
+          + "-fx-border-color: " + BORDER + ";"
+          + "-fx-border-radius: 4;"
+          + "-fx-background-radius: 4;"
+          + "-fx-font-size: 11;"
+        );
+        validatorGrid.add(emailLbl, 0, 1);
+        validatorGrid.add(tfEmail,  1, 1);
 
         // ── Compliance License section ─────────────────────────────────────────
         TextField tfLicense = new TextField(cfg.getLicensePath());
@@ -174,7 +187,7 @@ public class QTraceSettingsDialog {
         licenseStatusLbl.setMaxWidth(440);
 
         // Validate and display status for current path
-        updateLicenseStatus(licenseStatusLbl, cfg.getLicensePath(), tfValidator);
+        updateLicenseStatus(licenseStatusLbl, cfg.getLicensePath(), tfValidator, tfEmail);
 
         Button btnBrowseLicense = flatButton("Browse…", TEXT_MUTED);
         btnBrowseLicense.setOnAction(e -> {
@@ -190,7 +203,7 @@ public class QTraceSettingsDialog {
             File chosen = fc.showOpenDialog(dlg);
             if (chosen != null) {
                 tfLicense.setText(chosen.getAbsolutePath());
-                updateLicenseStatus(licenseStatusLbl, chosen.getAbsolutePath(), tfValidator);
+                updateLicenseStatus(licenseStatusLbl, chosen.getAbsolutePath(), tfValidator, tfEmail);
             }
         });
 
@@ -320,7 +333,7 @@ public class QTraceSettingsDialog {
             chkProjectFolder.setSelected(false);
             tfValidator.clear();
             tfLicense.clear();
-            updateLicenseStatus(licenseStatusLbl, "", tfValidator);
+            updateLicenseStatus(licenseStatusLbl, "", tfValidator, tfEmail);
             chkDetectionNote.setSelected(true);
             chkUnstampedReminder.setSelected(true);
         });
@@ -353,7 +366,7 @@ public class QTraceSettingsDialog {
             grid, hint, projectFolderBox,
             sep,
             sectionTitle("Validator"),
-            validatorGrid, validatorHint,
+            validatorGrid,
             sep2,
             sectionTitle("Compliance License"),
             licenseGrid,
@@ -364,8 +377,7 @@ public class QTraceSettingsDialog {
             sectionTitle("Capture"),
             captureBox,
             buttonRow);
-        VBox.setMargin(hint,          new Insets(0, 20, 8, 20));
-        VBox.setMargin(validatorHint, new Insets(0, 20, 8, 20));
+        VBox.setMargin(hint, new Insets(0, 20, 8, 20));
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
         root.setPrefWidth(520);
 
@@ -465,11 +477,13 @@ public class QTraceSettingsDialog {
         a.showAndWait();
     }
 
-    private static void updateLicenseStatus(Label statusLbl, String path, TextField tfValidator) {
+    private static void updateLicenseStatus(Label statusLbl, String path, TextField tfValidator, TextField tfEmail) {
         // Unlocked by default — only a verified, non-expired license re-locks it below.
         // Otherwise a stamp could be signed under someone else's certified name.
         tfValidator.setEditable(true);
+        tfValidator.setDisable(false);
         tfValidator.setTooltip(null);
+        tfEmail.setText("");
 
         if (path == null || path.isBlank()) {
             statusLbl.setText("No license loaded.");
@@ -501,8 +515,11 @@ public class QTraceSettingsDialog {
             // Certified identity — bound to the license, not freely editable.
             tfValidator.setText(info.name());
             tfValidator.setEditable(false);
+            tfValidator.setDisable(true);
             tfValidator.setTooltip(new javafx.scene.control.Tooltip(
                 "Locked — identity certified by your qTrace license."));
+            tfEmail.setText(info.email() != null && !info.email().isBlank()
+                ? info.email() : "(older license, regenerate to include your email)");
         } catch (Exception ex) {
             statusLbl.setText("Could not read license file.");
             statusLbl.setTextFill(Color.web(RED));
