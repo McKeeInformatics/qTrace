@@ -215,10 +215,11 @@ public class QTracePanel {
         String iconColor;
         boolean urgent = false; // keep the text itself colored for warning/error states
 
+        LicenseInfo licenseInfo = null;
         if (entitled != null && entitled.getActiveLicenseInfo() != null) {
-            LicenseInfo li = entitled.getActiveLicenseInfo();
-            text = "Certified for " + li.name() + " — " + li.validatorKeyShort()
-                 + "  ·  until " + li.expiresAtFormatted().replace("-", "/");
+            licenseInfo = entitled.getActiveLicenseInfo();
+            text = "Certified for " + licenseInfo.name()
+                 + "  ·  until " + licenseInfo.expiresAtFormatted().replace("-", "/");
             iconColor = GOLD;
         } else if (QTracePluginManager.hasCompliance()) {
             text = QTraceI18n.t("license.inactive.header");
@@ -231,6 +232,10 @@ public class QTracePanel {
 
         Group icon = scaledIcon(iconMedal(Color.web(iconColor)), 11);
         Label label = styledLabel(text, urgent ? iconColor : TEXT_MUTED, FontWeight.NORMAL, 13);
+
+        if (licenseInfo != null && licenseInfo.email() != null && !licenseInfo.email().isBlank()) {
+            Tooltip.install(label, new Tooltip(licenseInfo.email()));
+        }
 
         HBox badge = new HBox(4, icon, label);
         badge.setAlignment(Pos.CENTER_LEFT);

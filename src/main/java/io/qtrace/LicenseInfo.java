@@ -34,6 +34,7 @@ public record LicenseInfo(
     String  clerkUserId,
     String  name,
     String  institution,
+    String  email,         // platform account email, may be empty for older licenses
     boolean verified,
     Instant issuedAt,
     Instant expiresAt,
