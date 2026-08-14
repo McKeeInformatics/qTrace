@@ -17,6 +17,8 @@ The panel's certified-license badge drops the validator key fingerprint next to 
 
 ### Added — Replay Player
 
+![Replay Player — step-by-step replay with per-step status, Target image(s) batch selection, and Activity log](../docs/screenshots/v1.1.0-replay-player.png)
+
 qTrace could already regenerate a Groovy script from a `.qtrace` file — but you had to open it yourself in the Script Editor and click Run, with no way to know whether one step actually worked before the next one ran. The new **Player** executes the replay directly, step-by-step or continuously, with a real per-step status.
 
 Starting from an existing `.qtrace`, the Player lets you:
