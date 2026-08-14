@@ -81,15 +81,15 @@ public interface QTracePlugin {
 
     /**
      * Pushes a bundle (.qtrace + .qtcert + chain.jsonl + classifiers + imported files +
-     * thumbnail) to the user's qtrace.ca workspace. {@code thumbnailPath} may be null
-     * (e.g. thumbnail rendering failed) — the rest of the bundle still pushes.
+     * thumbnail + manual annotations GeoJSON) to the user's qtrace.ca workspace.
+     * {@code thumbnailPath}/{@code geojsonPath} may be null — the rest of the bundle still pushes.
      * Returns a CompletableFuture resolving to the workspace URL, or null on failure / not supported.
      * Auth: reads the .qtlicense JWT from QTraceConfig and sends it as a bearer token.
      */
     default CompletableFuture<String> pushToWorkspace(
             ValidationStamp stamp, Path certPath, Path chainLogPath, Path qtraceFile,
             Collection<ClassifierRecord> classifiers, Path thumbnailPath,
-            Collection<ImportedObjectFileRecord> importedFiles) {
+            Collection<ImportedObjectFileRecord> importedFiles, Path geojsonPath) {
         return CompletableFuture.completedFuture(null);
     }
 

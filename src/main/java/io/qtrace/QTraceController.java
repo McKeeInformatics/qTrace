@@ -154,6 +154,7 @@ public class QTraceController {
     private Path            lastCertPath  = null;  // written by exportReport(), used by pushToWorkspace()
     private Path            lastQtracePath = null;
     private Path            lastThumbnailPath = null;
+    private Path            lastGeojsonPath = null; // manual annotations GeoJSON — lives in QTraceConfig.getTrainingDir(), not outDir
     // Captured-step count at the moment of lastStamp — imageHash alone (pixel content)
     // doesn't change when new steps/annotations are added to the same image, so it can't
     // tell "stamped" from "stamped, then more work happened" on its own.
@@ -846,6 +847,25 @@ public class QTraceController {
                 if (panel != null) panel.log("  thumbnail: " + e.getMessage());
             }
 
+            // Manual annotations GeoJSON — written by the exporter into getTrainingDir(),
+            // a separately configurable directory, not outDir. Resolve it here (rather than
+            // in QTraceExporter) since it's read back from the .qtrace we just wrote anyway,
+            // same as the certificate block below.
+            lastGeojsonPath = null;
+            try {
+                JsonObject qtrootForGeo = JsonParser.parseString(Files.readString(outFile)).getAsJsonObject();
+                JsonArray sessionsForGeo = qtrootForGeo.getAsJsonArray("sessions");
+                JsonObject lastSessionForGeo = sessionsForGeo.get(sessionsForGeo.size() - 1).getAsJsonObject();
+                JsonObject annObj = lastSessionForGeo.has("annotations") && lastSessionForGeo.get("annotations").isJsonObject()
+                    ? lastSessionForGeo.getAsJsonObject("annotations") : null;
+                String geoName = annObj != null && annObj.has("geojson_file")
+                    ? annObj.get("geojson_file").getAsString() : null;
+                if (geoName != null && !geoName.isBlank()) {
+                    Path candidate = QTraceConfig.get().getTrainingDir().resolve(geoName);
+                    if (Files.exists(candidate)) lastGeojsonPath = candidate;
+                }
+            } catch (Exception ignored) {}
+
             // Compliance: build .qtcert chain-of-custody certificate (only when licensed & active)
             QTracePlugin ep = QTracePluginManager.getEntitled();
             lastQtracePath = outFile;
@@ -959,10 +979,11 @@ public class QTraceController {
             for (ImportedObjectFileRecord imp : importedFiles)
                 panel.log("  · imports/" + imp.companionFilename);
             if (lastThumbnailPath != null) panel.log("  · thumbnail.jpg");
+            if (lastGeojsonPath != null) panel.log("  · " + lastGeojsonPath.getFileName());
             panel.setPushEnabled(false);
             panel.startPushProgress();
         }
-        ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers, lastThumbnailPath, importedFiles)
+        ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers, lastThumbnailPath, importedFiles, lastGeojsonPath)
           .thenAccept(url -> {
               if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {
