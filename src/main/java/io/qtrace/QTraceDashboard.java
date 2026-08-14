@@ -1849,40 +1849,52 @@ public class QTraceDashboard {
     }
 
     // ── Card — External Files ────────────────────────────────────────────────
-    // Companion files produced alongside this .qtrace. Reads a future
-    // session.external_files[] manifest when present (forward-compatible with
-    // an exporter that writes {type, filename, path, sha256}); until then, falls
-    // back to what's already derivable: the annotations GeoJSON filename and a
-    // sibling thumbnail found on disk next to the .qtrace file.
+    // Companion files produced alongside this .qtrace, merged from three sources:
+    //   session.external_files[]        — thumbnail/cert/csv (QTraceExporter.appendExternalFile)
+    //   session.imported_object_files[] — "Import objects from file" companions (pre-existing)
+    //   session.annotations.geojson_file — exported annotations GeoJSON (pre-existing)
+    // Sessions exported before this manifest existed fall back to a sibling
+    // thumbnail found on disk next to the .qtrace file.
 
     private void buildExternalFilesCard(JsonObject root, JsonObject session) {
         externalFilesCardContent.getChildren().clear();
         List<HBox> rows = new ArrayList<>();
+        File qtraceDir = (selectedData != null && selectedData.qtraceFile() != null)
+            ? selectedData.qtraceFile().getParentFile() : null;
 
         JsonArray manifest = (session != null && session.has("external_files")
                 && session.get("external_files").isJsonArray())
-            ? session.getAsJsonArray("external_files") : null;
+            ? session.getAsJsonArray("external_files") : new JsonArray();
+        boolean hadThumbnailEntry = false;
+        for (var el : manifest) {
+            JsonObject f = el.getAsJsonObject();
+            String type = str(f, "type", "file");
+            String name = str(f, "filename", str(f, "path", "(unnamed)"));
+            String path = str(f, "path", null);
+            if ("thumbnail".equals(type)) hadThumbnailEntry = true;
+            rows.add(externalFileRow(type, name, path != null ? new File(path) : null));
+        }
 
-        if (manifest != null) {
-            for (var el : manifest) {
-                JsonObject f = el.getAsJsonObject();
-                String type = str(f, "type", "file");
-                String name = str(f, "filename", str(f, "path", "(unnamed)"));
-                String path = str(f, "path", null);
-                rows.add(externalFileRow(type, name, path != null ? new File(path) : null));
-            }
-        } else {
-            JsonObject annotations = jsonObj(session, "annotations");
-            String geojson = annotations != null ? str(annotations, "geojson_file", "") : "";
-            if (geojson != null && !geojson.isBlank())
-                rows.add(externalFileRow("annotations", geojson, null));
+        JsonArray imports = (session != null && session.has("imported_object_files")
+                && session.get("imported_object_files").isJsonArray())
+            ? session.getAsJsonArray("imported_object_files") : new JsonArray();
+        for (var el : imports) {
+            JsonObject f = el.getAsJsonObject();
+            String companion = str(f, "companion_file", "(unnamed)");
+            File resolved = qtraceDir != null ? new File(qtraceDir, companion) : null;
+            rows.add(externalFileRow("import", companion, resolved));
+        }
 
-            File qtraceFile = (selectedData != null) ? selectedData.qtraceFile() : null;
-            if (qtraceFile != null) {
-                String base = qtraceFile.getName().replaceAll("\\.qtrace$", "");
-                File thumb = new File(qtraceFile.getParentFile(), base + ".thumbnail.jpg");
-                if (thumb.isFile()) rows.add(externalFileRow("thumbnail", thumb.getName(), thumb));
-            }
+        JsonObject annotations = jsonObj(session, "annotations");
+        String geojson = annotations != null ? str(annotations, "geojson_file", "") : "";
+        if (geojson != null && !geojson.isBlank())
+            rows.add(externalFileRow("annotations", geojson, null));
+
+        // Pre-manifest sessions: thumbnail exists on disk but wasn't recorded in the JSON.
+        if (!hadThumbnailEntry && qtraceDir != null) {
+            String base = selectedData.qtraceFile().getName().replaceAll("\\.qtrace$", "");
+            File thumb = new File(qtraceDir, base + ".thumbnail.jpg");
+            if (thumb.isFile()) rows.add(externalFileRow("thumbnail", thumb.getName(), thumb));
         }
 
         if (rows.isEmpty()) {

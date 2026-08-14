@@ -824,6 +824,7 @@ public class QTraceController {
             exporter.setExtensions(collectLoadedExtensions());
             Path outFile = exporter.export(outDir);
             Path csvFile = exporter.appendToMasterCsv(outDir);
+            QTraceExporter.appendExternalFile(outFile, "csv", csvFile);
 
             if (panel != null) {
                 panel.log(".qtrace written:");
@@ -838,6 +839,7 @@ public class QTraceController {
                     var snapshot = GuiTools.makeViewerSnapshot(viewer);
                     String base = outFile.getFileName().toString().replaceAll("\\.qtrace$", "");
                     lastThumbnailPath = ThumbnailGenerator.generate(snapshot, outDir, base);
+                    QTraceExporter.appendExternalFile(outFile, "thumbnail", lastThumbnailPath);
                     if (panel != null) panel.log("  thumbnail: " + lastThumbnailPath.getFileName());
                 }
             } catch (Exception e) {
@@ -857,6 +859,7 @@ public class QTraceController {
                     Path certPath = ep.buildCertificate(lastStamp, lastSession, imageRoot, outDir);
                     if (certPath != null) {
                         lastCertPath = certPath;
+                        QTraceExporter.appendExternalFile(outFile, "cert", certPath);
                         if (panel != null) {
                             panel.log("  .qtcert: " + certPath.getFileName());
                             panel.setPushEnabled(true);
@@ -1153,7 +1156,8 @@ public class QTraceController {
         var  exporter  = new QTraceExporter(logger, null, lastStamp);
         exporter.setExtensions(collectLoadedExtensions());
         Path out       = exporter.export(exportDir);
-        exporter.appendToMasterCsv(exportDir);
+        Path csvFile   = exporter.appendToMasterCsv(exportDir);
+        QTraceExporter.appendExternalFile(out, "csv", csvFile);
         return out.getFileName().toString();
     }
 

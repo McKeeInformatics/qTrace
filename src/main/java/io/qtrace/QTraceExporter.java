@@ -125,6 +125,72 @@ public class QTraceExporter {
         return outFile;
     }
 
+    /**
+     * Records a companion file produced <em>after</em> {@link #export} already wrote the
+     * .qtrace — the thumbnail, .qtcert, and master CSV are only known once export() has
+     * returned (thumbnail/cert generation reads the just-written file; the CSV path is
+     * shared across images). Patches an {@code external_files[]} array onto the last
+     * session of the given .qtrace file. Silently does nothing if the file or its last
+     * session can't be found — a missing manifest entry is preferable to breaking the
+     * export the user is already looking at.
+     *
+     * @param type one of "thumbnail", "cert", "csv" — see QTraceDashboard#externalFileIcon
+     *             for the icons a Dashboard consumer maps these to
+     */
+    public static void appendExternalFile(Path qtraceFile, String type, Path resolvedFile) {
+        if (qtraceFile == null || resolvedFile == null || !Files.isRegularFile(resolvedFile)) return;
+        try {
+            JsonObject root = JsonParser.parseString(Files.readString(qtraceFile)).getAsJsonObject();
+            JsonArray sessions = root.has("sessions") && root.get("sessions").isJsonArray()
+                ? root.getAsJsonArray("sessions") : null;
+            if (sessions == null || sessions.size() == 0) return;
+            JsonObject lastSession = sessions.get(sessions.size() - 1).getAsJsonObject();
+
+            JsonArray manifest = lastSession.has("external_files") && lastSession.get("external_files").isJsonArray()
+                ? lastSession.getAsJsonArray("external_files") : new JsonArray();
+
+            String filename = resolvedFile.getFileName().toString();
+            // Replace any existing entry for the same (type, filename) rather than duplicate —
+            // e.g. re-exporting overwrites the thumbnail in place.
+            JsonArray kept = new JsonArray();
+            for (var el : manifest) {
+                JsonObject f = el.getAsJsonObject();
+                boolean sameEntry = type.equals(str(f, "type")) && filename.equals(str(f, "filename"));
+                if (!sameEntry) kept.add(f);
+            }
+            manifest = kept;
+
+            JsonObject entry = new JsonObject();
+            entry.addProperty("type",       type);
+            entry.addProperty("filename",   filename);
+            entry.addProperty("path",       resolvedFile.toAbsolutePath().toString());
+            entry.addProperty("size_bytes", Files.size(resolvedFile));
+            entry.addProperty("sha256",     sha256Of(resolvedFile));
+            manifest.add(entry);
+
+            lastSession.add("external_files", manifest);
+            Files.writeString(qtraceFile, GSON.toJson(root));
+        } catch (Exception ignored) {
+            // Best-effort — the .qtrace itself was already written successfully.
+        }
+    }
+
+    private static String str(JsonObject obj, String key) {
+        return obj.has(key) && !obj.get(key).isJsonNull() ? obj.get(key).getAsString() : null;
+    }
+
+    private static String sha256Of(Path file) {
+        try {
+            var digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(Files.readAllBytes(file));
+            StringBuilder sb = new StringBuilder(hash.length * 2);
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     /** Appends one row to master_validation_log.csv. */
     public Path appendToMasterCsv(Path outputDir) throws IOException {
         Path csvPath = outputDir.resolve("master_validation_log.csv");
