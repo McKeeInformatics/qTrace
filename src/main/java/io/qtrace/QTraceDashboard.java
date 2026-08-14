@@ -1919,7 +1919,7 @@ public class QTraceDashboard {
         if (resolvedFile != null && resolvedFile.isFile()) {
             Region sp = new Region();
             HBox.setHgrow(sp, Priority.ALWAYS);
-            Button openBtn = new Button(QTraceI18n.t("dashboard.openQtrace"));
+            Button openBtn = new Button("Open");
             openBtn.setStyle(
                 "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";" +
                 "-fx-cursor:hand;-fx-font-size:11;-fx-padding:2 8 2 8;" +
