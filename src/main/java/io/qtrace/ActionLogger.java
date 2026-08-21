@@ -1526,9 +1526,19 @@ public class ActionLogger implements WorkflowListener {
             .matcher(script);
         while (m.find()) {
             String candidate = m.group(1);
-            // Skip obvious non-names (paths, spaces in odd places, etc.)
-            if (candidate.contains("/") || candidate.contains("\\")) continue;
-            Path classifierFile = classifierDir.resolve(candidate + ".json");
+            // Only consider plain file-name-like candidates: reject path separators,
+            // unresolved interpolation (${...} left over from println-style source lines),
+            // and any character that is invalid in a file name on Windows/macOS/Linux
+            // (colon, quotes, wildcards, control chars, etc.) — such candidates cannot be
+            // a real classifier file name and would otherwise throw InvalidPathException
+            // out of Path.resolve(), crashing image load.
+            if (!candidate.matches("[A-Za-z0-9 _.\\-]{1,80}")) continue;
+            Path classifierFile;
+            try {
+                classifierFile = classifierDir.resolve(candidate + ".json");
+            } catch (InvalidPathException e) {
+                continue;
+            }
             if (Files.exists(classifierFile) && !knownClassifiers.containsKey(candidate)) {
                 if (panel != null) panel.log("[PC load] '" + candidate + "' detected in workflow step — loading.");
                 loadClassifierFromDisk(classifierFile, candidate);
