@@ -995,7 +995,7 @@ public class QTraceController {
                   if (panel != null) panel.log("☁ " + url);
               } else {
                   if (panel != null) {
-                      panel.log("☁ Push failed: " + (url != null ? url : "network/license error"));
+                      panel.log("☁ Push failed: " + (url != null ? url : "network error"));
                       panel.setPushEnabled(true);
                   }
               }
