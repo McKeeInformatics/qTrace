@@ -1973,6 +1973,57 @@ public class ActionLogger implements WorkflowListener {
             });
         });
 
+        Button btnImportList = new Button("Import list");
+        btnImportList.setFont(Font.font("System", 11));
+        btnImportList.setTextFill(Color.web("#a6adc8"));
+        btnImportList.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: #313244; -fx-border-radius: 4;");
+        btnImportList.setOnAction(e -> {
+            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+            fc.setTitle("Import training image list (CSV)");
+            fc.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("CSV", "*.csv"));
+            File file = fc.showOpenDialog(dlg);
+            if (file == null) return;
+
+            Set<String> imported = new LinkedHashSet<>();
+            try {
+                for (String line : Files.readAllLines(file.toPath(), StandardCharsets.UTF_8)) {
+                    for (String token : line.split(",")) {
+                        String name = token.trim();
+                        if (!name.isEmpty()) imported.add(name);
+                    }
+                }
+            } catch (IOException ex) {
+                Alert alert = new Alert(Alert.AlertType.ERROR, "Could not read CSV file:\n" + ex.getMessage());
+                alert.initOwner(dlg);
+                alert.showAndWait();
+                return;
+            }
+
+            Set<String> importedLower = new HashSet<>();
+            for (String name : imported) importedLower.add(name.toLowerCase());
+
+            int matched = 0;
+            for (Map.Entry<String, CheckBox> entry : checkboxes.entrySet()) {
+                boolean shouldSelect = importedLower.contains(entry.getKey().toLowerCase());
+                entry.getValue().setSelected(shouldSelect);
+                if (shouldSelect) matched++;
+            }
+
+            int unmatched = imported.size() - matched;
+            if (panel != null) panel.log("  training images: imported list from " + file.getName()
+                + " (" + matched + " matched" + (unmatched > 0 ? ", " + unmatched + " not found" : "") + ")");
+            if (unmatched > 0) {
+                Alert alert = new Alert(Alert.AlertType.WARNING,
+                    unmatched + " image name(s) from the CSV were not found in this project and were ignored.");
+                alert.initOwner(dlg);
+                alert.showAndWait();
+            }
+        });
+
+        HBox filterRow = new HBox(8, filterFld, btnImportList);
+        filterRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(filterFld, Priority.ALWAYS);
+
         Button btnConfirm = new Button("Confirm");
         btnConfirm.setFont(Font.font("System", FontWeight.BOLD, 12));
         btnConfirm.setPadding(new Insets(5, 16, 5, 16));
@@ -1986,7 +2037,7 @@ public class ActionLogger implements WorkflowListener {
         HBox btnRow = new HBox(btnConfirm);
         btnRow.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox root = new VBox(10, headLbl, promptLbl, selectRow, filterFld, scroll, btnRow);
+        VBox root = new VBox(10, headLbl, promptLbl, selectRow, filterRow, scroll, btnRow);
         root.setPadding(new Insets(20));
         root.setStyle("-fx-background-color: #1e1e2e;");
         root.setPrefWidth(460);
