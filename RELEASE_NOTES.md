@@ -1,3 +1,10 @@
+## What's new in v1.1.3
+
+### Added — Dashboard: Export to CSV
+A new **Export** button sits next to Import in the side panel. It opens a field-selection dialog (everything checked by default — every Dashboard column, `image.name`/`image.channels`/`image.type`, and a per-class annotation breakdown) and writes one CSV row per `.qtrace` file, covering every image found, not just what's currently filtered in the Dashboard. Annotation classes get their own dynamic columns, one per class name found across the exported set. UTF-8 BOM included for correct accented-character display in Excel.
+
+---
+
 ## What's new in v1.1.2
 
 ### Added — Import objects from file, captured properly
