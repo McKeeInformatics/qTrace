@@ -308,12 +308,15 @@ public class QTracePanel {
             QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
         Button importBtn = iconButton(iconFactory(this::iconImport), QTraceI18n.t("btn.import.caption"),
             QTraceI18n.t("btn.import.tooltip"), Color.web(GROUP_TOOLS));
+        Button exportBtn = iconButton(iconFactory(this::iconExport), QTraceI18n.t("btn.export.caption"),
+            QTraceI18n.t("btn.export.tooltip"), Color.web(GROUP_TOOLS));
         Button resetBtn = iconButton(iconFactory(this::iconReset), QTraceI18n.t("btn.reset.caption"),
             QTraceI18n.t("btn.reset.tooltip"), Color.web(RED));
         dashboardBtn.setOnAction(e -> controller.showDashboard());
         importBtn.setOnAction(e -> controller.startBatchExport());
+        exportBtn.setOnAction(e -> controller.exportDashboardCsv());
         resetBtn.setOnAction(e -> confirmReset());
-        row.getChildren().addAll(dashboardBtn, importBtn, resetBtn);
+        row.getChildren().addAll(dashboardBtn, importBtn, exportBtn, resetBtn);
 
         return row;
     }
@@ -751,6 +754,18 @@ public class QTracePanel {
             ln(12, 7.2, 12, 14.2, c, 1.7),
             openPath(c, 1.7, 8.6, 11.2, 12, 14.6, 15.4, 11.2),
             ln(8, 16.6, 16, 16.6, c, 1.7)
+        );
+        return g;
+    }
+
+    /** Same circle+arrow+bar language as Import, mirrored: arrow up out of the circle, bar above. */
+    private Group iconExport(Color c) {
+        Group g = new Group();
+        g.getChildren().addAll(
+            circ(12, 12, 9.3, c, 1.7, false),
+            ln(12, 9.8, 12, 16.8, c, 1.7),
+            openPath(c, 1.7, 8.6, 12.8, 12, 9.4, 15.4, 12.8),
+            ln(8, 7.4, 16, 7.4, c, 1.7)
         );
         return g;
     }

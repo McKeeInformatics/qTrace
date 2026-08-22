@@ -34,8 +34,10 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
+import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.Window;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -49,7 +51,9 @@ import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.*;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -512,6 +516,18 @@ public class QTraceDashboard {
 
     private void loadAllRows() {
         allRows.clear();
+        ScanResult scan = scanAllRows(qupath);
+        allRows.addAll(scan.rows());
+        String dirPath = scan.dirPath() != null ? scan.dirPath() : "(not configured)";
+        pendingScanSummary = "📁  " + dirPath
+            + "  (" + scan.qtraceCount() + " .qtrace  •  " + allRows.size() + " image(s))";
+    }
+
+    private record ScanResult(List<RowData> rows, int qtraceCount, String dirPath) {}
+
+    /** Scans the configured export directory + current project for every .qtrace / image. Off-FX-thread only. */
+    private static ScanResult scanAllRows(QuPathGUI qupath) {
+        List<RowData> rows = new ArrayList<>();
 
         File qtDir = null;
         try { qtDir = QTraceConfig.get().getExportDir().toFile(); } catch (Exception ignored) {}
@@ -545,7 +561,7 @@ public class QTraceDashboard {
                 for (var entry : project.getImageList()) {
                     String name = entry.getImageName();
                     added.add(name);
-                    allRows.add(new RowData(name, findMatchingQtrace(name, qtraceMap),
+                    rows.add(new RowData(name, findMatchingQtrace(name, qtraceMap),
                         findMatchingFile(name, fileMap)));
                 }
             }
@@ -553,27 +569,26 @@ public class QTraceDashboard {
 
         for (var e : qtraceMap.entrySet()) {
             boolean already = added.stream().anyMatch(n -> namesMatch(n, e.getKey()));
-            if (!already) allRows.add(new RowData(e.getKey(), e.getValue(), fileMap.get(e.getKey())));
+            if (!already) rows.add(new RowData(e.getKey(), e.getValue(), fileMap.get(e.getKey())));
         }
 
-        String dirPath = qtDir != null ? qtDir.getAbsolutePath() : "(not configured)";
-        pendingScanSummary = "📁  " + dirPath
-            + "  (" + qtraceMap.size() + " .qtrace  •  " + allRows.size() + " image(s))";
+        String dirPath = qtDir != null ? qtDir.getAbsolutePath() : null;
+        return new ScanResult(rows, qtraceMap.size(), dirPath);
     }
 
-    private JsonObject findMatchingQtrace(String name, Map<String, JsonObject> map) {
+    private static JsonObject findMatchingQtrace(String name, Map<String, JsonObject> map) {
         for (var e : map.entrySet())
             if (namesMatch(name, e.getKey())) return e.getValue();
         return null;
     }
 
-    private File findMatchingFile(String name, Map<String, File> map) {
+    private static File findMatchingFile(String name, Map<String, File> map) {
         for (var e : map.entrySet())
             if (namesMatch(name, e.getKey())) return e.getValue();
         return null;
     }
 
-    private boolean namesMatch(String a, String b) {
+    private static boolean namesMatch(String a, String b) {
         if (a == null || b == null) return false;
         return a.equals(b) || a.contains(b) || b.contains(a);
     }
@@ -680,7 +695,7 @@ public class QTraceDashboard {
         return out;
     }
 
-    private Set<String> getClassesFromRow(RowData rd) {
+    private static Set<String> getClassesFromRow(RowData rd) {
         Set<String> out = new LinkedHashSet<>();
         // Read latest session only — reflects current annotation state, not historical sessions.
         JsonObject s = latestSession(rd.qtrace());
@@ -2370,7 +2385,7 @@ public class QTraceDashboard {
     }
 
     /** First Region*-class annotation whose name is non-empty in the latest session, or "". */
-    private String getRegionFromRow(RowData rd) {
+    private static String getRegionFromRow(RowData rd) {
         JsonObject session = latestSession(rd.qtrace());
         if (session == null) return "";
         JsonObject ann = jsonObj(session, "annotations");
@@ -2404,14 +2419,14 @@ public class QTraceDashboard {
     private boolean hasBvFromRow(RowData rd)  { return getBvCountFromRow(rd)  > 0; }
     private boolean hasTauFromRow(RowData rd) { return getTauCountFromRow(rd) > 0; }
 
-    private int getAnnotationCountFromRow(RowData rd) {
+    private static int getAnnotationCountFromRow(RowData rd) {
         JsonObject ann = latestAnnotations(rd);
         if (ann == null || !ann.has("total") || ann.get("total").isJsonNull()) return 0;
         return ann.get("total").getAsInt();
     }
 
     /** Per-class annotation counts as "Class: n, Class: n", e.g. "Vessel: 8, Tau: 4". */
-    private String getAnnotationsByClassText(RowData rd) {
+    private static String getAnnotationsByClassText(RowData rd) {
         JsonObject ann = latestAnnotations(rd);
         if (ann == null || !ann.has("by_class") || !ann.get("by_class").isJsonObject()) return "";
         JsonObject byClass = ann.getAsJsonObject("by_class");
@@ -2423,14 +2438,102 @@ public class QTraceDashboard {
         return String.join(", ", parts);
     }
 
-    private JsonObject latestAnnotations(RowData rd) {
+    private static JsonObject latestAnnotations(RowData rd) {
         JsonObject session = latestSession(rd.qtrace());
         return session != null ? jsonObj(session, "annotations") : null;
     }
 
+    // ── CSV export raw-value accessors ────────────────────────────────────────
+    // Mirror buildTableRow()'s per-column logic minus display decoration (emoji, color,
+    // truncation) — kept as separate methods rather than reused by buildTableRow itself,
+    // so the already-working table rendering stays untouched by this feature.
+
+    private static int getClassCountFromRow(RowData rd, String className) {
+        JsonObject ann = latestAnnotations(rd);
+        if (ann == null || !ann.has("by_class") || !ann.get("by_class").isJsonObject()) return 0;
+        JsonObject bc = ann.getAsJsonObject("by_class");
+        return bc.has(className) ? bc.get(className).getAsInt() : 0;
+    }
+
+    private static String getValidatedTextFromRow(RowData rd) {
+        JsonObject session = latestSession(rd.qtrace());
+        if (session == null) return "";
+        JsonObject val = jsonObj(session, "validation");
+        if (val == null) return "";
+        String validator = str(val, "validator", "?");
+        String conf      = str(val, "confidence", "");
+        return conf.isEmpty() ? validator : validator + " — " + conf;
+    }
+
+    private static String getAlignmentTextFromRow(RowData rd) {
+        JsonObject session = latestSession(rd.qtrace());
+        if (session == null) return "";
+        JsonObject align = jsonObj(session, "alignment");
+        boolean applied = align != null && align.has("applied") && align.get("applied").getAsBoolean();
+        return applied ? str(align, "transform_type", "?") : "";
+    }
+
+    private static int getSegmentationStepCountFromRow(RowData rd) {
+        JsonObject session = latestSession(rd.qtrace());
+        if (session == null || !session.has("steps") || session.get("steps").isJsonNull()) return 0;
+        int cnt = 0;
+        for (var el : session.getAsJsonArray("steps")) {
+            String cmd = str(el.getAsJsonObject(), "command", "").toLowerCase();
+            if (SEG_KEYWORDS.stream().anyMatch(cmd::contains)) cnt++;
+        }
+        return cnt;
+    }
+
+    private static String getClassifiersTextFromRow(RowData rd) {
+        JsonObject session = latestSession(rd.qtrace());
+        if (session == null || !session.has("pixel_classifiers")
+                || session.get("pixel_classifiers").isJsonNull()) return "";
+        JsonArray clfs = session.getAsJsonArray("pixel_classifiers");
+        List<String> parts = new ArrayList<>();
+        for (var c : clfs) {
+            JsonObject clf = c.getAsJsonObject();
+            parts.add(str(clf, "name", "?") + ":" + str(clf, "fidelity", ""));
+        }
+        return String.join(", ", parts);
+    }
+
+    private static String getStepsCapturedFromRow(RowData rd) {
+        JsonObject session = latestSession(rd.qtrace());
+        return (session != null && session.has("steps_captured"))
+            ? String.valueOf(session.get("steps_captured").getAsInt()) : "";
+    }
+
+    /** "signed" | "corrupted" | "not signed" | "" — mirrors buildTableRow()'s 🛡 column. */
+    private static String getSignatureStatusFromRow(RowData rd) {
+        JsonObject root    = rd.qtrace();
+        JsonObject session = latestSession(root);
+        JsonObject val     = session != null ? jsonObj(session, "validation") : null;
+        String sig    = val != null ? str(val, "signature",       "") : "";
+        String pubKey = val != null ? str(val, "validatorKeyPub", "") : "";
+        if (!sig.isEmpty() && !pubKey.isEmpty()) {
+            String vldtr     = str(val, "validator",    "");
+            String scope     = str(val, "scope",        "");
+            String conf      = str(val, "confidence",   "");
+            String ts        = str(val, "timestamp",    "");
+            String imgHash   = str(val, "imageHash",    "");
+            String stLbl     = str(val, "statusLabel",  "");
+            String qpdataSha = str(val, "qpdata_sha256", null);
+            if (imgHash.isEmpty()) {
+                JsonObject img = jsonObj(root, "image");
+                if (img != null) imgHash = str(img, "sha256", "");
+            }
+            if (stLbl.isEmpty() && root != null) stLbl = str(root, "status", "");
+            String payload = buildCanonicalPayload(vldtr, scope, conf, stLbl, imgHash, qpdataSha, ts, pubKey);
+            return StampSigner.verify(payload, pubKey, sig) ? "signed" : "corrupted";
+        } else if (val != null && !str(val, "validator", "").isEmpty()) {
+            return "not signed";
+        }
+        return "";
+    }
+
     // ── UI helpers ────────────────────────────────────────────────────────────
 
-    private Label lbl(String text, String color, int size, FontWeight weight, boolean italic) {
+    private static Label lbl(String text, String color, int size, FontWeight weight, boolean italic) {
         Label l = new Label(text);
         l.setTextFill(Color.web(color));
         l.setFont(italic
@@ -2524,13 +2627,13 @@ public class QTraceDashboard {
 
     // ── JSON helpers ──────────────────────────────────────────────────────────
 
-    private String str(JsonObject obj, String key, String def) {
+    private static String str(JsonObject obj, String key, String def) {
         if (obj == null || !obj.has(key) || obj.get(key).isJsonNull())
             return def;   // returns null when def is null (used for optional fields)
         return obj.get(key).getAsString();
     }
 
-    private JsonObject jsonObj(JsonObject root, String key) {
+    private static JsonObject jsonObj(JsonObject root, String key) {
         if (root == null || !root.has(key) || root.get(key).isJsonNull()) return null;
         try { return root.getAsJsonObject(key); } catch (Exception e) { return null; }
     }
@@ -2839,4 +2942,128 @@ public class QTraceDashboard {
     public void minimize()   { stage.setIconified(true); }
     public boolean isShowing()    { return stage.isShowing(); }
     public boolean isIconified()  { return stage.isIconified(); }
+
+    // ── CSV export ────────────────────────────────────────────────────────────
+
+    private record ExportField(String id, String label, Function<RowData, String> accessor) {}
+
+    private static List<ExportField> buildDashboardExportFields() {
+        return List.of(
+            new ExportField("sample",       "Sample",             rd -> parseSample(rd.imageName())),
+            new ExportField("roi",          "ROI",                rd -> parseRoi(rd.imageName())),
+            new ExportField("status",       "Status",             rd -> {
+                JsonObject r = rd.qtrace();
+                return (r != null && r.has("status") && !r.get("status").isJsonNull())
+                    ? r.get("status").getAsString() : "";
+            }),
+            new ExportField("region",       "Region",             QTraceDashboard::getRegionFromRow),
+            new ExportField("annotations",  "Annotations total",  rd -> String.valueOf(getAnnotationCountFromRow(rd))),
+            new ExportField("validated",    "Validated",          QTraceDashboard::getValidatedTextFromRow),
+            new ExportField("alignment",    "Alignment",          QTraceDashboard::getAlignmentTextFromRow),
+            new ExportField("segmentation", "Segmentation",       rd -> String.valueOf(getSegmentationStepCountFromRow(rd))),
+            new ExportField("classifiers",  "Classifiers",        QTraceDashboard::getClassifiersTextFromRow),
+            new ExportField("steps",        "Steps",              QTraceDashboard::getStepsCapturedFromRow),
+            new ExportField("signature",    "Signature",          QTraceDashboard::getSignatureStatusFromRow)
+        );
+    }
+
+    private static List<ExportField> buildImageExportFields() {
+        return List.of(
+            new ExportField("image.name",     "image.name",     RowData::imageName),
+            new ExportField("image.channels", "image.channels", rd -> imageFieldStr(rd, "channels")),
+            new ExportField("image.type",     "image.type",     rd -> imageFieldStr(rd, "type"))
+        );
+    }
+
+    private static String imageFieldStr(RowData rd, String key) {
+        JsonObject img = jsonObj(rd.qtrace(), "image");
+        return img != null ? str(img, key, "") : "";
+    }
+
+    /** Opens the field-selection dialog, scans every .qtrace, and writes a user-chosen CSV file. */
+    public static void runCsvExport(QuPathGUI qupath) {
+        List<ExportField> dashboardFields = buildDashboardExportFields();
+        List<ExportField> imageFields     = buildImageExportFields();
+
+        List<String[]> dashboardChoices = dashboardFields.stream()
+            .map(f -> new String[]{f.id(), f.label()}).toList();
+        List<String[]> imageChoices = imageFields.stream()
+            .map(f -> new String[]{f.id(), f.label()}).toList();
+
+        Window owner = qupath.getStage();
+        ExportFieldsDialog.Result choice = ExportFieldsDialog.show(owner, dashboardChoices, imageChoices);
+        if (!choice.confirmed) return;
+
+        List<ExportField> allFields = new ArrayList<>();
+        allFields.addAll(dashboardFields);
+        allFields.addAll(imageFields);
+        List<ExportField> selected = allFields.stream()
+            .filter(f -> choice.selectedFieldIds.contains(f.id())).toList();
+
+        Stage progress = new Stage();
+        progress.initOwner(owner);
+        progress.initModality(Modality.APPLICATION_MODAL);
+        progress.initStyle(javafx.stage.StageStyle.UNDECORATED);
+        VBox progressBox = new VBox(10,
+            new ProgressIndicator(),
+            lbl(QTraceI18n.t("export.csv.scanning"), TEXT_MAIN, 12, FontWeight.NORMAL, false));
+        progressBox.setAlignment(Pos.CENTER);
+        progressBox.setPadding(new Insets(20));
+        progressBox.setStyle("-fx-background-color:" + BG_BASE + ";-fx-border-color:" + BORDER + ";");
+        progress.setScene(new Scene(progressBox, 260, 100));
+        progress.show();
+
+        Thread t = new Thread(() -> {
+            ScanResult scan = scanAllRows(qupath);
+            Platform.runLater(() -> {
+                progress.close();
+
+                Set<String> classNames = new TreeSet<>();
+                if (choice.includeByClass)
+                    for (RowData rd : scan.rows()) classNames.addAll(getClassesFromRow(rd));
+
+                String csv = buildCsv(scan.rows(), selected, classNames);
+
+                File target = chooseCsvSaveTarget(owner);
+                if (target == null) return;
+                try {
+                    Files.write(target.toPath(), ("﻿" + csv).getBytes(StandardCharsets.UTF_8));
+                } catch (Exception ex) {
+                    Alert alert = new Alert(Alert.AlertType.ERROR,
+                        QTraceI18n.t("export.csv.error") + " " + ex.getMessage());
+                    alert.initOwner(owner);
+                    alert.showAndWait();
+                }
+            });
+        }, "qtrace-csv-export-scan");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static String buildCsv(List<RowData> rows, List<ExportField> selected, Set<String> classNames) {
+        List<String> header = new ArrayList<>();
+        for (ExportField f : selected) header.add(f.label());
+        header.addAll(classNames);
+
+        StringBuilder sb = new StringBuilder(CsvWriter.row(header));
+        for (RowData rd : rows) {
+            List<String> values = new ArrayList<>();
+            for (ExportField f : selected) values.add(f.accessor().apply(rd));
+            for (String cls : classNames) values.add(String.valueOf(getClassCountFromRow(rd, cls)));
+            sb.append(CsvWriter.row(values));
+        }
+        return sb.toString();
+    }
+
+    private static File chooseCsvSaveTarget(Window owner) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(QTraceI18n.t("export.csv.save.title"));
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV", "*.csv"));
+        try {
+            File dir = QTraceConfig.get().getExportDir().toFile();
+            if (dir.exists()) chooser.setInitialDirectory(dir);
+        } catch (Exception ignored) {}
+        chooser.setInitialFileName("qtrace-export-" + LocalDate.now() + ".csv");
+        return chooser.showSaveDialog(owner instanceof Stage s ? s : null);
+    }
 }
