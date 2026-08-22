@@ -731,6 +731,7 @@ public class ActionLogger implements WorkflowListener {
     public ImageData<BufferedImage> getCurrentImageData() { return currentImageData; }
     public int              getManualAnnotationCount()    { return manualAnnotationCount; }
     public boolean          hasSteps()                    { return !capturedSteps.isEmpty(); }
+    public boolean          hasNewSteps()                 { return capturedSteps.size() > preExistingStepCount; }
     public QuPathGUI        getQuPath()                   { return qupath; }
     public void             setScriptRunning(boolean b)   { scriptRunning = b; }
     public Set<UUID>        getSessionAnnotationIds()     { return Collections.unmodifiableSet(annotationStepIndex.keySet()); }

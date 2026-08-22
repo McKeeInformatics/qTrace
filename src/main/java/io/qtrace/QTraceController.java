@@ -346,6 +346,11 @@ public class QTraceController {
         }
     }
 
+    /** Exports every .qtrace file's Dashboard data to a user-chosen CSV file. */
+    public void exportDashboardCsv() {
+        QTraceDashboard.runCsvExport(qupath);
+    }
+
     /** Opens the commit-graph window for the current image's .qtrace (Compliance feature). */
     public void showCommitGraph() {
         // Nothing to graph until there is a project, an open image, and at least one stamp (.qtrace).
@@ -690,7 +695,7 @@ public class QTraceController {
      * {@code proceed} immediately.
      */
     private boolean maybePromptForgottenStamp(ImageData<BufferedImage> oldData, Runnable proceed) {
-        boolean hasSteps = logger != null && logger.hasSteps();
+        boolean hasSteps = logger != null && logger.hasNewSteps();
         String  imageHash = logger != null ? logger.getImageHash() : null;
         int     currentStepCount = logger != null ? logger.getCapturedSteps().size() : 0;
         boolean alreadyStamped = imageHash != null && lastStamp != null
