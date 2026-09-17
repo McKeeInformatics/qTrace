@@ -44,6 +44,13 @@ public class QTraceConfig {
     private static final Path DEFAULT_LOGS_DIR =
         Path.of(System.getProperty("user.home"), ".qTrace", "replay-logs");
 
+    // ── Project Folder mode — <project>/qTrace/{trace,geoJson,logs,gitTrack} ──────
+    public static final String PROJECT_SUBDIR   = "qTrace";
+    public static final String TRACE_SUBDIR     = "trace";
+    public static final String GEOJSON_SUBDIR   = "geoJson";
+    public static final String LOGS_SUBDIR      = "logs";
+    public static final String GITTRACK_SUBDIR  = "gitTrack";
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     // Singleton
@@ -114,12 +121,36 @@ public class QTraceConfig {
     // ── Project Folder mode ───────────────────────────────────────────────────
 
     /**
-     * When enabled, the Player (and eventually other qTrace output) stores everything under
-     * {@code <project>/qTrace/} — created on demand with subfolders per kind of output
-     * ({@code Logs/} today) — instead of the paths configured above. Default: off.
+     * When enabled, qTrace stores its output under {@code <project>/qTrace/} — with
+     * {@code trace/}, {@code geoJson/}, {@code logs/} and {@code gitTrack/} subfolders,
+     * created on demand — instead of the paths configured above. Default: on.
      */
-    public boolean isUseProjectFolder()        { return useProjectFolder != null && useProjectFolder; }
+    public boolean isUseProjectFolder()        { return useProjectFolder == null || useProjectFolder; }
     public void    setUseProjectFolder(boolean b) { this.useProjectFolder = b; }
+
+    /**
+     * Resolves a path that may be redirected under {@code <projectBaseDir>/qTrace/<subdir>}
+     * when Project Folder mode is on and a project is open; otherwise returns {@code fallback}.
+     * Pure/static so it's testable without the config singleton.
+     */
+    public static Path resolveDir(boolean useProjectFolder, Path projectBaseDir, String subdir, Path fallback) {
+        if (useProjectFolder && projectBaseDir != null) {
+            return projectBaseDir.resolve(PROJECT_SUBDIR).resolve(subdir);
+        }
+        return fallback;
+    }
+
+    public Path resolveExportDir(Path projectBaseDir)     { return resolveDir(isUseProjectFolder(), projectBaseDir, TRACE_SUBDIR,    getExportDir());     }
+    public Path resolveClassifierDir(Path projectBaseDir) { return resolveDir(isUseProjectFolder(), projectBaseDir, GITTRACK_SUBDIR, getClassifierDir()); }
+    public Path resolveTrainingDir(Path projectBaseDir)   { return resolveDir(isUseProjectFolder(), projectBaseDir, GEOJSON_SUBDIR,  getTrainingDir());   }
+    public Path resolveLogsDir(Path projectBaseDir)       { return resolveDir(isUseProjectFolder(), projectBaseDir, LOGS_SUBDIR,     getLogsDir());       }
+
+    /** Creates the four Project Folder mode subfolders under {@code <projectBaseDir>/qTrace/} if missing. */
+    public static void createProjectDirs(Path projectBaseDir) throws IOException {
+        for (String sub : new String[] { TRACE_SUBDIR, GEOJSON_SUBDIR, LOGS_SUBDIR, GITTRACK_SUBDIR }) {
+            Files.createDirectories(projectBaseDir.resolve(PROJECT_SUBDIR).resolve(sub));
+        }
+    }
 
     // ── Validator ─────────────────────────────────────────────────────────────
 

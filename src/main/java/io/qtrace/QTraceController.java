@@ -433,7 +433,7 @@ public class QTraceController {
     }
 
     public void showPreferences() {
-        QTraceSettingsDialog.show(qupath.getStage());
+        QTraceSettingsDialog.show(qupath);
     }
 
     public void showAbout() {
@@ -748,6 +748,7 @@ public class QTraceController {
             return;
         }
         logger.refreshAllAnnotationCaptures();
+        ensureProjectFolderDirs();
         String currentStatus = readCurrentStatus();
         String qpdataHash = resolveQpdataHash();
         String defaultCaseId = resolveDefaultCaseId();
@@ -770,6 +771,19 @@ public class QTraceController {
                 },
                 () -> { if (panel != null) panel.log("Record cancelled."); }
             );
+    }
+
+    /** Creates the <project>/qTrace/{trace,geoJson,logs,gitTrack} subfolders on Stamp, when Project Folder mode is on. */
+    private void ensureProjectFolderDirs() {
+        QTraceConfig cfg = QTraceConfig.get();
+        if (!cfg.isUseProjectFolder()) return;
+        var project = qupath.getProject();
+        if (project == null || project.getPath() == null) return;
+        try {
+            QTraceConfig.createProjectDirs(project.getPath().getParent());
+        } catch (java.io.IOException e) {
+            System.err.println("[qTrace] ensureProjectFolderDirs: " + e.getMessage());
+        }
     }
 
     /**

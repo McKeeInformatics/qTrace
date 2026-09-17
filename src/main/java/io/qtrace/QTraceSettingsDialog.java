@@ -34,7 +34,12 @@ import javafx.util.StringConverter;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
+import qupath.lib.gui.QuPathGUI;
+import qupath.lib.projects.Project;
+
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * Modal dialog for configuring QTrace export paths.
@@ -55,7 +60,14 @@ public class QTraceSettingsDialog {
     private static final String RED        = "#f38ba8";
     private static final String PORTAL_URL = "https://qtrace.ca/portal";
 
-    public static void show(Stage owner) {
+    public static void show(Stage owner) { show(owner, (Project<?>) null); }
+
+    public static void show(QuPathGUI qupath) { show(qupath.getStage(), qupath.getProject()); }
+
+    public static void show(Stage owner, Project<?> project) {
+        Path projectBaseDir = (project != null && project.getPath() != null)
+            ? project.getPath().getParent() : null;
+
         Stage dlg = new Stage();
         dlg.initOwner(owner);
         dlg.initModality(Modality.WINDOW_MODAL);
@@ -96,29 +108,55 @@ public class QTraceSettingsDialog {
         hint.setTextFill(Color.web(TEXT_MUTED));
         hint.setFont(Font.font("System", 10));
         hint.setWrapText(true);
+        hint.setMaxWidth(440);
 
-        // ── Project Folder mode — overrides the paths above with <project>/qTrace/ ──────────
+        // ── Project Folder mode — overrides all paths above with <project>/qTrace/ ──────────
         CheckBox chkProjectFolder = new CheckBox("Use Project Folder");
         chkProjectFolder.setSelected(cfg.isUseProjectFolder());
         chkProjectFolder.setTextFill(Color.web(TEXT_SUB));
 
         Label projectFolderHint = new Label(
-            "When enabled, qTrace stores its output under <project folder>/qTrace/ instead of the "
-          + "paths above (created automatically, with a Logs/ subfolder for the Player — more "
-          + "subfolders as other qTrace output moves to this scheme). Falls back to the paths "
-          + "above when no QuPath project is open.");
+            "When enabled (default), qTrace stores its output under <project folder>/qTrace/ — "
+          + "with trace/, geoJson/, logs/ and gitTrack/ subfolders, created automatically on Save "
+          + "or on Stamp — instead of the paths below, which become read-only. Falls back to the "
+          + "paths below when no QuPath project is open.");
         projectFolderHint.setTextFill(Color.web(TEXT_MUTED));
         projectFolderHint.setFont(Font.font("System", 10));
         projectFolderHint.setWrapText(true);
         projectFolderHint.setMaxWidth(440);
 
         VBox projectFolderBox = new VBox(4, chkProjectFolder, projectFolderHint);
-        projectFolderBox.setPadding(new Insets(0, 20, 8, 20));
+        projectFolderBox.setPadding(new Insets(0, 20, 12, 20));
 
-        // Today Project Folder mode only redirects the Player's logs (export/classifier/training
-        // paths above are unaffected) — only that field's row reflects the override.
-        tfLogs.disableProperty().bind(chkProjectFolder.selectedProperty());
-        hint.setMaxWidth(440);
+        // Project Folder mode redirects all four paths above — fields become read-only and
+        // display the resolved <project>/qTrace/<subdir> path (or a prompt when no project is open).
+        Runnable refreshPathFields = () -> {
+            boolean useProj = chkProjectFolder.isSelected();
+            tfExport.setDisable(useProj);
+            tfClassifier.setDisable(useProj);
+            tfTraining.setDisable(useProj);
+            tfLogs.setDisable(useProj);
+            if (useProj) {
+                if (projectBaseDir != null) {
+                    tfExport.setText(projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR).resolve(QTraceConfig.TRACE_SUBDIR).toString());
+                    tfClassifier.setText(projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR).resolve(QTraceConfig.GITTRACK_SUBDIR).toString());
+                    tfTraining.setText(projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR).resolve(QTraceConfig.GEOJSON_SUBDIR).toString());
+                    tfLogs.setText(projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR).resolve(QTraceConfig.LOGS_SUBDIR).toString());
+                } else {
+                    for (TextField tf : new TextField[] { tfExport, tfClassifier, tfTraining, tfLogs }) {
+                        tf.setText("");
+                        tf.setPromptText("(open a QuPath project to resolve this path)");
+                    }
+                }
+            } else {
+                tfExport.setText(cfg.rawExportDir());
+                tfClassifier.setText(cfg.rawClassifierDir());
+                tfTraining.setText(cfg.rawTrainingDir());
+                tfLogs.setText(cfg.rawLogsDir());
+            }
+        };
+        chkProjectFolder.selectedProperty().addListener((obs, was, sel) -> refreshPathFields.run());
+        refreshPathFields.run();
 
         // ── Validator section ──────────────────────────────────────────────────
         TextField tfValidator = new TextField(cfg.getValidatorName());
@@ -297,11 +335,8 @@ public class QTraceSettingsDialog {
         Button btnOk     = solidButton("Save",                BLUE);
 
         btnReset.setOnAction(e -> {
-            tfExport.clear();
-            tfClassifier.clear();
-            tfTraining.clear();
-            tfLogs.clear();
-            chkProjectFolder.setSelected(false);
+            chkProjectFolder.setSelected(true);
+            refreshPathFields.run();
             tfValidator.clear();
             tfLicense.clear();
             updateLicenseStatus(licenseStatusLbl, "", tfValidator, tfEmail);
@@ -312,10 +347,14 @@ public class QTraceSettingsDialog {
         btnCancel.setOnAction(e -> dlg.close());
 
         btnOk.setOnAction(e -> {
-            cfg.setExportDir(tfExport.getText());
-            cfg.setClassifierDir(tfClassifier.getText());
-            cfg.setTrainingDir(tfTraining.getText());
-            cfg.setLogsDir(tfLogs.getText());
+            // When Project Folder mode is on, the fields above just display the resolved
+            // <project>/qTrace/<subdir> path — don't clobber the configured fallback with it.
+            if (!chkProjectFolder.isSelected()) {
+                cfg.setExportDir(tfExport.getText());
+                cfg.setClassifierDir(tfClassifier.getText());
+                cfg.setTrainingDir(tfTraining.getText());
+                cfg.setLogsDir(tfLogs.getText());
+            }
             cfg.setUseProjectFolder(chkProjectFolder.isSelected());
             cfg.setValidatorName(tfValidator.getText());
             cfg.setLicensePath(tfLicense.getText());
@@ -324,6 +363,9 @@ public class QTraceSettingsDialog {
             cfg.setPromptDetectionNote(chkDetectionNote.isSelected());
             cfg.setPromptUnstampedReminder(chkUnstampedReminder.isSelected());
             cfg.save();
+            if (chkProjectFolder.isSelected() && projectBaseDir != null) {
+                try { QTraceConfig.createProjectDirs(projectBaseDir); } catch (IOException ignored) {}
+            }
             dlg.close();
         });
 
@@ -337,7 +379,7 @@ public class QTraceSettingsDialog {
 
         VBox pageIdentity = new VBox(14, validatorGrid, buildDigitalIdentityCard(cfg), buildCredentialsRow());
         VBox pageLicense    = new VBox(licenseGrid);
-        VBox pagePaths      = new VBox(grid, hint, projectFolderBox);
+        VBox pagePaths      = new VBox(projectFolderBox, grid, hint);
         VBox pagePreferences = captureBox;
 
         Label appearanceSoon = new Label("Theme customization — coming soon.");

@@ -70,6 +70,7 @@ public class QTracePanel {
     private static final String GOLD            = "#d9b34d";
 
     private final Stage stage;
+    private final QuPathGUI qupath;
     private final QTraceController controller;
 
     // Status widgets
@@ -97,6 +98,7 @@ public class QTracePanel {
 
     public QTracePanel(QuPathGUI qupath, QTraceController controller) {
         this.controller = controller;
+        this.qupath = qupath;
         this.stage = new Stage();
         stage.initOwner(qupath.getStage());
         stage.initModality(Modality.NONE);
@@ -168,7 +170,7 @@ public class QTracePanel {
 
         Button settingsBtn = iconOnlyButton(glyphIcon("⚙"), QTraceI18n.t("btn.settings.tooltip"), Color.web(GROUP_ADMIN));
         settingsBtn.setId("settings-button"); // looked up by the screenshot harness — see ScreenshotHarness
-        settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(stage));
+        settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
 
         topLine.getChildren().addAll(logoView, title, topSpacer, captureStatus, settingsBtn);
 
