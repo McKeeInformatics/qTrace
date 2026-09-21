@@ -90,6 +90,7 @@ public class QTracePanel {
     private Button   btnRecord;
     // Cloud push button (Compliance only) — "Upload"
     private Button   btnPush;
+    private Button   btnReset;
 
     // Log
     private TextArea logArea;
@@ -319,7 +320,7 @@ public class QTracePanel {
             QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
         Button importBtn = iconButton(iconFactory(this::iconImport), QTraceI18n.t("btn.import.caption"),
             QTraceI18n.t("btn.import.tooltip"), Color.web(GROUP_TOOLS));
-        Button resetBtn = iconButton(iconFactory(this::iconReset), QTraceI18n.t("btn.reset.caption"),
+        Button resetBtn = btnReset = iconButton(iconFactory(this::iconReset), QTraceI18n.t("btn.reset.caption"),
             QTraceI18n.t("btn.reset.tooltip"), Color.web(RED));
         // looked up by the screenshot harness — see ScreenshotHarness
         dashboardBtn.setId("dashboard-button");
@@ -328,6 +329,8 @@ public class QTracePanel {
         dashboardBtn.setOnAction(e -> controller.showDashboard());
         importBtn.setOnAction(e -> controller.startBatchExport());
         resetBtn.setOnAction(e -> confirmReset());
+        resetBtn.setDisable(!controller.hasActiveImage());
+        resetBtn.setOpacity(controller.hasActiveImage() ? 1.0 : 0.45);
         row.getChildren().addAll(dashboardBtn, importBtn, resetBtn);
 
         return row;
@@ -995,6 +998,13 @@ public class QTracePanel {
 
     /** Refresh image name label (called after image change). */
     public void refreshStatus() {
-        Platform.runLater(() -> imageNameLabel.setText(controller.getCurrentImageName()));
+        Platform.runLater(() -> {
+            imageNameLabel.setText(controller.getCurrentImageName());
+            if (btnReset != null) {
+                boolean has = controller.hasActiveImage();
+                btnReset.setDisable(!has);
+                btnReset.setOpacity(has ? 1.0 : 0.45);
+            }
+        });
     }
 }
