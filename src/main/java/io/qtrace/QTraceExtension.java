@@ -103,7 +103,10 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         MenuItem about       = new MenuItem("About QTrace...");
         about.setOnAction(e -> controller.showAbout());
 
-        menu.getItems().addAll(openPanel, dashboard, player, new SeparatorMenuItem(), preferences, about);
+        MenuItem report      = new MenuItem(QTraceI18n.t("report.menu"));
+        report.setOnAction(e -> IssueReportDialog.show(qupath));
+
+        menu.getItems().addAll(openPanel, dashboard, player, new SeparatorMenuItem(), preferences, report, about);
 
         // ── Toolbar button (added on FX thread after QuPath finishes layout) ───
         Platform.runLater(() -> addToolbarButton(qupath));
@@ -168,7 +171,10 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         MenuItem miAbout  = new MenuItem("About qTrace...");
         miAbout.setOnAction(e -> controller.showAbout());
 
-        btn.getItems().addAll(miPanel, miDash, miPlayer, new SeparatorMenuItem(), miPrefs, miAbout);
+        MenuItem miReport = new MenuItem(QTraceI18n.t("report.menu"));
+        miReport.setOnAction(e -> IssueReportDialog.show(qupath));
+
+        btn.getItems().addAll(miPanel, miDash, miPlayer, new SeparatorMenuItem(), miPrefs, miReport, miAbout);
 
         // ── Dynamic icon colour based on recording state ───────────────────────
         controller.addRecordingListener(recording ->
