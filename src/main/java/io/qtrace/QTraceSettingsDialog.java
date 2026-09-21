@@ -125,8 +125,24 @@ public class QTraceSettingsDialog {
         projectFolderHint.setWrapText(true);
         projectFolderHint.setMaxWidth(440);
 
-        VBox projectFolderBox = new VBox(4, chkProjectFolder, projectFolderHint);
-        projectFolderBox.setPadding(new Insets(0, 20, 12, 20));
+        Button btnOpenProject = flatButton("Open Project Folder", BLUE);
+        btnOpenProject.setId("settings-open-project-folder");
+        btnOpenProject.setDisable(projectBaseDir == null);
+        btnOpenProject.setOnAction(e -> {
+            if (projectBaseDir == null) return;
+            Path qDir = projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR);
+            openUrl(java.nio.file.Files.isDirectory(qDir) ? qDir.toString() : projectBaseDir.toString());
+        });
+        btnOpenProject.visibleProperty().bind(chkProjectFolder.selectedProperty());
+        btnOpenProject.managedProperty().bind(chkProjectFolder.selectedProperty());
+
+        Region projectFolderSpacer = new Region();
+        HBox.setHgrow(projectFolderSpacer, Priority.ALWAYS);
+        HBox projectFolderHeader = new HBox(8, chkProjectFolder, projectFolderSpacer, btnOpenProject);
+        projectFolderHeader.setAlignment(Pos.CENTER_LEFT);
+
+        VBox projectFolderBox = new VBox(4, projectFolderHeader, projectFolderHint);
+        projectFolderBox.setPadding(new Insets(16, 20, 12, 20));
 
         // Project Folder mode redirects all four paths above — fields become read-only and
         // display the resolved <project>/qTrace/<subdir> path (or a prompt when no project is open).
