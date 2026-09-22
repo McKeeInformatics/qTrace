@@ -39,8 +39,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -63,6 +66,13 @@ public final class QTraceUpdater {
 
     private static final Logger log = LoggerFactory.getLogger(QTraceUpdater.class);
     private static final String TAG = "[qtrace-update] ";
+
+    // One startup session may update Core AND Compliance. Each check is an open task
+    // until it resolves (nothing to offer / prompt declined / download finished); the
+    // single "installed — Quit QuPath Now" dialog is shown only once ALL tasks are done,
+    // otherwise quitting after the first install dropped the second prompt unseen.
+    private static final AtomicInteger openTasks = new AtomicInteger();
+    private static final List<String> installedThisSession = new ArrayList<>();
 
     // Overridable for the local update simulator (tools/update-sim/):
     //   -Dqtrace.update.server=http://127.0.0.1:8765   (version + compliance download)
@@ -91,7 +101,9 @@ public final class QTraceUpdater {
             log.info(TAG + "core check skipped: update check disabled in config");
             return;
         }
+        openTasks.incrementAndGet();
         CompletableFuture.runAsync(() -> {
+            boolean handedOff = false;
             try {
                 HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(10)).build();
@@ -133,10 +145,12 @@ public final class QTraceUpdater {
 
                 final String url = assetUrl;
                 Downloader dl = () -> httpGetBytes(url, null);
-                promptAndInstall(qupath, "core", QTraceController.VERSION, remote, null, dl);
+                handedOff = promptAndInstall(qupath, "core", QTraceController.VERSION, remote, null, dl);
             } catch (Exception e) {
                 // offline / rate-limited — no dialog, but leave a trace
                 log.info(TAG + "core check failed: {}", e.toString());
+            } finally {
+                if (!handedOff) taskDone(qupath);
             }
         });
     }
@@ -156,7 +170,9 @@ public final class QTraceUpdater {
             return;
         }
         final String currentVer = ep.getPluginVersion();
+        openTasks.incrementAndGet();
         CompletableFuture.runAsync(() -> {
+            boolean handedOff = false;
             try {
                 String jwt = licenseJwt();
                 if (jwt == null) { // no license → can't authenticate the download
@@ -176,10 +192,12 @@ public final class QTraceUpdater {
                 if (remoteVer == null) return;
 
                 Downloader dl = () -> httpGetBytes(COMP_DOWNLOAD_URL, jwt);
-                promptAndInstall(qupath, "compliance", currentVer, remoteVer, sha256, dl);
+                handedOff = promptAndInstall(qupath, "compliance", currentVer, remoteVer, sha256, dl);
             } catch (Exception e) {
                 // offline / no license — no dialog, but leave a trace
                 log.info(TAG + "compliance check failed: {}", e.toString());
+            } finally {
+                if (!handedOff) taskDone(qupath);
             }
         });
     }
@@ -205,17 +223,18 @@ public final class QTraceUpdater {
     /**
      * Prompts the user about {@code remoteVer} and, on confirmation, downloads,
      * verifies (if {@code expectedSha256} non-null) and installs the JAR.
-     * Safe to call from any thread.
+     * Safe to call from any thread. Returns true when a prompt was scheduled: the
+     * caller's open task is then closed by this flow (see {@link #taskDone}).
      */
-    public static void promptAndInstall(QuPathGUI qupath, String module, String currentVer,
+    public static boolean promptAndInstall(QuPathGUI qupath, String module, String currentVer,
                                         String remoteVer, String expectedSha256, Downloader downloader) {
         if (remoteVer == null || compareSemver(remoteVer, currentVer) <= 0) {
             log.info(TAG + "{}: up to date (local={} remote={})", module, currentVer, remoteVer);
-            return;
+            return false;
         }
         if (remoteVer.equals(QTraceConfig.get().getDismissedUpdateVersion())) {
             log.info(TAG + "{}: {} was dismissed by the user", module, remoteVer);
-            return;
+            return false;
         }
         log.info(TAG + "{}: offering {} → {}", module, currentVer, remoteVer);
 
@@ -237,16 +256,18 @@ public final class QTraceUpdater {
 
             Optional<ButtonType> result = alert.showAndWait();
             log.info(TAG + "{}: user chose {}", module, result.map(ButtonType::getText).orElse("<closed>"));
-            if (result.isEmpty() || result.get() == later) return;
+            if (result.isEmpty() || result.get() == later) { taskDone(qupath); return; }
             if (result.get() == ignore) {
                 QTraceConfig.get().setDismissedUpdateVersion(remoteVer);
                 QTraceConfig.get().save();
+                taskDone(qupath);
                 return;
             }
             // Install → background download + write
             CompletableFuture.runAsync(() ->
                 downloadAndInstall(qupath, module, remoteVer, expectedSha256, downloader));
         }));
+        return true;
     }
 
     private static void downloadAndInstall(QuPathGUI qupath, String module, String remoteVer,
@@ -280,11 +301,27 @@ public final class QTraceUpdater {
             // there is nothing left to be ambiguous about — one restart is enough.
             QTraceUpdater.reapOldJars(QTraceUpdater.class, module);
 
-            promptQuit(qupath, remoteVer);
+            synchronized (installedThisSession) {
+                installedThisSession.add(("core".equals(module) ? "Core" : "Compliance") + " v" + remoteVer);
+            }
         } catch (Exception e) {
             log.warn(TAG + "{}: install of {} failed", module, remoteVer, e);
             error(qupath, QTraceI18n.t("update.failed").replace("{0}", e.getMessage()));
+        } finally {
+            taskDone(qupath);
         }
+    }
+
+    /** Closes one open task; the last one shows the single post-install dialog. */
+    private static void taskDone(QuPathGUI qupath) {
+        if (openTasks.decrementAndGet() > 0) return;
+        String installed;
+        synchronized (installedThisSession) {
+            if (installedThisSession.isEmpty()) return;
+            installed = String.join(", ", installedThisSession);
+            installedThisSession.clear();
+        }
+        promptQuit(qupath, installed);
     }
 
     // ── Extensions dir + JAR cleanup ────────────────────────────────────────────
@@ -413,12 +450,12 @@ public final class QTraceUpdater {
      * sendQuitRequest() (same path as File > Quit, incl. the unsaved-changes prompt):
      * firing a synthetic WINDOW_CLOSE_REQUEST on the stage was silently ignored.
      */
-    private static void promptQuit(QuPathGUI qupath, String remoteVer) {
+    private static void promptQuit(QuPathGUI qupath, String installed) {
         Platform.runLater(() -> {
             Alert a = new Alert(Alert.AlertType.INFORMATION);
             a.setTitle(QTraceI18n.t("update.title"));
             a.setHeaderText(null);
-            a.setContentText(QTraceI18n.t("update.installed").replace("{0}", remoteVer)
+            a.setContentText(QTraceI18n.t("update.installed").replace("{0}", installed)
                 + "\n" + QTraceI18n.t("update.installed.hint"));
             if (qupath != null && qupath.getStage() != null) a.initOwner(qupath.getStage());
 
