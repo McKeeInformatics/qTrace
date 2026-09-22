@@ -37,15 +37,12 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Startup update mechanism shared by Core (public GitHub) and Compliance (qtrace.ca).
@@ -86,9 +83,6 @@ public final class QTraceUpdater {
         "https://www.qtrace.ca");
     private static final String VERSION_URL = SERVER + "/api/version";
     private static final String COMP_DOWNLOAD_URL = SERVER + "/api/download/compliance/licensed";
-
-    private static final Pattern JAR_VERSION =
-        Pattern.compile("^qtrace-(?:core|compliance)-(\\d+(?:\\.\\d+)*)\\.jar$");
 
     @FunctionalInterface
     public interface Downloader { byte[] download() throws Exception; }
@@ -282,11 +276,7 @@ public final class QTraceUpdater {
                     throw new Exception("SHA-256 mismatch (expected " + expectedSha256 + ", got " + actual + ")");
             }
 
-            Path dir = extensionsDir(QTraceUpdater.class);
-            Path target = dir.resolve("qtrace-" + module + "-" + remoteVer + ".jar");
-            Path tmp = dir.resolve("qtrace-" + module + "-" + remoteVer + ".jar.part");
-            Files.write(tmp, data);
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            Path target = JarInstaller.install(extensionsDir(QTraceUpdater.class), module, remoteVer, data);
             log.info(TAG + "{}: wrote {}", module, target);
 
             // Remove the superseded file(s) for this module NOW rather than waiting for the
@@ -359,70 +349,18 @@ public final class QTraceUpdater {
      * silently reviving an old version even after a successful update (best-effort).
      */
     public static void reapOldJars(Class<?> anchor, String module) {
-        try {
-            Path dir = extensionsDir(anchor);
-            log.info(TAG + "reap {}: extensions dir = {}", module, dir);
-            if (!Files.isDirectory(dir)) return;
-            String prefix = "qtrace-" + module + "-";
-            String bareLegacyName = "qtrace-" + module + ".jar";
-            String best = null;
-            try (var s = Files.list(dir)) {
-                for (Path p : (Iterable<Path>) s::iterator) {
-                    String v = versionOf(p, prefix);
-                    if (v != null && (best == null || compareSemver(v, best) > 0)) best = v;
-                }
-            }
-            if (best == null) {
-                log.info(TAG + "reap {}: no versioned JAR found, nothing to do", module);
-                return;
-            }
-            final String keep = best;
-            log.info(TAG + "reap {}: keeping version {}", module, keep);
-            try (var s = Files.list(dir)) {
-                for (Path p : (Iterable<Path>) s::iterator) {
-                    String v = versionOf(p, prefix);
-                    boolean isBareLegacy = p.getFileName().toString().equals(bareLegacyName);
-                    if (isBareLegacy || (v != null && compareSemver(v, keep) < 0)) {
-                        try {
-                            Files.deleteIfExists(p);
-                            log.info(TAG + "reap {}: deleted {}", module, p);
-                        } catch (Exception e) {
-                            log.warn(TAG + "reap {}: could NOT delete {} ({})", module, p, e.toString());
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn(TAG + "reap {} failed: {}", module, e.toString());
-        }
-    }
-
-    private static String versionOf(Path p, String prefix) {
-        String name = p.getFileName().toString();
-        if (!name.startsWith(prefix) || !name.endsWith(".jar")) return null;
-        Matcher m = JAR_VERSION.matcher(name);
-        return m.matches() ? m.group(1) : null;
+        Path dir = extensionsDir(anchor);
+        JarInstaller.ReapResult r = JarInstaller.reap(dir, module);
+        log.info(TAG + "reap {}: extensions dir = {}, keeping version {}", module, dir, r.kept());
+        r.deleted().forEach(p -> log.info(TAG + "reap {}: deleted {}", module, p));
+        r.failed().forEach((p, err) -> log.warn(TAG + "reap {}: could NOT delete {} ({})", module, p, err));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
 
     /** Compares dotted numeric versions. >0 if a>b, 0 equal, <0 a<b. */
     public static int compareSemver(String a, String b) {
-        if (a == null) a = "0";
-        if (b == null) b = "0";
-        String[] pa = a.split("\\."), pb = b.split("\\.");
-        int n = Math.max(pa.length, pb.length);
-        for (int i = 0; i < n; i++) {
-            int va = i < pa.length ? parse(pa[i]) : 0;
-            int vb = i < pb.length ? parse(pb[i]) : 0;
-            if (va != vb) return Integer.compare(va, vb);
-        }
-        return 0;
-    }
-
-    private static int parse(String s) {
-        try { return Integer.parseInt(s.replaceAll("[^0-9].*$", "")); }
-        catch (Exception e) { return 0; }
+        return JarInstaller.compareSemver(a, b);
     }
 
     public static byte[] httpGetBytes(String url, String bearer) throws Exception {
