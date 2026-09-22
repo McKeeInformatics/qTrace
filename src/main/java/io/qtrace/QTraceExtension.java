@@ -36,6 +36,9 @@ import qupath.lib.gui.extensions.GitHubProject;
 import qupath.lib.gui.extensions.QuPathExtension;
 
 import java.util.ServiceLoader;
+import java.util.jar.JarFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Entry point for the QTrace QuPath extension.
@@ -55,6 +58,8 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
     // Guards against a double install if an update left two qtrace-core JARs on the
     // classpath for one restart (QuPath instantiates one extension per service entry).
     private static boolean installed = false;
+
+    private static final Logger log = LoggerFactory.getLogger(QTraceExtension.class);
 
     private QTraceController controller;
 
@@ -77,6 +82,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
             }
         }
         if (best != null) QTracePluginManager.register(best);
+        logClassLoaderDiagnostic(best);
 
         controller = new QTraceController(qupath);
         // Deferred like the toolbar button below — the File menu's items aren't
@@ -123,6 +129,50 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
     }
 
     private static String nz(String s) { return s != null ? s : "0"; }
+
+    /**
+     * Startup trace of what the classloader REALLY loaded: which JAR file each qTrace
+     * entry class came from, the version its own manifest declares vs the version
+     * reported at runtime, and every qTrace service descriptor visible (duplicates =
+     * several qTrace JARs on the classpath). Diagnoses update problems on any OS.
+     */
+    private static void logClassLoaderDiagnostic(QTracePlugin plugin) {
+        try {
+            logOrigin("core", QTraceExtension.class, QTraceController.VERSION);
+            if (plugin != null) logOrigin("plugin", plugin.getClass(), plugin.getPluginVersion());
+            var urls = QTraceExtension.class.getClassLoader()
+                .getResources("META-INF/services/io.qtrace.QTracePlugin");
+            while (urls.hasMoreElements())
+                log.info("[qtrace-update] diag: plugin descriptor visible at {}", urls.nextElement());
+            var ext = QTraceExtension.class.getClassLoader()
+                .getResources("io/qtrace/QTraceExtension.class");
+            while (ext.hasMoreElements())
+                log.info("[qtrace-update] diag: core class visible at {}", ext.nextElement());
+        } catch (Exception e) {
+            log.warn("[qtrace-update] diag failed: {}", e.toString());
+        }
+    }
+
+    private static void logOrigin(String what, Class<?> c, String reported) {
+        String jar = "?", manifestVer = "?";
+        try {
+            var src = c.getProtectionDomain().getCodeSource();
+            if (src != null) {
+                var p = java.nio.file.Path.of(src.getLocation().toURI());
+                jar = p.toString();
+                if (java.nio.file.Files.isRegularFile(p)) {
+                    try (JarFile jf = new JarFile(p.toFile())) {
+                        var mf = jf.getManifest();
+                        if (mf != null) manifestVer = mf.getMainAttributes().getValue("Implementation-Version");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            manifestVer = "unreadable (" + e + ")";
+        }
+        log.info("[qtrace-update] diag: {} {} loaded from {} | manifest version={} | reported version={} | package version={}",
+            what, c.getName(), jar, manifestVer, reported, c.getPackage().getImplementationVersion());
+    }
 
     private void addToolbarButton(QuPathGUI qupath) {
         // ── Icon: logo over a coloured rectangle ───────────────────────────────

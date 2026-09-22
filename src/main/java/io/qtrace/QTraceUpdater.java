@@ -26,6 +26,8 @@ import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 
 import java.net.URI;
@@ -59,15 +61,21 @@ public final class QTraceUpdater {
 
     private QTraceUpdater() {}
 
-    private static final String GITHUB_LATEST =
-        "https://api.github.com/repos/RomainTourte/qTrace-core/releases/latest";
+    private static final Logger log = LoggerFactory.getLogger(QTraceUpdater.class);
+    private static final String TAG = "[qtrace-update] ";
+
+    // Overridable for the local update simulator (tools/update-sim/):
+    //   -Dqtrace.update.server=http://127.0.0.1:8765   (version + compliance download)
+    //   -Dqtrace.update.github=http://127.0.0.1:8765/github/releases/latest
+    private static final String GITHUB_LATEST = System.getProperty("qtrace.update.github",
+        "https://api.github.com/repos/RomainTourte/qTrace-core/releases/latest");
     // www.qtrace.ca (not the apex) — qtrace.ca 308-redirects to www, and a
     // cross-host redirect makes java.net.http.HttpClient drop the Authorization
     // header, breaking the licensed compliance download (HTTP 401).
-    private static final String VERSION_URL =
-        "https://www.qtrace.ca/api/version";
-    private static final String COMP_DOWNLOAD_URL =
-        "https://www.qtrace.ca/api/download/compliance/licensed";
+    private static final String SERVER = System.getProperty("qtrace.update.server",
+        "https://www.qtrace.ca");
+    private static final String VERSION_URL = SERVER + "/api/version";
+    private static final String COMP_DOWNLOAD_URL = SERVER + "/api/download/compliance/licensed";
 
     private static final Pattern JAR_VERSION =
         Pattern.compile("^qtrace-(?:core|compliance)-(\\d+(?:\\.\\d+)*)\\.jar$");
@@ -79,7 +87,10 @@ public final class QTraceUpdater {
 
     /** Async, safe. Offers an update if the latest qTrace-core GitHub release is newer. */
     public static void checkCore(QuPathGUI qupath) {
-        if (!QTraceConfig.get().isUpdateCheckEnabled()) return;
+        if (!QTraceConfig.get().isUpdateCheckEnabled()) {
+            log.info(TAG + "core check skipped: update check disabled in config");
+            return;
+        }
         CompletableFuture.runAsync(() -> {
             try {
                 HttpClient client = HttpClient.newBuilder()
@@ -90,13 +101,17 @@ public final class QTraceUpdater {
                     .header("Accept", "application/vnd.github+json")
                     .GET().build();
                 HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-                if (resp.statusCode() != 200) return;
+                if (resp.statusCode() != 200) {
+                    log.info(TAG + "core check: {} → HTTP {}", GITHUB_LATEST, resp.statusCode());
+                    return;
+                }
 
                 JsonObject json = JsonParser.parseString(resp.body()).getAsJsonObject();
                 String tag = json.has("tag_name") ? json.get("tag_name").getAsString() : null;
                 if (tag == null) return;
                 String remote = tag.startsWith("v") ? tag.substring(1) : tag;
 
+                log.info(TAG + "core check: local={} remote={}", QTraceController.VERSION, remote);
                 if (compareSemver(remote, QTraceController.VERSION) <= 0) return;
 
                 String assetUrl = null;
@@ -111,13 +126,17 @@ public final class QTraceUpdater {
                         }
                     }
                 }
-                if (assetUrl == null) return;
+                if (assetUrl == null) {
+                    log.warn(TAG + "core release {} has no qtrace-core*.jar asset", tag);
+                    return;
+                }
 
                 final String url = assetUrl;
                 Downloader dl = () -> httpGetBytes(url, null);
                 promptAndInstall(qupath, "core", QTraceController.VERSION, remote, null, dl);
-            } catch (Exception ignored) {
-                // offline / rate-limited — stay silent
+            } catch (Exception e) {
+                // offline / rate-limited — no dialog, but leave a trace
+                log.info(TAG + "core check failed: {}", e.toString());
             }
         });
     }
@@ -131,12 +150,19 @@ public final class QTraceUpdater {
      * the loaded plugin's reported version and the license from config.
      */
     public static void checkCompliance(QuPathGUI qupath, QTracePlugin ep) {
-        if (ep == null || !QTraceConfig.get().isUpdateCheckEnabled()) return;
+        if (ep == null || !QTraceConfig.get().isUpdateCheckEnabled()) {
+            log.info(TAG + "compliance check skipped: plugin={} enabled={}",
+                ep, QTraceConfig.get().isUpdateCheckEnabled());
+            return;
+        }
         final String currentVer = ep.getPluginVersion();
         CompletableFuture.runAsync(() -> {
             try {
                 String jwt = licenseJwt();
-                if (jwt == null) return; // no license → can't authenticate the download
+                if (jwt == null) { // no license → can't authenticate the download
+                    log.info(TAG + "compliance check skipped: no license configured");
+                    return;
+                }
 
                 byte[] mb = httpGetBytes(VERSION_URL, null);
                 JsonObject manifest = JsonParser
@@ -146,12 +172,14 @@ public final class QTraceUpdater {
                 JsonObject ent = manifest.getAsJsonObject(manifestKey);
                 String remoteVer = ent.has("version") ? ent.get("version").getAsString() : null;
                 String sha256    = ent.has("sha256")  ? ent.get("sha256").getAsString()  : null;
+                log.info(TAG + "compliance check: local={} remote={} sha256={}", currentVer, remoteVer, sha256);
                 if (remoteVer == null) return;
 
                 Downloader dl = () -> httpGetBytes(COMP_DOWNLOAD_URL, jwt);
                 promptAndInstall(qupath, "compliance", currentVer, remoteVer, sha256, dl);
-            } catch (Exception ignored) {
-                // offline / no license — stay silent
+            } catch (Exception e) {
+                // offline / no license — no dialog, but leave a trace
+                log.info(TAG + "compliance check failed: {}", e.toString());
             }
         });
     }
@@ -181,10 +209,19 @@ public final class QTraceUpdater {
      */
     public static void promptAndInstall(QuPathGUI qupath, String module, String currentVer,
                                         String remoteVer, String expectedSha256, Downloader downloader) {
-        if (remoteVer == null || compareSemver(remoteVer, currentVer) <= 0) return;
-        if (remoteVer.equals(QTraceConfig.get().getDismissedUpdateVersion())) return;
+        if (remoteVer == null || compareSemver(remoteVer, currentVer) <= 0) {
+            log.info(TAG + "{}: up to date (local={} remote={})", module, currentVer, remoteVer);
+            return;
+        }
+        if (remoteVer.equals(QTraceConfig.get().getDismissedUpdateVersion())) {
+            log.info(TAG + "{}: {} was dismissed by the user", module, remoteVer);
+            return;
+        }
+        log.info(TAG + "{}: offering {} → {}", module, currentVer, remoteVer);
 
-        Platform.runLater(() -> {
+        // Shown only once no modal dialog is open (QuPath's Welcome window at startup):
+        // stacked on top of it, the post-install "Quit QuPath Now" could never work.
+        Platform.runLater(() -> whenNoModalOpen("update prompt", () -> {
             String label = "core".equals(module) ? "Core" : "Compliance";
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
             alert.setTitle(QTraceI18n.t("update.title"));
@@ -199,6 +236,7 @@ public final class QTraceUpdater {
             alert.getButtonTypes().setAll(install, later, ignore);
 
             Optional<ButtonType> result = alert.showAndWait();
+            log.info(TAG + "{}: user chose {}", module, result.map(ButtonType::getText).orElse("<closed>"));
             if (result.isEmpty() || result.get() == later) return;
             if (result.get() == ignore) {
                 QTraceConfig.get().setDismissedUpdateVersion(remoteVer);
@@ -208,7 +246,7 @@ public final class QTraceUpdater {
             // Install → background download + write
             CompletableFuture.runAsync(() ->
                 downloadAndInstall(qupath, module, remoteVer, expectedSha256, downloader));
-        });
+        }));
     }
 
     private static void downloadAndInstall(QuPathGUI qupath, String module, String remoteVer,
@@ -216,8 +254,9 @@ public final class QTraceUpdater {
         try {
             byte[] data = downloader.download();
             if (data == null || data.length == 0) throw new Exception("empty download");
+            String actual = sha256Hex(data);
+            log.info(TAG + "{}: downloaded {} bytes, sha256={}", module, data.length, actual);
             if (expectedSha256 != null && !expectedSha256.isBlank()) {
-                String actual = sha256Hex(data);
                 if (!actual.equalsIgnoreCase(expectedSha256))
                     throw new Exception("SHA-256 mismatch (expected " + expectedSha256 + ", got " + actual + ")");
             }
@@ -227,6 +266,7 @@ public final class QTraceUpdater {
             Path tmp = dir.resolve("qtrace-" + module + "-" + remoteVer + ".jar.part");
             Files.write(tmp, data);
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            log.info(TAG + "{}: wrote {}", module, target);
 
             // Remove the superseded file(s) for this module NOW rather than waiting for the
             // next startup's reapOldJars() call. Two same-named-class JARs (e.g. the bare
@@ -240,8 +280,9 @@ public final class QTraceUpdater {
             // there is nothing left to be ambiguous about — one restart is enough.
             QTraceUpdater.reapOldJars(QTraceUpdater.class, module);
 
-            promptRestart(qupath, remoteVer);
+            promptQuit(qupath, remoteVer);
         } catch (Exception e) {
+            log.warn(TAG + "{}: install of {} failed", module, remoteVer, e);
             error(qupath, QTraceI18n.t("update.failed").replace("{0}", e.getMessage()));
         }
     }
@@ -283,6 +324,7 @@ public final class QTraceUpdater {
     public static void reapOldJars(Class<?> anchor, String module) {
         try {
             Path dir = extensionsDir(anchor);
+            log.info(TAG + "reap {}: extensions dir = {}", module, dir);
             if (!Files.isDirectory(dir)) return;
             String prefix = "qtrace-" + module + "-";
             String bareLegacyName = "qtrace-" + module + ".jar";
@@ -293,18 +335,29 @@ public final class QTraceUpdater {
                     if (v != null && (best == null || compareSemver(v, best) > 0)) best = v;
                 }
             }
-            if (best == null) return;
+            if (best == null) {
+                log.info(TAG + "reap {}: no versioned JAR found, nothing to do", module);
+                return;
+            }
             final String keep = best;
+            log.info(TAG + "reap {}: keeping version {}", module, keep);
             try (var s = Files.list(dir)) {
                 for (Path p : (Iterable<Path>) s::iterator) {
                     String v = versionOf(p, prefix);
                     boolean isBareLegacy = p.getFileName().toString().equals(bareLegacyName);
                     if (isBareLegacy || (v != null && compareSemver(v, keep) < 0)) {
-                        try { Files.deleteIfExists(p); } catch (Exception ignored) {}
+                        try {
+                            Files.deleteIfExists(p);
+                            log.info(TAG + "reap {}: deleted {}", module, p);
+                        } catch (Exception e) {
+                            log.warn(TAG + "reap {}: could NOT delete {} ({})", module, p, e.toString());
+                        }
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.warn(TAG + "reap {} failed: {}", module, e.toString());
+        }
     }
 
     private static String versionOf(Path p, String prefix) {
@@ -354,8 +407,13 @@ public final class QTraceUpdater {
     private static void info(QuPathGUI qupath, String msg)  { alert(qupath, Alert.AlertType.INFORMATION, msg); }
     private static void error(QuPathGUI qupath, String msg) { alert(qupath, Alert.AlertType.ERROR, msg); }
 
-    /** Post-install prompt: offer to quit QuPath now (same as the window's close button) or later. */
-    private static void promptRestart(QuPathGUI qupath, String remoteVer) {
+    /**
+     * Post-install prompt: offer to quit QuPath now or later. The user reopens QuPath
+     * themselves — the new JAR is only picked up by a fresh JVM. Uses QuPath's own
+     * sendQuitRequest() (same path as File > Quit, incl. the unsaved-changes prompt):
+     * firing a synthetic WINDOW_CLOSE_REQUEST on the stage was silently ignored.
+     */
+    private static void promptQuit(QuPathGUI qupath, String remoteVer) {
         Platform.runLater(() -> {
             Alert a = new Alert(Alert.AlertType.INFORMATION);
             a.setTitle(QTraceI18n.t("update.title"));
@@ -364,16 +422,42 @@ public final class QTraceUpdater {
                 + "\n" + QTraceI18n.t("update.installed.hint"));
             if (qupath != null && qupath.getStage() != null) a.initOwner(qupath.getStage());
 
-            ButtonType restartNow = new ButtonType(QTraceI18n.t("update.restart.now"), ButtonBar.ButtonData.OK_DONE);
-            ButtonType later       = new ButtonType(QTraceI18n.t("update.later"),       ButtonBar.ButtonData.CANCEL_CLOSE);
-            a.getButtonTypes().setAll(restartNow, later);
+            ButtonType quitNow = new ButtonType(QTraceI18n.t("update.quit.now"), ButtonBar.ButtonData.OK_DONE);
+            ButtonType later   = new ButtonType(QTraceI18n.t("update.later"),    ButtonBar.ButtonData.CANCEL_CLOSE);
+            a.getButtonTypes().setAll(quitNow, later);
 
             Optional<ButtonType> result = a.showAndWait();
-            if (result.isPresent() && result.get() == restartNow && qupath != null && qupath.getStage() != null) {
-                qupath.getStage().fireEvent(
-                    new javafx.stage.WindowEvent(qupath.getStage(), javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST));
-            }
+            boolean quit = result.isPresent() && result.get() == quitNow;
+            log.info(TAG + "post-install: user chose {}", quit ? "quit now" : "later");
+            if (quit && qupath != null) whenNoModalOpen("quit request", () -> {
+                log.info(TAG + "post-install: sending quit request to QuPath");
+                qupath.sendQuitRequest();
+            });
         });
+    }
+
+    /**
+     * Runs {@code action} on the FX thread once no nested event loop is running, i.e. no
+     * modal dialog is open (typically QuPath's own Welcome window at startup). QuPath
+     * silently discards a close request issued from a nested loop ("Close request from
+     * nested loop - will be discarded"), so both the update prompt and the post-install
+     * quit wait for it.
+     */
+    private static void whenNoModalOpen(String what, Runnable action) {
+        whenNoModalOpen(what, action, true);
+    }
+
+    private static void whenNoModalOpen(String what, Runnable action, boolean first) {
+        if (!Platform.isNestedLoopRunning()) {
+            action.run();
+            return;
+        }
+        if (first) log.info(TAG + "{} deferred until the open modal dialog closes", what);
+        var retry = new javafx.animation.PauseTransition(javafx.util.Duration.millis(250));
+        // Re-check outside the animation pulse: showAndWait() is forbidden during
+        // animation processing (IllegalStateException).
+        retry.setOnFinished(e -> Platform.runLater(() -> whenNoModalOpen(what, action, false)));
+        retry.play();
     }
 
     private static void alert(QuPathGUI qupath, Alert.AlertType type, String msg) {
