@@ -75,8 +75,7 @@ public class QTraceController {
     static final String VERSION = resolveVersion();
 
     private static String resolveVersion() {
-        String v = QTraceController.class.getPackage().getImplementationVersion();
-        return v != null ? v : "dev";
+        return JarVersion.of(QTraceController.class);
     }
 
     public static String getDisplayVersion() {
