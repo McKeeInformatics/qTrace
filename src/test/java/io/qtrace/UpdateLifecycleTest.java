@@ -2,6 +2,7 @@ package io.qtrace;
 
 import io.qtrace.fixture.ProbeA;
 import io.qtrace.fixture.ProbeB;
+import io.qtrace.fixture.Sleeper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,6 +18,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -33,7 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * builds its extension classloader like QuPath 0.7 does (walk the extensions dir,
  * add EVERY JAR in file-system order — same-named JARs only trigger a warning, the
  * first one added wins), then qTrace's startup reap runs. The version actually
- * loaded must be v2, and only v2 may remain on disk.
+ * loaded must be v2, and only v2 may remain on disk. When the old JAR could not be
+ * deleted (Windows lock), the cleanup helper scheduled in session 1 must have removed
+ * it once the QuPath process exited, before session 2 starts.
  */
 class UpdateLifecycleTest {
 
@@ -54,13 +58,29 @@ class UpdateLifecycleTest {
         byte[] v2 = Files.readAllBytes(jar(Files.createTempFile("v2", ".jar"), probe, "1.1.6"));
 
         // ── Session 1: v1 loaded, the user clicks Install ───────────────────────
+        // A separate process stands in for the QuPath JVM: the cleanup helper must wait
+        // for it to exit (the lock itself is held by this test's classloader, released
+        // just before the "QuPath" process ends — as when a real JVM exits).
+        Process qupath = new ProcessBuilder(
+            Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+            "-cp", System.getProperty("java.class.path"), Sleeper.class.getName()).start();
+        Process cleanup = null;
         try (URLClassLoader session1 = qupathExtensionLoader()) {
             assertEquals("1.1.5", JarVersion.of(Class.forName(probe.getName(), true, session1)));
             JarInstaller.install(extensions, module, "1.1.6", v2);
             JarInstaller.ReapResult r = JarInstaller.reap(extensions, module);
             System.out.printf("[%s] session 1 reap: kept=%s deleted=%s failed=%s%n",
                 System.getProperty("os.name"), r.kept(), r.deleted(), r.failed());
-        } // QuPath quits
+            if (!r.failed().isEmpty())
+                cleanup = JarInstaller.scheduleDeleteAfterExit(qupath.pid(), r.failed().keySet());
+        } // QuPath quits: locks released, then the process ends
+        qupath.destroy();
+        qupath.waitFor(30, TimeUnit.SECONDS);
+        if (cleanup != null) {
+            boolean done = cleanup.waitFor(60, TimeUnit.SECONDS);
+            System.out.printf("[%s] cleanup helper finished=%s exit=%s%n",
+                System.getProperty("os.name"), done, done ? cleanup.exitValue() : "-");
+        }
 
         // ── Session 2: restart ──────────────────────────────────────────────────
         String loaded;

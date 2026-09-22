@@ -70,6 +70,7 @@ public final class QTraceUpdater {
     // otherwise quitting after the first install dropped the second prompt unseen.
     private static final AtomicInteger openTasks = new AtomicInteger();
     private static final List<String> installedThisSession = new ArrayList<>();
+    private static final java.util.Set<Path> scheduledForDeletion = new java.util.HashSet<>();
 
     // Overridable for the local update simulator (tools/update-sim/):
     //   -Dqtrace.update.server=http://127.0.0.1:8765   (version + compliance download)
@@ -354,6 +355,21 @@ public final class QTraceUpdater {
         log.info(TAG + "reap {}: extensions dir = {}, keeping version {}", module, dir, r.kept());
         r.deleted().forEach(p -> log.info(TAG + "reap {}: deleted {}", module, p));
         r.failed().forEach((p, err) -> log.warn(TAG + "reap {}: could NOT delete {} ({})", module, p, err));
+
+        // Windows keeps loaded JARs locked: delete them once this QuPath process has exited,
+        // otherwise the old JAR sorts first at the next start and is loaded (and locked) again.
+        List<Path> pending = new ArrayList<>();
+        synchronized (scheduledForDeletion) {
+            for (Path p : r.failed().keySet())
+                if (p.getFileName().toString().endsWith(".jar") && scheduledForDeletion.add(p)) pending.add(p);
+        }
+        if (pending.isEmpty()) return;
+        try {
+            JarInstaller.scheduleDeleteAfterExit(ProcessHandle.current().pid(), pending);
+            log.info(TAG + "reap {}: will delete {} once QuPath exits", module, pending);
+        } catch (Exception e) {
+            log.warn(TAG + "reap {}: could not schedule deletion of {} ({})", module, pending, e.toString());
+        }
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────

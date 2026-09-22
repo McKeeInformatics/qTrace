@@ -19,12 +19,16 @@
 
 package io.qtrace;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -93,6 +97,57 @@ public final class JarInstaller {
             failed.put(dir, e.toString());
         }
         return new ReapResult(best, deleted, failed);
+    }
+
+    /**
+     * Starts a detached helper that waits for process {@code pid} (the running QuPath)
+     * to exit, then deletes {@code files}, retrying for ~20 s (an antivirus may still hold
+     * a handle for a moment). For superseded JARs Windows refuses to delete while QuPath
+     * has them open: without this, the old JAR is still there at the next start, sorts
+     * first, gets loaded again and locked again — the update never takes effect.
+     * Returns the helper process (callers normally ignore it).
+     */
+    public static Process scheduleDeleteAfterExit(long pid, Collection<Path> files) throws Exception {
+        List<String> cmd = new ArrayList<>();
+        if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")) {
+            StringBuilder list = new StringBuilder();
+            for (Path f : files) {
+                if (list.length() > 0) list.append(',');
+                list.append('\'').append(f.toAbsolutePath().toString().replace("'", "''")).append('\'');
+            }
+            String script = "$ErrorActionPreference='SilentlyContinue'\n"
+                + "Wait-Process -Id " + pid + "\n"
+                + "foreach ($f in @(" + list + ")) {\n"
+                + "  for ($i = 0; $i -lt 40; $i++) {\n"
+                + "    if (-not (Test-Path -LiteralPath $f)) { break }\n"
+                + "    Remove-Item -LiteralPath $f -Force\n"
+                + "    if (-not (Test-Path -LiteralPath $f)) { break }\n"
+                + "    Start-Sleep -Milliseconds 500\n"
+                + "  }\n"
+                + "}\n";
+            // -EncodedCommand (UTF-16LE base64): no quoting pitfalls with user paths.
+            String encoded = Base64.getEncoder().encodeToString(script.getBytes(StandardCharsets.UTF_16LE));
+            cmd.addAll(List.of("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                "-WindowStyle", "Hidden", "-EncodedCommand", encoded));
+        } else {
+            // $0 = pid, "$@" = files. Ignore SIGHUP so closing QuPath's terminal doesn't kill us.
+            cmd.addAll(List.of("sh", "-c",
+                "trap '' HUP; while kill -0 \"$0\" 2>/dev/null; do sleep 0.5; done; "
+                + "for f in \"$@\"; do i=0; while [ -e \"$f\" ] && [ $i -lt 40 ]; do "
+                + "rm -f -- \"$f\"; [ -e \"$f\" ] && sleep 0.5; i=$((i+1)); done; done",
+                Long.toString(pid)));
+            for (Path f : files) cmd.add(f.toAbsolutePath().toString());
+        }
+        return new ProcessBuilder(cmd)
+            .redirectInput(ProcessBuilder.Redirect.from(nullDevice()))
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start();
+    }
+
+    private static java.io.File nullDevice() {
+        return new java.io.File(System.getProperty("os.name", "").toLowerCase(Locale.ROOT)
+            .startsWith("windows") ? "NUL" : "/dev/null");
     }
 
     private static String versionOf(Path p, String prefix) {
