@@ -381,6 +381,10 @@ public class QTraceExporter {
         // Annotations with per-author attribution
         session.add("annotations", buildAnnotationsObject(imageData, outputDir, imageName));
 
+        // Detections are too many to list, but their count + fingerprint let a verifier tell
+        // whether the stamped detections are still the ones in the .qpdata.
+        session.add("detections", buildDetectionsObject(imageData));
+
         // Manual detection corrections (audit-only — not replayable)
         session.add("manual_detection_corrections", buildDetectionCorrectionsArray());
 
@@ -715,12 +719,48 @@ public class QTraceExporter {
         annObj.add("by_author", byAuthorObj);
 
         annObj.add("details", details);
+        annObj.addProperty("fingerprint_sha256", fingerprint(allAnnotations));
 
         // GeoJSON with qtrace:author injected into each feature's properties
-        String geoFile = exportAnnotationsWithAuthors(allAnnotations, QTraceConfig.get().outputTrainingDir(), imageName);
+        Path trainingDir = QTraceConfig.get().outputTrainingDir();
+        String geoFile = exportAnnotationsWithAuthors(allAnnotations, trainingDir, imageName);
         annObj.addProperty("geojson_file", geoFile != null ? geoFile : "");
+        if (geoFile != null) {
+            try {
+                annObj.addProperty("geojson_sha256", io.qtrace.chain.Hashing.sha256Hex(trainingDir.resolve(geoFile)));
+            } catch (Exception e) {
+                System.err.println("[qTrace] geojson_sha256: " + e.getMessage());
+            }
+        }
 
         return annObj;
+    }
+
+    private static JsonObject buildDetectionsObject(ImageData<BufferedImage> imageData) {
+        Collection<PathObject> detections = imageData.getHierarchy().getDetectionObjects();
+        Map<String, Integer> byClass = new TreeMap<>();
+        for (PathObject d : detections)
+            byClass.merge(d.getPathClass() != null ? d.getPathClass().getName() : "(unclassified)", 1, Integer::sum);
+        JsonObject obj = new JsonObject();
+        obj.addProperty("total", detections.size());
+        JsonObject byClassObj = new JsonObject();
+        byClass.forEach(byClassObj::addProperty);
+        obj.add("by_class", byClassObj);
+        obj.addProperty("fingerprint_sha256", fingerprint(detections));
+        return obj;
+    }
+
+    /** See {@link io.qtrace.chain.ObjectFingerprint} — class/shape/centroid/area, UUID-independent. */
+    static String fingerprint(Collection<PathObject> objects) {
+        List<io.qtrace.chain.ObjectFingerprint.Obj> objs = new ArrayList<>(objects.size());
+        for (PathObject o : objects) {
+            ROI r = o.getROI();
+            if (r == null) continue;
+            objs.add(new io.qtrace.chain.ObjectFingerprint.Obj(
+                o.getPathClass() != null ? o.getPathClass().getName() : "(unclassified)",
+                r.getRoiName(), r.getCentroidX(), r.getCentroidY(), r.getArea()));
+        }
+        return io.qtrace.chain.ObjectFingerprint.of(objs);
     }
 
     private String exportAnnotationsWithAuthors(Collection<PathObject> annotations,
