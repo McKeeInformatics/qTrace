@@ -21,7 +21,6 @@ package io.qtrace;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import io.qtrace.ProvenanceDiff.Finding;
 import io.qtrace.ProvenanceDiff.Kind;
 import javafx.application.Platform;
@@ -45,7 +44,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.stream.Stream;
 
 /**
  * "Why?" window: explains where an image's current state diverges from its latest stamp —
@@ -84,8 +82,10 @@ public final class ProvenanceDiffDialog {
             List<Section> sections;
             String reference;
             try {
-                JsonObject session = latestValidatedSession(root);
-                JsonObject stamped = findCertPayload(qtraceFile, session);
+                JsonObject session = StampIntegrity.latestValidatedSession(root);
+                if (session == null) throw new IllegalStateException("no stamped session in this .qtrace");
+                JsonObject stamped = qtraceFile != null
+                    ? StampIntegrity.findCertPayload(root, qtraceFile.toPath().getParent()) : null;
                 reference = stamped != null
                     ? "Reference: the signed certificate (.qtcert) of this stamp"
                     : "Reference: the stamped session in the .qtrace (no certificate found)";
@@ -172,34 +172,6 @@ public final class ProvenanceDiffDialog {
             arr.add(d);
         }
         return arr;
-    }
-
-    static JsonObject latestValidatedSession(JsonObject root) {
-        JsonArray sessions = arr(root, "sessions");
-        for (int i = sessions.size() - 1; i >= 0; i--) {
-            JsonObject s = sessions.get(i).getAsJsonObject();
-            if (obj(s, "validation") != null) return s;
-        }
-        throw new IllegalStateException("no stamped session in this .qtrace");
-    }
-
-    /** The .qtcert whose qtrace_payload is this session, in <exportDir>/case_<caseId>/certs/. */
-    private static JsonObject findCertPayload(File qtraceFile, JsonObject session) {
-        String caseId = str(obj(session, "validation"), "case_id");
-        String sessionId = str(session, "session_id");
-        if (qtraceFile == null || caseId == null || sessionId == null) return null;
-        Path certs = qtraceFile.toPath().getParent()
-            .resolve("case_" + caseId.replaceAll("[^a-zA-Z0-9._-]", "_")).resolve("certs");
-        if (!Files.isDirectory(certs)) return null;
-        try (Stream<Path> files = Files.list(certs)) {
-            for (Path p : (Iterable<Path>) files.filter(f -> f.toString().endsWith(".qtcert"))::iterator) {
-                try {
-                    JsonObject payload = obj(JsonParser.parseString(Files.readString(p)).getAsJsonObject(), "qtrace_payload");
-                    if (payload != null && sessionId.equals(str(payload, "session_id"))) return payload;
-                } catch (Exception ignored) {}
-            }
-        } catch (Exception ignored) {}
-        return null;
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────

@@ -438,21 +438,24 @@ public class QTracePanel {
     }
 
     /**
-     * Shows or hides the integrity alert for the open image. Only SIGNATURE_INVALID and
-     * DATA_CHANGED are shown; {@code onWhy} opens the diff window.
+     * Shows or hides the integrity alert for the open image (states where
+     * {@link StampIntegrity.State#isAlert()}); {@code onWhy} opens the diff window.
      */
     public void setIntegrity(StampIntegrity.State state, Runnable onWhy) {
         Platform.runLater(() -> {
-            boolean alert = state == StampIntegrity.State.SIGNATURE_INVALID
-                         || state == StampIntegrity.State.DATA_CHANGED;
+            boolean alert = state.isAlert();
             integrityRow.setVisible(alert);
             integrityRow.setManaged(alert);
             if (!alert) return;
-            boolean corrupted = state == StampIntegrity.State.SIGNATURE_INVALID;
+            boolean corrupted = state == StampIntegrity.State.SIGNATURE_INVALID
+                             || state == StampIntegrity.State.TRACE_EDITED;
             String color = corrupted ? RED : PEACH;
-            integrityLabel.setText(corrupted
-                ? "⛔ Stamp corrupted — the .qtrace was edited after signing"
-                : "⚠ Image data changed since the last stamp");
+            integrityLabel.setText(switch (state) {
+                case SIGNATURE_INVALID -> "⛔ Stamp corrupted — the .qtrace was edited after signing";
+                case TRACE_EDITED      -> "⛔ .qtrace edited — it no longer matches its certificate";
+                case DATA_CHANGED      -> "⚠ Image data changed since the last stamp";
+                default                -> "⚠ Satellite files changed since the last stamp";
+            });
             integrityLabel.setTextFill(Color.web(color));
             integrityRow.setStyle("-fx-border-color:" + color + ";-fx-border-radius:4;-fx-background-radius:4;"
                 + "-fx-background-color:" + (corrupted ? "rgba(243,139,168,0.10)" : "rgba(250,179,135,0.10)") + ";");

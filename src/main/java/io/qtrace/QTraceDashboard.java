@@ -1481,7 +1481,10 @@ public class QTraceDashboard {
                     if (Files.exists(qpdata)) sha = io.qtrace.chain.Hashing.sha256Hex(qpdata);
                 }
             } catch (Exception ignored) {}
-            StampIntegrity.State state = StampIntegrity.check(root, sha);
+            Path exportDir = qtraceFile != null ? qtraceFile.toPath().getParent() : null;
+            StampIntegrity.State state = StampIntegrity.check(root, sha,
+                StampIntegrity.findCertPayload(root, exportDir), exportDir,
+                QTraceConfig.get().outputTrainingDir());
             Platform.runLater(() -> {
                 switch (state) {
                     case OK -> { status.setText("✓ Stamp and data intact"); status.setTextFill(Color.web(GREEN)); }
@@ -1491,13 +1494,21 @@ public class QTraceDashboard {
                         status.setText("⛔ Stamp corrupted — .qtrace edited after signing");
                         status.setTextFill(Color.web(RED));
                     }
+                    case TRACE_EDITED -> {
+                        status.setText("⛔ .qtrace no longer matches its certificate");
+                        status.setTextFill(Color.web(RED));
+                    }
                     case DATA_CHANGED -> {
                         status.setText("⚠ Image data changed since the stamp");
                         status.setTextFill(Color.web(PEACH));
                     }
+                    case FILES_CHANGED -> {
+                        status.setText("⚠ Satellite files changed since the stamp");
+                        status.setTextFill(Color.web(PEACH));
+                    }
                 }
                 status.setStyle("-fx-font-style: normal;");
-                if (state == StampIntegrity.State.SIGNATURE_INVALID || state == StampIntegrity.State.DATA_CHANGED) {
+                if (state.isAlert()) {
                     Button why = new Button("🔍 Why?");
                     why.setStyle("-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";"
                         + "-fx-cursor:hand;-fx-font-size:11;-fx-padding:1 8 1 8;"

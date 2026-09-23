@@ -4,6 +4,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -91,5 +95,55 @@ class StampIntegrityTest {
     void traceWithoutValidationHasNoStamp() {
         root.getAsJsonArray("sessions").get(0).getAsJsonObject().remove("validation");
         assertEquals(StampIntegrity.State.NO_STAMP, StampIntegrity.check(root, QPDATA));
+    }
+
+    // ── with the certificate payload ────────────────────────────────────────
+
+    private JsonObject session() {
+        return root.getAsJsonArray("sessions").get(0).getAsJsonObject();
+    }
+
+    @Test
+    void unsignedFieldEditedAfterTheStampIsTraceEdited() {
+        JsonObject payload = session().deepCopy();
+        session().addProperty("steps_captured", 99);   // not covered by the signature
+        assertEquals(StampIntegrity.State.OK, StampIntegrity.check(root, QPDATA));
+        assertEquals(StampIntegrity.State.TRACE_EDITED,
+            StampIntegrity.check(root, QPDATA, payload, null, null));
+    }
+
+    @Test
+    void satelliteFileChangedAfterTheStampIsFilesChanged(@TempDir Path dir) throws Exception {
+        Path thumb = Files.writeString(dir.resolve("t.jpg"), "pixels");
+        JsonObject ref = new JsonObject();
+        ref.addProperty("type", "thumbnail");
+        ref.addProperty("filename", "t.jpg");
+        ref.addProperty("size_bytes", 6);
+        ref.addProperty("sha256", io.qtrace.chain.Hashing.sha256Hex(thumb));
+        JsonArray files = new JsonArray();
+        files.add(ref);
+        session().add("external_files", files);
+        JsonObject payload = session().deepCopy();
+        assertEquals(StampIntegrity.State.OK, StampIntegrity.check(root, QPDATA, payload, dir, dir));
+        Files.writeString(thumb, "PIXELS");
+        assertEquals(StampIntegrity.State.FILES_CHANGED, StampIntegrity.check(root, QPDATA, payload, dir, dir));
+    }
+
+    @Test
+    void signatureFailureWinsOverTraceEdits() {
+        JsonObject payload = session().deepCopy();
+        validation().addProperty("statusLabel", "2-Finished");
+        assertEquals(StampIntegrity.State.SIGNATURE_INVALID,
+            StampIntegrity.check(root, QPDATA, payload, null, null));
+    }
+
+    @Test
+    void findsTheCertificatePayloadOfTheStampedSession(@TempDir Path dir) throws Exception {
+        session().addProperty("session_id", "s-42");
+        validation().addProperty("case_id", "proj/p.qpproj");
+        Path certs = Files.createDirectories(dir.resolve("case_proj_p.qpproj").resolve("certs"));
+        Files.writeString(certs.resolve("qtc_X.qtcert"),
+            "{\"certificate_id\":\"qtc_X\",\"qtrace_payload\":{\"session_id\":\"s-42\"}}");
+        assertEquals("s-42", StampIntegrity.findCertPayload(root, dir).get("session_id").getAsString());
     }
 }

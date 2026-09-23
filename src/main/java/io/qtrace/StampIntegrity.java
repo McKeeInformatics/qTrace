@@ -44,8 +44,74 @@ public final class StampIntegrity {
         OK,
         /** The .qtrace stamp fields were edited after signing. */
         SIGNATURE_INVALID,
+        /** Signature valid, but the stamped session no longer matches its certificate
+         *  (unsigned fields such as steps or parameters were edited). */
+        TRACE_EDITED,
         /** The stamp is intact, but the .qpdata is no longer the one it certified. */
-        DATA_CHANGED
+        DATA_CHANGED,
+        /** Stamp and data intact, but a satellite file (thumbnail, GeoJSON, log) changed. */
+        FILES_CHANGED;
+
+        /** States the panel and the Dashboard alert on. */
+        public boolean isAlert() {
+            return this == SIGNATURE_INVALID || this == TRACE_EDITED || this == DATA_CHANGED || this == FILES_CHANGED;
+        }
+    }
+
+    /**
+     * Full check against the stamp's certificate: signature, then the stamped session vs
+     * {@code certPayload} (null when there is no certificate — Core), then the .qpdata,
+     * then satellite files in {@code exportDir} and the GeoJSON in {@code trainingDir}.
+     */
+    public static State check(JsonObject root, String currentQpdataSha256, JsonObject certPayload,
+                              java.nio.file.Path exportDir, java.nio.file.Path trainingDir) {
+        State base = check(root, currentQpdataSha256);
+        if (base == State.NO_STAMP || base == State.SIGNATURE_INVALID || certPayload == null) return base;
+        JsonObject session = latestValidatedSession(root);
+        if (session != null && !ProvenanceDiff.diffSession(certPayload, session, null).isEmpty())
+            return State.TRACE_EDITED;
+        if (base == State.DATA_CHANGED) return base;
+        JsonArray files = certPayload.has("external_files") && certPayload.get("external_files").isJsonArray()
+            ? certPayload.getAsJsonArray("external_files") : new JsonArray();
+        boolean filesChanged = !ProvenanceDiff.checkFiles(files, exportDir).isEmpty();
+        JsonObject ann = obj(certPayload, "annotations");
+        if (ann != null)
+            filesChanged |= !ProvenanceDiff.checkGeoJson(str(ann, "geojson_file", null),
+                str(ann, "geojson_sha256", null), trainingDir).isEmpty();
+        return filesChanged ? State.FILES_CHANGED : base;
+    }
+
+    /** The .qtcert payload of the latest stamped session, in {@code <exportDir>/case_<caseId>/certs/}. */
+    public static JsonObject findCertPayload(JsonObject root, java.nio.file.Path exportDir) {
+        JsonObject session = latestValidatedSession(root);
+        if (session == null || exportDir == null) return null;
+        String caseId = str(obj(session, "validation"), "case_id", null);
+        String sessionId = str(session, "session_id", null);
+        if (caseId == null || sessionId == null) return null;
+        java.nio.file.Path certs = exportDir
+            .resolve("case_" + caseId.replaceAll("[^a-zA-Z0-9._-]", "_")).resolve("certs");
+        if (!java.nio.file.Files.isDirectory(certs)) return null;
+        try (var files = java.nio.file.Files.list(certs)) {
+            for (var p : (Iterable<java.nio.file.Path>) files.filter(f -> f.toString().endsWith(".qtcert"))::iterator) {
+                try {
+                    JsonObject payload = obj(com.google.gson.JsonParser.parseString(
+                        java.nio.file.Files.readString(p)).getAsJsonObject(), "qtrace_payload");
+                    if (payload != null && sessionId.equals(str(payload, "session_id", null))) return payload;
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /** Last session carrying a validation block (sessions exported without a stamp are skipped). */
+    public static JsonObject latestValidatedSession(JsonObject root) {
+        if (root == null || !root.has("sessions") || !root.get("sessions").isJsonArray()) return null;
+        JsonArray sessions = root.getAsJsonArray("sessions");
+        for (int i = sessions.size() - 1; i >= 0; i--) {
+            JsonObject s = sessions.get(i).getAsJsonObject();
+            if (obj(s, "validation") != null) return s;
+        }
+        return null;
     }
 
     /**

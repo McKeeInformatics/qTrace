@@ -422,7 +422,10 @@ public class QTraceController {
                     Path qpdata = entry.getEntryPath().resolve("data.qpdata");
                     if (Files.exists(qpdata)) sha = io.qtrace.chain.Hashing.sha256Hex(qpdata);
                 }
-                StampIntegrity.State state = StampIntegrity.check(root, sha);
+                Path exportDir = qtrace.toPath().getParent();
+                StampIntegrity.State state = StampIntegrity.check(root, sha,
+                    StampIntegrity.findCertPayload(root, exportDir), exportDir,
+                    QTraceConfig.get().outputTrainingDir());
                 if (gen != integrityGen.get()) return;
                 panel.setIntegrity(state, () -> ProvenanceDiffDialog.show(qupath.getStage(), root, qtrace, entry));
             } catch (Exception e) {
