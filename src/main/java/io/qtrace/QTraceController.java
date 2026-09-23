@@ -765,6 +765,14 @@ public class QTraceController {
             if (panel != null) panel.log("Nothing to record — no steps captured yet.");
             return;
         }
+        // The stamp binds qpdata_sha256 to the file on disk: stamping unsaved work would
+        // certify a stale .qpdata that doesn't contain what the validator is attesting.
+        var imageData = logger.getCurrentImageData();
+        if (imageData != null && imageData.isChanged()) {
+            showSaveBeforeStampInfo();
+            if (panel != null) panel.log("Stamp cancelled — save the image first (File › Save, Ctrl+S).");
+            return;
+        }
         logger.refreshAllAnnotationCaptures();
         ensureProjectFolderDirs();
         String currentStatus = readCurrentStatus();
@@ -789,6 +797,17 @@ public class QTraceController {
                 },
                 () -> { if (panel != null) panel.log("Record cancelled."); }
             );
+    }
+
+    private void showSaveBeforeStampInfo() {
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.initOwner(qupath.getStage());
+        a.setTitle("qTrace — Save before stamping");
+        a.setHeaderText("This image has unsaved changes");
+        a.setContentText(
+            "The stamp certifies the image data as saved on disk. Save the image first "
+          + "(File › Save, or Ctrl+S), then click Stamp again.");
+        a.showAndWait();
     }
 
     /** Creates the <project>/qTrace/{trace,geoJson,logs,gitTrack} subfolders on Stamp, when Project Folder mode is on. */
