@@ -51,8 +51,14 @@ public final class JarInstaller {
 
     /** Writes {@code data} as {@code qtrace-<module>-<version>.jar} in {@code dir} (atomic rename). */
     public static Path install(Path dir, String module, String version, byte[] data) throws Exception {
-        Path target = dir.resolve("qtrace-" + module + "-" + version + ".jar");
-        Path tmp = dir.resolve("qtrace-" + module + "-" + version + ".jar.part");
+        return install(dir, module, version, data, ".jar");
+    }
+
+    /** Same with an explicit extension — ".qtjar" under the qTrace loader (never loaded by QuPath). */
+    public static Path install(Path dir, String module, String version, byte[] data, String extension)
+            throws Exception {
+        Path target = dir.resolve("qtrace-" + module + "-" + version + extension);
+        Path tmp = dir.resolve("qtrace-" + module + "-" + version + extension + ".part");
         Files.write(tmp, data);
         Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
         return target;

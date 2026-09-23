@@ -68,9 +68,12 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         if (installed) return;
         installed = true;
 
-        // Best-effort cleanup of superseded JARs left by a previous auto-update.
-        QTraceUpdater.reapOldJars(QTraceExtension.class, "compliance");
-        QTraceUpdater.reapOldJars(QTraceExtension.class, "core");
+        // Best-effort cleanup of superseded JARs left by a previous auto-update — only for a
+        // direct install; under the qTrace loader, the loader keeps/cleans module versions.
+        if (!QTraceUpdater.loaderMode()) {
+            QTraceUpdater.reapOldJars(QTraceExtension.class, "compliance");
+            QTraceUpdater.reapOldJars(QTraceExtension.class, "core");
+        }
 
         // Register the highest-version QTracePlugin among those discovered — an update
         // may leave two Compliance JARs loaded until the old file is reaped next restart.
@@ -124,8 +127,12 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
 
         // ── Startup update checks (async; user-validated, applied on restart) ──
         // Both checks are Core-driven so an old Compliance JAR still gets updated.
-        QTraceUpdater.checkCore(qupath);
-        QTraceUpdater.checkCompliance(qupath, QTracePluginManager.get());
+        if (QTraceUpdater.loaderMode()) {
+            QTraceUpdater.checkModules(qupath);
+        } else {
+            QTraceUpdater.checkCore(qupath);
+            QTraceUpdater.checkCompliance(qupath, QTracePluginManager.get());
+        }
     }
 
     private static String nz(String s) { return s != null ? s : "0"; }

@@ -83,6 +83,10 @@ public final class QTraceUpdater {
     private static final String SERVER = System.getProperty("qtrace.update.server",
         "https://www.qtrace.ca");
     private static final String VERSION_URL = SERVER + "/api/version";
+    // Loader mode (docs/architecture/loader.md § 7): same descriptors as the loader.
+    private static final String BOOTSTRAP_URL = System.getProperty("qtrace.loader.bootstrap",
+        "https://github.com/RomainTourte/qTrace-core/releases/latest/download/qtrace-bootstrap.json");
+    private static final String MODULES_URL = SERVER + "/api/modules";
     private static final String COMP_DOWNLOAD_URL = SERVER + "/api/download/compliance/licensed";
 
     @FunctionalInterface
@@ -146,6 +150,67 @@ public final class QTraceUpdater {
                 log.info(TAG + "core check failed: {}", e.toString());
             } finally {
                 if (!handedOff) taskDone(qupath);
+            }
+        });
+    }
+
+    // ── Loader mode: every module from the loader's descriptors ─────────────────
+
+    /** True when Core runs from a .qtjar, i.e. was loaded by the qTrace loader. */
+    public static boolean loaderMode() {
+        try {
+            var src = QTraceUpdater.class.getProtectionDomain().getCodeSource();
+            return src != null && ModuleUpdates.isLoaderMode(Path.of(src.getLocation().toURI()));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Async, safe. Under the loader: offers every module of the release bootstrap and, with a
+     * license, of /api/modules that is newer than what extensions/qtrace/ already holds
+     * (a version downloaded but not loaded yet is not offered again). Nothing is deleted —
+     * the loader keeps/cleans versions at the next start.
+     */
+    public static void checkModules(QuPathGUI qupath) {
+        if (!QTraceConfig.get().isUpdateCheckEnabled()) {
+            log.info(TAG + "modules check skipped: update check disabled in config");
+            return;
+        }
+        openTasks.incrementAndGet();
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<ModuleUpdates.Offer> remote = new ArrayList<>();
+                try {
+                    remote.addAll(ModuleUpdates.parse(
+                        new String(httpGetBytes(BOOTSTRAP_URL, null), StandardCharsets.UTF_8), false));
+                } catch (Exception e) {
+                    log.info(TAG + "bootstrap descriptor unavailable: {}", e.toString());
+                }
+                String jwt = licenseJwt();
+                if (jwt != null) {
+                    try {
+                        remote.addAll(ModuleUpdates.parse(
+                            new String(httpGetBytes(MODULES_URL, jwt), StandardCharsets.UTF_8), true));
+                    } catch (Exception e) {
+                        log.info(TAG + "licensed modules descriptor unavailable: {}", e.toString());
+                    }
+                }
+                Path dir = extensionsDir(QTraceUpdater.class);
+                var local = ModuleUpdates.localVersions(dir);
+                log.info(TAG + "modules check: local={} remote={}", local,
+                    remote.stream().map(o -> o.module() + " " + o.version()).toList());
+                for (ModuleUpdates.Offer o : ModuleUpdates.pending(remote, local)) {
+                    openTasks.incrementAndGet();
+                    final String bearer = o.licensed() ? jwt : null;
+                    Downloader dl = () -> httpGetBytes(o.url(), bearer);
+                    if (!promptAndInstall(qupath, o.module(), local.getOrDefault(o.module(), "0"),
+                            o.version(), o.sha256(), dl)) taskDone(qupath);
+                }
+            } catch (Exception e) {
+                log.info(TAG + "modules check failed: {}", e.toString());
+            } finally {
+                taskDone(qupath);
             }
         });
     }
@@ -236,7 +301,7 @@ public final class QTraceUpdater {
         // Shown only once no modal dialog is open (QuPath's Welcome window at startup):
         // stacked on top of it, the post-install "Quit QuPath Now" could never work.
         Platform.runLater(() -> whenNoModalOpen("update prompt", () -> {
-            String label = "core".equals(module) ? "Core" : "Compliance";
+            String label = moduleLabel(module);
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
             alert.setTitle(QTraceI18n.t("update.title"));
             alert.setHeaderText(QTraceI18n.t("update.available")
@@ -277,7 +342,9 @@ public final class QTraceUpdater {
                     throw new Exception("SHA-256 mismatch (expected " + expectedSha256 + ", got " + actual + ")");
             }
 
-            Path target = JarInstaller.install(extensionsDir(QTraceUpdater.class), module, remoteVer, data);
+            boolean underLoader = loaderMode();
+            Path target = JarInstaller.install(extensionsDir(QTraceUpdater.class), module, remoteVer, data,
+                underLoader ? ".qtjar" : ".jar");
             log.info(TAG + "{}: wrote {}", module, target);
 
             // Remove the superseded file(s) for this module NOW rather than waiting for the
@@ -290,10 +357,10 @@ public final class QTraceUpdater {
             // classes is ever actually visible, regardless of which ServiceLoader entry we
             // pick. Reaping right away means only the new file exists at the next restart, so
             // there is nothing left to be ambiguous about — one restart is enough.
-            QTraceUpdater.reapOldJars(QTraceUpdater.class, module);
+            if (!underLoader) QTraceUpdater.reapOldJars(QTraceUpdater.class, module);
 
             synchronized (installedThisSession) {
-                installedThisSession.add(("core".equals(module) ? "Core" : "Compliance") + " v" + remoteVer);
+                installedThisSession.add(moduleLabel(module) + " v" + remoteVer);
             }
         } catch (Exception e) {
             log.warn(TAG + "{}: install of {} failed", module, remoteVer, e);
@@ -301,6 +368,12 @@ public final class QTraceUpdater {
         } finally {
             taskDone(qupath);
         }
+    }
+
+    private static String moduleLabel(String module) {
+        if ("core".equals(module)) return "Core";
+        if ("compliance".equals(module)) return "Compliance";
+        return module.isEmpty() ? module : Character.toUpperCase(module.charAt(0)) + module.substring(1);
     }
 
     /** Closes one open task; the last one shows the single post-install dialog. */
