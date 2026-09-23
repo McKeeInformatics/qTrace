@@ -400,10 +400,9 @@ public final class QTraceUpdater {
         try {
             var src = anchor.getProtectionDomain().getCodeSource();
             if (src != null && src.getLocation() != null) {
-                Path p = Path.of(src.getLocation().toURI());
-                if (Files.isRegularFile(p) && p.getFileName().toString().endsWith(".jar"))
-                    return p.getParent();
-                if (Files.isDirectory(p)) return p; // running from classes dir (dev)
+                // .jar (direct install) or .qtjar (extensions/qtrace/ under the loader)
+                Path dir = ModuleUpdates.folderOf(Path.of(src.getLocation().toURI()));
+                if (dir != null) return dir;
             }
         } catch (Exception ignored) {}
         try {

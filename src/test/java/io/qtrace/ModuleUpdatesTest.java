@@ -65,6 +65,16 @@ class ModuleUpdatesTest {
     }
 
     @Test
+    void folderOfCodeSource_acceptsQtjar_soUpdatesLandInExtensionsQtrace() throws Exception {
+        Path qtjar = qtjar("qtrace-core-1.2.0.qtjar", "core", "1.2.0");
+        Path jar = Files.writeString(dir.resolve("qtrace-core-1.1.5.jar"), "x");
+        assertEquals(dir, ModuleUpdates.folderOf(qtjar));
+        assertEquals(dir, ModuleUpdates.folderOf(jar));
+        assertEquals(dir, ModuleUpdates.folderOf(dir)); // classes directory (dev)
+        assertEquals(null, ModuleUpdates.folderOf(dir.resolve("missing.qtjar")));
+    }
+
+    @Test
     void loaderMode_isDetectedFromTheCodeSource() {
         assertTrue(ModuleUpdates.isLoaderMode(Path.of("/x/extensions/qtrace/qtrace-core-1.2.0.qtjar")));
         assertFalse(ModuleUpdates.isLoaderMode(Path.of("/x/extensions/qtrace-core-1.1.5.jar")));

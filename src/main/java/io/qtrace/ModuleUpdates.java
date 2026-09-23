@@ -89,6 +89,20 @@ public final class ModuleUpdates {
         }).toList();
     }
 
+    /**
+     * Folder holding the module file a class was loaded from — a .jar (direct install) or a
+     * .qtjar (extensions/qtrace/ under the loader) — or the classes directory in dev; null
+     * otherwise.
+     */
+    public static Path folderOf(Path codeSource) {
+        if (codeSource == null) return null;
+        if (Files.isDirectory(codeSource)) return codeSource;
+        String n = codeSource.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (Files.isRegularFile(codeSource) && (n.endsWith(".jar") || n.endsWith(".qtjar")))
+            return codeSource.getParent();
+        return null;
+    }
+
     /** True when Core was loaded from a .qtjar, i.e. through the qTrace loader. */
     public static boolean isLoaderMode(Path codeSource) {
         return codeSource != null
