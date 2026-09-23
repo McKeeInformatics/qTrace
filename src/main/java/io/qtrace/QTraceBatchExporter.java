@@ -290,7 +290,7 @@ public class QTraceBatchExporter {
         Set<String> alreadyExported = new HashSet<>();
         if (cfg.skipExisting()) {
             try {
-                Path exportDir = QTraceConfig.get().getExportDir();
+                Path exportDir = QTraceConfig.get().outputExportDir();
                 if (Files.exists(exportDir)) {
                     Files.list(exportDir)
                         .filter(p -> p.toString().endsWith(".qtrace"))

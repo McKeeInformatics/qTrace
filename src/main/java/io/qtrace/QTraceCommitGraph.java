@@ -185,7 +185,7 @@ public class QTraceCommitGraph {
         FileChooser fc = new FileChooser();
         fc.setTitle(QTraceI18n.t("graph.open"));
         try {
-            File dir = QTraceConfig.get().getExportDir().toFile();
+            File dir = QTraceConfig.get().readExportDir().orElse(QTraceConfig.get().getExportDir()).toFile();
             if (dir.isDirectory()) fc.setInitialDirectory(dir);
         } catch (Exception ignored) {}
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(".qtrace", "*.qtrace"));

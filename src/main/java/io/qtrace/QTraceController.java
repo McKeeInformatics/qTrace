@@ -153,7 +153,7 @@ public class QTraceController {
     private Path            lastCertPath  = null;  // written by exportReport(), used by pushToWorkspace()
     private Path            lastQtracePath = null;
     private Path            lastThumbnailPath = null;
-    private Path            lastGeojsonPath = null; // manual annotations GeoJSON — lives in QTraceConfig.getTrainingDir(), not outDir
+    private Path            lastGeojsonPath = null; // manual annotations GeoJSON — lives in QTraceConfig.outputTrainingDir(), not outDir
     // Captured-step count at the moment of lastStamp — imageHash alone (pixel content)
     // doesn't change when new steps/annotations are added to the same image, so it can't
     // tell "stamped" from "stamped, then more work happened" on its own.
@@ -178,6 +178,11 @@ public class QTraceController {
 
     public QTraceController(QuPathGUI qupath) {
         this.qupath = qupath;
+        // Project Folder mode resolves every qTrace folder against the open project.
+        QTraceConfig.setProjectDirSupplier(() -> {
+            var project = qupath.getProject();
+            return project != null && project.getPath() != null ? project.getPath().getParent() : null;
+        });
         // Logger starts immediately — panel-less, silent until panel is attached
         this.logger = new ActionLogger(qupath, null);
         // Upload availability depends on the image SHA-256, computed asynchronously;
@@ -245,7 +250,7 @@ public class QTraceController {
             }
             String imageName = imageData.getServer().getMetadata().getName();
             String base = imageName.replaceAll("[^a-zA-Z0-9._-]", "_");
-            Path exportDir  = QTraceConfig.get().getExportDir();
+            Path exportDir  = QTraceConfig.get().outputExportDir();
             Path qtracePath = exportDir.resolve(base + ".qtrace");
             if (!Files.exists(qtracePath) || !Files.isDirectory(exportDir)) {
                 panel.setPushEnabled(false);
@@ -335,6 +340,20 @@ public class QTraceController {
     }
 
     public void showDashboard() {
+        // Use Project Folder on + no project open: ask for a project rather than showing
+        // whatever sits in the configured fallback folder.
+        if (QTraceConfig.get().readExportDir().isEmpty()) {
+            Alert a = new Alert(Alert.AlertType.INFORMATION);
+            a.setTitle("qTrace — Dashboard");
+            a.setHeaderText(QTraceI18n.t("dashboard.project.header"));
+            a.setContentText(QTraceI18n.t("dashboard.project.content"));
+            if (qupath.getStage() != null) a.initOwner(qupath.getStage());
+            ButtonType open = new ButtonType(QTraceI18n.t("dashboard.project.open"), ButtonBar.ButtonData.OK_DONE);
+            a.getButtonTypes().setAll(open, ButtonType.CANCEL);
+            if (a.showAndWait().orElse(ButtonType.CANCEL) != open) return;
+            qupath.getCommonActions().PROJECT_OPEN.handle(new javafx.event.ActionEvent());
+            if (QTraceConfig.get().readExportDir().isEmpty()) return; // still no project
+        }
         if (dashboard == null || !dashboard.isShowing()) {
             dashboard = new QTraceDashboard(qupath);
             dashboard.show();
@@ -383,7 +402,7 @@ public class QTraceController {
             if (imageData == null) return null;
             String base = imageData.getServer().getMetadata().getName()
                 .replaceAll("[^a-zA-Z0-9._-]", "_");
-            Path outFile = QTraceConfig.get().getExportDir().resolve(base + ".qtrace");
+            Path outFile = QTraceConfig.get().outputExportDir().resolve(base + ".qtrace");
             return Files.exists(outFile) ? outFile.toFile() : null;
         } catch (Exception ignored) { return null; }
     }
@@ -825,7 +844,7 @@ public class QTraceController {
             if (imageData == null) return null;
             String imageName = imageData.getServer().getMetadata().getName();
             String base = imageName.replaceAll("[^a-zA-Z0-9._-]", "_");
-            java.nio.file.Path outFile = QTraceConfig.get().getExportDir().resolve(base + ".qtrace");
+            java.nio.file.Path outFile = QTraceConfig.get().outputExportDir().resolve(base + ".qtrace");
             if (!java.nio.file.Files.exists(outFile)) return null;
             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(outFile)).getAsJsonObject();
             return root.has("status") ? root.get("status").getAsString() : null;
@@ -838,7 +857,7 @@ public class QTraceController {
             return;
         }
         try {
-            Path outDir  = QTraceConfig.get().getExportDir();
+            Path outDir  = QTraceConfig.get().outputExportDir();
             var exporter = new QTraceExporter(logger, null, lastStamp);
             exporter.setExtensions(collectLoadedExtensions());
             Path outFile = exporter.export(outDir);
@@ -865,7 +884,7 @@ public class QTraceController {
                 if (panel != null) panel.log("  thumbnail: " + e.getMessage());
             }
 
-            // Manual annotations GeoJSON — written by the exporter into getTrainingDir(),
+            // Manual annotations GeoJSON — written by the exporter into outputTrainingDir(),
             // a separately configurable directory, not outDir. Resolve it here (rather than
             // in QTraceExporter) since it's read back from the .qtrace we just wrote anyway,
             // same as the certificate block below.
@@ -879,7 +898,7 @@ public class QTraceController {
                 String geoName = annObj != null && annObj.has("geojson_file")
                     ? annObj.get("geojson_file").getAsString() : null;
                 if (geoName != null && !geoName.isBlank()) {
-                    Path candidate = QTraceConfig.get().getTrainingDir().resolve(geoName);
+                    Path candidate = QTraceConfig.get().outputTrainingDir().resolve(geoName);
                     if (Files.exists(candidate)) lastGeojsonPath = candidate;
                 }
             } catch (Exception ignored) {}
@@ -1192,7 +1211,7 @@ public class QTraceController {
             logger.computeClassifierFidelity().name(), 1, "1-In Progress",
             null, null);  // signature + validatorKeyPub: unsigned (batch path, no dialog)
 
-        Path exportDir = QTraceConfig.get().getExportDir();
+        Path exportDir = QTraceConfig.get().outputExportDir();
         var  exporter  = new QTraceExporter(logger, null, lastStamp);
         exporter.setExtensions(collectLoadedExtensions());
         Path out       = exporter.export(exportDir);

@@ -25,6 +25,8 @@ import com.google.gson.GsonBuilder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Persistent configuration for QTrace export paths.
@@ -144,6 +146,52 @@ public class QTraceConfig {
     public Path resolveClassifierDir(Path projectBaseDir) { return resolveDir(isUseProjectFolder(), projectBaseDir, GITTRACK_SUBDIR, getClassifierDir()); }
     public Path resolveTrainingDir(Path projectBaseDir)   { return resolveDir(isUseProjectFolder(), projectBaseDir, GEOJSON_SUBDIR,  getTrainingDir());   }
     public Path resolveLogsDir(Path projectBaseDir)       { return resolveDir(isUseProjectFolder(), projectBaseDir, LOGS_SUBDIR,     getLogsDir());       }
+
+    /**
+     * Folder a reader (Dashboard, version graph) should look in. Unlike {@link #resolveDir},
+     * Project Folder mode without an open project yields empty — the caller asks for a
+     * project instead of silently showing whatever sits in the configured fallback folder.
+     */
+    public static Optional<Path> readDir(boolean useProjectFolder, Path projectBaseDir, String subdir, Path fallback) {
+        if (useProjectFolder) {
+            return projectBaseDir == null ? Optional.empty()
+                : Optional.of(projectBaseDir.resolve(PROJECT_SUBDIR).resolve(subdir));
+        }
+        return Optional.ofNullable(fallback);
+    }
+
+    // The open QuPath project's folder, supplied by QTraceController (null = no project).
+    private static volatile Supplier<Path> projectDirSupplier = () -> null;
+
+    public static void setProjectDirSupplier(Supplier<Path> supplier) {
+        projectDirSupplier = supplier != null ? supplier : () -> null;
+    }
+
+    /** Base folder of the open QuPath project, or null. */
+    public static Path currentProjectDir() {
+        try { return projectDirSupplier.get(); } catch (Exception e) { return null; }
+    }
+
+    // ── Effective folders — what every reader/writer must use ─────────────────
+    // Project Folder mode redirects to <project>/qTrace/<subdir> (created on demand) when a
+    // project is open; otherwise the configured folder. Writers keep the configured folder
+    // as a fallback when no project is open, so no provenance is ever lost.
+
+    public Path outputExportDir()     { return ensured(resolveExportDir(currentProjectDir())); }
+    public Path outputClassifierDir() { return ensured(resolveClassifierDir(currentProjectDir())); }
+    public Path outputTrainingDir()   { return ensured(resolveTrainingDir(currentProjectDir())); }
+
+    /** Where readers look for .qtrace files; empty = Project Folder mode but no project open. */
+    public Optional<Path> readExportDir() {
+        return readDir(isUseProjectFolder(), currentProjectDir(), TRACE_SUBDIR, getExportDir());
+    }
+
+    private Path ensured(Path dir) {
+        if (dir != null && isUseProjectFolder() && currentProjectDir() != null) {
+            try { Files.createDirectories(dir); } catch (IOException ignored) {}
+        }
+        return dir;
+    }
 
     /** Creates the four Project Folder mode subfolders under {@code <projectBaseDir>/qTrace/} if missing. */
     public static void createProjectDirs(Path projectBaseDir) throws IOException {

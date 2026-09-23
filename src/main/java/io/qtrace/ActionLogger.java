@@ -1842,11 +1842,11 @@ public class ActionLogger implements WorkflowListener {
 
             // Git commit + TPC JSON for provenance
             try {
-                Path dest = QTraceConfig.get().getClassifierDir()
+                Path dest = QTraceConfig.get().outputClassifierDir()
                     .resolve("classifiers").resolve(name + ".json");
                 Files.createDirectories(dest.getParent());
                 Files.writeString(dest, json);
-                record.gitHash = new GitBridge(QTraceConfig.get().getClassifierDir())
+                record.gitHash = new GitBridge(QTraceConfig.get().outputClassifierDir())
                     .commit(dest, "QTrace classifier loaded: " + name
                         + " (user=" + user + ", sha=" + sha256.substring(0, 8) + ")");
                 if (panel != null) panel.log("  git    : " + record.gitHash);
@@ -2326,8 +2326,8 @@ public class ActionLogger implements WorkflowListener {
             panel.log("  training images: " + String.join(", ", trainingImages));
 
         // ── Export training GeoJSON (PC-4) ───────────────────────────────
-        Path trainingDir    = QTraceConfig.get().getTrainingDir();
-        Path classifierDir  = QTraceConfig.get().getClassifierDir();
+        Path trainingDir    = QTraceConfig.get().outputTrainingDir();
+        Path classifierDir  = QTraceConfig.get().outputClassifierDir();
         try {
             if (!training.isEmpty()) {
                 String geoFname = exportTrainingAnnotations(name, training, trainingDir);
@@ -2370,7 +2370,7 @@ public class ActionLogger implements WorkflowListener {
             String safeName  = imageName.replaceAll("[^a-zA-Z0-9._-]", "_");
             String filename  = "TPC-" + safeName + "-" + tsShort + ".json";
 
-            Path outDir = QTraceConfig.get().getTrainingDir();
+            Path outDir = QTraceConfig.get().outputTrainingDir();
             Files.createDirectories(outDir);
 
             com.google.gson.Gson gson = new com.google.gson.GsonBuilder()

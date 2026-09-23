@@ -530,7 +530,9 @@ public class QTraceDashboard {
         allRows.clear();
         ScanResult scan = scanAllRows(qupath);
         allRows.addAll(scan.rows());
-        String dirPath = scan.dirPath() != null ? scan.dirPath() : "(not configured)";
+        String dirPath = scan.dirPath() != null ? scan.dirPath()
+            : QTraceConfig.get().isUseProjectFolder() ? "(open a QuPath project — Use Project Folder is on)"
+            : "(not configured)";
         pendingScanSummary = "📁  " + dirPath
             + "  (" + scan.qtraceCount() + " .qtrace  •  " + allRows.size() + " image(s))";
     }
@@ -542,7 +544,9 @@ public class QTraceDashboard {
         List<RowData> rows = new ArrayList<>();
 
         File qtDir = null;
-        try { qtDir = QTraceConfig.get().getExportDir().toFile(); } catch (Exception ignored) {}
+        // Project Folder mode: <project>/qTrace/trace, or nothing without an open project
+        // (QTraceController.showDashboard asks for one) — never the configured fallback.
+        try { qtDir = QTraceConfig.get().readExportDir().map(Path::toFile).orElse(null); } catch (Exception ignored) {}
 
         Map<String, JsonObject> qtraceMap = new LinkedHashMap<>();
         Map<String, File>       fileMap   = new LinkedHashMap<>();
@@ -3109,7 +3113,7 @@ public class QTraceDashboard {
         chooser.setTitle(QTraceI18n.t("export.csv.save.title"));
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV", "*.csv"));
         try {
-            File dir = QTraceConfig.get().getExportDir().toFile();
+            File dir = QTraceConfig.get().readExportDir().orElse(QTraceConfig.get().getExportDir()).toFile();
             if (dir.exists()) chooser.setInitialDirectory(dir);
         } catch (Exception ignored) {}
         chooser.setInitialFileName("qtrace-export-" + LocalDate.now() + ".csv");

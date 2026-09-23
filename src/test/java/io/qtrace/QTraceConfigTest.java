@@ -6,6 +6,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -52,4 +54,44 @@ class QTraceConfigTest {
         assertTrue(Files.isDirectory(root.resolve("gitTrack")));
     }
 
+    // ── Reading side (Dashboard, version graph) ──────────────────────────────
+
+    @Test
+    void readDir_projectMode_withProject_isTheProjectSubfolder() {
+        Path project = Path.of("/my/project");
+        assertEquals(Optional.of(project.resolve("qTrace").resolve("trace")),
+            QTraceConfig.readDir(true, project, QTraceConfig.TRACE_SUBDIR, FALLBACK));
+    }
+
+    @Test
+    void readDir_projectMode_withoutProject_isEmpty_notTheFallback() {
+        // Use Project Folder on + no project open: the Dashboard must ask for a project
+        // instead of silently showing whatever sits in the configured fallback folder.
+        assertEquals(Optional.empty(), QTraceConfig.readDir(true, null, QTraceConfig.TRACE_SUBDIR, FALLBACK));
+    }
+
+    @Test
+    void readDir_projectModeOff_isTheConfiguredFolder() {
+        assertEquals(Optional.of(FALLBACK),
+            QTraceConfig.readDir(false, Path.of("/my/project"), QTraceConfig.TRACE_SUBDIR, FALLBACK));
+    }
+
+    // ── Writing side: every output honours Project Folder mode ─────────────
+
+    @Test
+    void outputDirs_followTheCurrentProject_whenProjectModeIsOn(@TempDir Path project) {
+        QTraceConfig cfg = QTraceConfig.get();
+        boolean was = cfg.isUseProjectFolder();
+        try {
+            cfg.setUseProjectFolder(true);
+            QTraceConfig.setProjectDirSupplier(() -> project);
+            assertEquals(project.resolve("qTrace/trace"), cfg.outputExportDir());
+            assertEquals(project.resolve("qTrace/gitTrack"), cfg.outputClassifierDir());
+            assertEquals(project.resolve("qTrace/geoJson"), cfg.outputTrainingDir());
+            assertTrue(Files.isDirectory(project.resolve("qTrace/trace")), "created on demand");
+        } finally {
+            cfg.setUseProjectFolder(was);
+            QTraceConfig.setProjectDirSupplier(() -> null);
+        }
+    }
 }
