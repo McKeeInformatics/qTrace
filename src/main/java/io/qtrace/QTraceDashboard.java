@@ -915,24 +915,9 @@ public class QTraceDashboard {
         String shieldText, shieldColor;
         {
             JsonObject val = hasSession ? jsonObj(session, "validation") : null;
-            String sig    = val != null ? str(val, "signature",       "") : "";
-            String pubKey = val != null ? str(val, "validatorKeyPub", "") : "";
-            if (!sig.isEmpty() && !pubKey.isEmpty()) {
-                String vldtr    = str(val, "validator",    "");
-                String scope    = str(val, "scope",        "");
-                String conf     = str(val, "confidence",   "");
-                String ts       = str(val, "timestamp",    "");
-                String imgHash  = str(val, "imageHash",    "");
-                String stLbl    = str(val, "statusLabel",  "");
-                String qpdataSha = str(val, "qpdata_sha256", null);
-                if (imgHash.isEmpty()) {
-                    JsonObject img = jsonObj(root, "image");
-                    if (img != null) imgHash = str(img, "sha256", "");
-                }
-                if (stLbl.isEmpty() && root != null) stLbl = str(root, "status", "");
-                String payload = buildCanonicalPayload(
-                    vldtr, scope, conf, stLbl, imgHash, qpdataSha, ts, pubKey);
-                boolean ok = StampSigner.verify(payload, pubKey, sig);
+            Boolean valid = val != null ? StampIntegrity.verifyValidation(val, root, true) : null;
+            if (valid != null) {
+                boolean ok = valid;
                 shieldText  = ok ? "signed" : "corrupted";
                 shieldColor = ok ? GREEN : RED;
             } else if (val != null && !str(val, "validator", "").isEmpty()) {
@@ -1355,6 +1340,8 @@ public class QTraceDashboard {
         File qtraceFile = (selectedData != null) ? selectedData.qtraceFile() : null;
         HBox anchorRow = buildAnchorRow(latestVal, qtraceFile);
         imageCardContent.getChildren().add(anchorRow);
+        String imgName = selectedData != null ? selectedData.imageName() : null;
+        imageCardContent.getChildren().add(buildIntegrityRow(root, qtraceFile, imgName));
 
         if (validatedSessions.size() <= 1) return;
 
@@ -1416,21 +1403,10 @@ public class QTraceDashboard {
         left.getChildren().add(details);
 
         // ── Signature verification ────────────────────────────────────────────
-        String signature    = str(val, "signature",       "");
         String validatorKey = str(val, "validatorKeyPub", "");
-        if (!signature.isEmpty() && !validatorKey.isEmpty()) {
-            String imageHash   = str(val, "imageHash",    "");
-            String statusLabel = str(val, "statusLabel",  "");
-            String qpdataSha   = str(val, "qpdata_sha256", null);
-            if (imageHash.isEmpty() && root != null) {
-                JsonObject img = jsonObj(root, "image");
-                if (img != null) imageHash = str(img, "sha256", "");
-            }
-            if (statusLabel.isEmpty() && isLatest && root != null)
-                statusLabel = str(root, "status", "");
-            String payload = buildCanonicalPayload(
-                validator, scope, confidence, statusLabel, imageHash, qpdataSha, timestamp, validatorKey);
-            boolean valid = StampSigner.verify(payload, validatorKey, signature);
+        Boolean validOrNull = StampIntegrity.verifyValidation(val, root, isLatest);
+        if (validOrNull != null) {
+            boolean valid = validOrNull;
             String badgeText  = valid ? "🔐  Signature ED25519 ✓" : "⚠  Signature invalide";
             String badgeColor = valid ? GREEN : RED;
             Label badge = lbl(badgeText, badgeColor, 11, FontWeight.BOLD, false);
@@ -1484,6 +1460,60 @@ public class QTraceDashboard {
      * Layout of returned HBox:
      *   "Anchor"  [badge label]
      */
+    /**
+     * "Integrity" row: stamp signature + whether the .qpdata on disk is still the stamped one.
+     * The .qpdata hash is computed off the FX thread; a "🔍 Why?" button opens the diff when
+     * something diverges.
+     */
+    private HBox buildIntegrityRow(JsonObject root, File qtraceFile, String imageName) {
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(2, 0, 2, 0));
+        Label status = lbl("Checking…", TEXT_MUTED, 11, FontWeight.NORMAL, true);
+        row.getChildren().addAll(lbl("Integrity:", TEXT_MUTED, 11, FontWeight.NORMAL, false), status);
+
+        ProjectImageEntry<?> entry = imageName != null ? resolveEntryForImage(imageName) : null;
+        Thread t = new Thread(() -> {
+            String sha = null;
+            try {
+                if (entry != null && entry.getEntryPath() != null) {
+                    Path qpdata = entry.getEntryPath().resolve("data.qpdata");
+                    if (Files.exists(qpdata)) sha = io.qtrace.chain.Hashing.sha256Hex(qpdata);
+                }
+            } catch (Exception ignored) {}
+            StampIntegrity.State state = StampIntegrity.check(root, sha);
+            Platform.runLater(() -> {
+                switch (state) {
+                    case OK -> { status.setText("✓ Stamp and data intact"); status.setTextFill(Color.web(GREEN)); }
+                    case UNSIGNED -> status.setText(entry == null ? "Stamp not signed" : "Stamp not signed — data unchanged");
+                    case NO_STAMP -> status.setText("—");
+                    case SIGNATURE_INVALID -> {
+                        status.setText("⛔ Stamp corrupted — .qtrace edited after signing");
+                        status.setTextFill(Color.web(RED));
+                    }
+                    case DATA_CHANGED -> {
+                        status.setText("⚠ Image data changed since the stamp");
+                        status.setTextFill(Color.web(PEACH));
+                    }
+                }
+                status.setStyle("-fx-font-style: normal;");
+                if (state == StampIntegrity.State.SIGNATURE_INVALID || state == StampIntegrity.State.DATA_CHANGED) {
+                    Button why = new Button("🔍 Why?");
+                    why.setStyle("-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";"
+                        + "-fx-cursor:hand;-fx-font-size:11;-fx-padding:1 8 1 8;"
+                        + "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;");
+                    why.setTooltip(new Tooltip("Show exactly what differs from the stamp: .qtrace fields, "
+                        + "satellite files, annotations and detections."));
+                    why.setOnAction(e -> ProvenanceDiffDialog.show(row.getScene().getWindow(), root, qtraceFile, entry));
+                    row.getChildren().add(why);
+                }
+            });
+        }, "qtrace-integrity");
+        t.setDaemon(true);
+        t.start();
+        return row;
+    }
+
     private HBox buildAnchorRow(JsonObject val, File qtraceFile) {
         HBox row = new HBox(20);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -2556,23 +2586,9 @@ public class QTraceDashboard {
         JsonObject root    = rd.qtrace();
         JsonObject session = latestSession(root);
         JsonObject val     = session != null ? jsonObj(session, "validation") : null;
-        String sig    = val != null ? str(val, "signature",       "") : "";
-        String pubKey = val != null ? str(val, "validatorKeyPub", "") : "";
-        if (!sig.isEmpty() && !pubKey.isEmpty()) {
-            String vldtr     = str(val, "validator",    "");
-            String scope     = str(val, "scope",        "");
-            String conf      = str(val, "confidence",   "");
-            String ts        = str(val, "timestamp",    "");
-            String imgHash   = str(val, "imageHash",    "");
-            String stLbl     = str(val, "statusLabel",  "");
-            String qpdataSha = str(val, "qpdata_sha256", null);
-            if (imgHash.isEmpty()) {
-                JsonObject img = jsonObj(root, "image");
-                if (img != null) imgHash = str(img, "sha256", "");
-            }
-            if (stLbl.isEmpty() && root != null) stLbl = str(root, "status", "");
-            String payload = buildCanonicalPayload(vldtr, scope, conf, stLbl, imgHash, qpdataSha, ts, pubKey);
-            return StampSigner.verify(payload, pubKey, sig) ? "signed" : "corrupted";
+        Boolean valid = val != null ? StampIntegrity.verifyValidation(val, root, true) : null;
+        if (valid != null) {
+            return valid ? "signed" : "corrupted";
         } else if (val != null && !str(val, "validator", "").isEmpty()) {
             return "not signed";
         }
@@ -2653,29 +2669,6 @@ public class QTraceDashboard {
     }
 
     // ── Signature helpers ─────────────────────────────────────────────────────
-
-    /**
-     * Reconstructs the RFC 8785 canonical payload for a stamp read from a .qtrace.
-     * Mirrors ValidationStamp.canonicalPayload() exactly.
-     * qpdataSha256 may be null (stamps created before M0 or without a project).
-     */
-    private static String buildCanonicalPayload(
-            String validator, String scope, String confidence,
-            String statusLabel, String imageHash, String qpdataSha256,
-            String timestamp, String validatorKeyPub) {
-        Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("confidence",        confidence     != null ? confidence    : "");
-        fields.put("git_hash",          "");            // UI stamps always pass null gitHash
-        fields.put("image_sha256",      imageHash      != null ? imageHash     : "");
-        fields.put("qpdata_sha256",     qpdataSha256);  // null → JSON null, matches stamp
-        fields.put("scope",             scope          != null ? scope         : "");
-        fields.put("signing_meaning",   ValidationStamp.SIGNING_MEANING);
-        fields.put("status",            statusLabel    != null ? statusLabel   : "");
-        fields.put("timestamp",         timestamp      != null ? timestamp     : "");
-        fields.put("validator",         validator      != null ? validator     : "");
-        fields.put("validator_key_pub", validatorKeyPub != null ? validatorKeyPub : "");
-        return CanonicalJson.of(fields);
-    }
 
     // ── JSON helpers ──────────────────────────────────────────────────────────
 

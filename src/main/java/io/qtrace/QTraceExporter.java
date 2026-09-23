@@ -736,7 +736,7 @@ public class QTraceExporter {
         return annObj;
     }
 
-    private static JsonObject buildDetectionsObject(ImageData<BufferedImage> imageData) {
+    static JsonObject buildDetectionsObject(ImageData<?> imageData) {
         Collection<PathObject> detections = imageData.getHierarchy().getDetectionObjects();
         Map<String, Integer> byClass = new TreeMap<>();
         for (PathObject d : detections)
