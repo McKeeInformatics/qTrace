@@ -66,11 +66,25 @@ public final class ProvenanceDiff {
         Map<String, String> ref = flatten(withoutCertRefs(stamped));
         Map<String, String> cur = flatten(withoutCertRefs(current));
         List<Finding> out = new ArrayList<>();
+        // A list element (a step, a file…) present on one side only is one finding, not one
+        // per field: report it by its label and skip its fields below.
+        Set<String> refElems = elements(ref.keySet()), curElems = elements(cur.keySet());
+        Set<String> orphans = new TreeSet<>();
+        for (String e : union(refElems, curElems)) {
+            boolean inRef = refElems.contains(e), inCur = curElems.contains(e);
+            if (inRef && inCur) continue;
+            orphans.add(e);
+            out.add(new Finding(Kind.FIELD, e, inRef ? elementLabel(ref, e) : "∅", inCur ? elementLabel(cur, e) : "∅"));
+        }
         for (String key : new TreeSet<>(union(ref.keySet(), cur.keySet()))) {
             String leaf = key.substring(key.lastIndexOf('.') + 1);
             if (IGNORED_KEYS.contains(leaf)) continue;
+            String elem = elementOf(key);
+            if (elem != null && orphans.contains(elem)) continue;
             String a = ref.getOrDefault(key, "∅"), b = cur.getOrDefault(key, "∅");
-            if (!a.equals(b)) out.add(new Finding(Kind.FIELD, key, a, b));
+            if (a.equals(b)) continue;
+            String[] ex = excerpt(a, b);
+            out.add(new Finding(Kind.FIELD, key, ex[0], ex[1]));
         }
         // The root status mirrors validation.statusLabel (Dashboard's Status column). Report it
         // only when it drifted on its own — when the stamp field changed too, that finding
@@ -81,6 +95,48 @@ public final class ProvenanceDiff {
                 && !stampedStatus.equals("\"" + currentRootStatus + "\""))
             out.add(new Finding(Kind.FIELD, "status", stampedStatus, "\"" + currentRootStatus + "\""));
         return out;
+    }
+
+    /** "steps[3].params.x" → "steps[3]" (first list element in the path), null when none. */
+    private static String elementOf(String key) {
+        int close = key.indexOf(']');
+        return close < 0 ? null : key.substring(0, close + 1);
+    }
+
+    private static Set<String> elements(Set<String> keys) {
+        Set<String> out = new TreeSet<>();
+        for (String k : keys) {
+            String e = elementOf(k);
+            if (e != null) out.add(e);
+        }
+        return out;
+    }
+
+    /** A readable name for a list element: its command, name, filename or uuid. */
+    private static String elementLabel(Map<String, String> flat, String elem) {
+        for (String f : List.of("command", "name", "filename", "uuid")) {
+            String v = flat.get(elem + "." + f);
+            if (v != null && v.startsWith("\"")) return v.substring(1, v.length() - 1);
+        }
+        return "present";
+    }
+
+    private static final int EXCERPT_CONTEXT = 30;
+
+    /** For long values, keeps only the differing passage with some context on each side. */
+    static String[] excerpt(String a, String b) {
+        if (a.length() <= 120 && b.length() <= 120) return new String[] { a, b };
+        int pre = 0, max = Math.min(a.length(), b.length());
+        while (pre < max && a.charAt(pre) == b.charAt(pre)) pre++;
+        int suf = 0;
+        while (suf < max - pre && a.charAt(a.length() - 1 - suf) == b.charAt(b.length() - 1 - suf)) suf++;
+        int start = Math.max(0, pre - EXCERPT_CONTEXT);
+        return new String[] { cut(a, start, a.length() - suf + EXCERPT_CONTEXT), cut(b, start, b.length() - suf + EXCERPT_CONTEXT) };
+    }
+
+    private static String cut(String s, int start, int end) {
+        end = Math.min(s.length(), Math.max(end, start));
+        return (start > 0 ? "…" : "") + s.substring(start, end) + (end < s.length() ? "…" : "");
     }
 
     /** qTrace appends the .qtcert itself to external_files after stamping — expected, not a change. */
@@ -244,9 +300,9 @@ public final class ProvenanceDiff {
     // ── satellite files ─────────────────────────────────────────────────────
 
     /**
-     * Checks session.external_files ({filename, path, size_bytes, sha256}) against disk.
-     * A file whose first size_bytes still hash to the stamped value only grew since
-     * (append-only logs such as master_validation_log.csv) and is not reported.
+     * Checks session.external_files ({filename, path, size_bytes, sha256}) against disk, in
+     * {@code exportDir} (the .qtrace folder). A CSV log whose first size_bytes still hash to the
+     * stamped value only grew since (master_validation_log.csv is append-only): not reported.
      */
     public static List<Finding> checkFiles(JsonArray externalFiles, Path exportDir) {
         List<Finding> out = new ArrayList<>();
@@ -256,14 +312,24 @@ public final class ProvenanceDiff {
             JsonObject f = e.getAsJsonObject();
             String name = s(f, "filename"), sha = s(f, "sha256");
             if (sha.isEmpty() || "cert".equals(s(f, "type"))) continue;
-            Path p = exportDir != null ? exportDir.resolve(name) : null;
-            if (p == null || !Files.exists(p)) p = s(f, "path").isEmpty() ? null : Path.of(s(f, "path"));
-            if (p == null || !Files.exists(p)) {
-                out.add(new Finding(Kind.FILE, name, "present", "missing"));
-                continue;
+            // Per-image satellites live next to the .qtrace: no fallback to the stamped absolute
+            // path, which may point to another copy of the project that still has the original.
+            // The validation log is shared across images and stays where it was written, so a
+            // .qtrace moved without it is checked against the stamped location too.
+            boolean sharedLog = "csv".equals(s(f, "type"));
+            List<Path> candidates = new ArrayList<>();
+            if (exportDir != null) candidates.add(exportDir.resolve(name));
+            if ((exportDir == null || sharedLog) && !s(f, "path").isEmpty()) candidates.add(Path.of(s(f, "path")));
+            // Only the append-only validation log may legitimately grow after the stamp.
+            long size = sharedLog && f.has("size_bytes") ? f.get("size_bytes").getAsLong() : -1;
+            boolean exists = false, matches = false;
+            for (Path p : candidates) {
+                if (!Files.exists(p)) continue;
+                exists = true;
+                if (sha.equals(prefixSha256(p, size))) { matches = true; break; }
             }
-            long size = f.has("size_bytes") ? f.get("size_bytes").getAsLong() : -1;
-            if (!sha.equals(prefixSha256(p, size))) out.add(new Finding(Kind.FILE, name, "unchanged", "modified"));
+            if (!exists)       out.add(new Finding(Kind.FILE, name, "present", "missing"));
+            else if (!matches) out.add(new Finding(Kind.FILE, name, "unchanged", "modified"));
         }
         return out;
     }

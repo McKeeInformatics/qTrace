@@ -220,4 +220,54 @@ class ProvenanceDiffTest {
         Files.writeString(g, "{\"features\":[]}");
         assertEquals(Kind.FILE, ProvenanceDiff.checkGeoJson("a.geojson", sha, dir).get(0).kind());
     }
+
+    @Test
+    void appendedBytesOnANonLogFileAreAModification(@TempDir Path dir) throws Exception {
+        Path f = Files.writeString(dir.resolve("thumb.jpg"), "pixels");
+        JsonArray ref = fileRef(f, "thumbnail");
+        Files.writeString(f, "pixelsX");
+        assertEquals("modified", ProvenanceDiff.checkFiles(ref, dir).get(0).current());
+    }
+
+    @Test
+    void fileMissingFromTheTraceFolderIsMissingEvenIfTheStampedAbsolutePathExists(@TempDir Path dir) throws Exception {
+        Path elsewhere = Files.createDirectories(dir.resolve("original"));
+        Path f = Files.writeString(elsewhere.resolve("thumb.jpg"), "pixels");
+        Path traceDir = Files.createDirectories(dir.resolve("trace"));
+        assertEquals("missing", ProvenanceDiff.checkFiles(fileRef(f, "thumbnail"), traceDir).get(0).current());
+    }
+
+    @Test
+    void longTextFieldsShowOnlyTheChangedPassage() {
+        String big = "x".repeat(2000);
+        JsonObject stamped = new JsonObject(), current = new JsonObject();
+        stamped.addProperty("script", big + "model-0.1.1\")" + big);
+        current.addProperty("script", big + "model-0.1.0\")" + big);
+        Finding f = ProvenanceDiff.diffSession(stamped, current, null).get(0);
+        assertTrue(f.stamped().length() < 120, f.stamped());
+        assertTrue(f.stamped().contains("0.1.1") && f.current().contains("0.1.0"), f.stamped() + " / " + f.current());
+    }
+
+    @Test
+    void aRemovedStepIsOneFinding() {
+        JsonObject stamped = json("{\"steps\":[{\"command\":\"A\",\"order\":1},{\"command\":\"B\",\"order\":2}]}");
+        JsonObject current = json("{\"steps\":[{\"command\":\"A\",\"order\":1}]}");
+        List<Finding> f = ProvenanceDiff.diffSession(stamped, current, null);
+        assertEquals(1, f.size());
+        assertEquals("steps[1]", f.get(0).subject());
+        assertEquals("B", f.get(0).stamped());
+        assertEquals("∅", f.get(0).current());
+    }
+
+    @Test
+    void sharedLogFallsBackToItsStampedPathWhenTheTraceWasMovedWithoutIt(@TempDir Path dir) throws Exception {
+        Path original = Files.createDirectories(dir.resolve("original"));
+        Path log = Files.writeString(original.resolve("master_validation_log.csv"), "h\nrow1\n");
+        JsonArray ref = fileRef(log, "csv");
+        Path moved = Files.createDirectories(dir.resolve("moved"));
+        Files.writeString(moved.resolve("master_validation_log.csv"), "h\nother\n");
+        assertTrue(ProvenanceDiff.checkFiles(ref, moved).isEmpty());
+        Files.writeString(log, "h\nROW1\n");
+        assertEquals("modified", ProvenanceDiff.checkFiles(ref, moved).get(0).current());
+    }
 }
