@@ -329,7 +329,7 @@ public final class ProvenanceDiff {
                 if (sha.equals(prefixSha256(p, size))) { matches = true; break; }
             }
             if (!exists)       out.add(new Finding(Kind.FILE, name, "present", "missing"));
-            else if (!matches) out.add(new Finding(Kind.FILE, name, "unchanged", "modified"));
+            else if (!matches) out.add(new Finding(Kind.FILE, name, "original file", "modified"));
         }
         return out;
     }
@@ -341,7 +341,7 @@ public final class ProvenanceDiff {
         if (!Files.exists(p)) return List.of(new Finding(Kind.FILE, fileName, "present", "missing"));
         return stampedSha256.equals(prefixSha256(p, -1))
             ? List.of()
-            : List.of(new Finding(Kind.FILE, fileName, "unchanged", "modified"));
+            : List.of(new Finding(Kind.FILE, fileName, "original file", "modified"));
     }
 
     /** SHA-256 of the first {@code size} bytes, or of the whole file when size < 0 or the file shrank. */

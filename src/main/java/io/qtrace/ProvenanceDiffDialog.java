@@ -203,11 +203,9 @@ public final class ProvenanceDiffDialog {
         };
     }
 
+    /** Same severity as the panel alert: the .qtrace (the proof itself) is red, data and satellites orange. */
     private static String color(Kind k) {
-        return switch (k) {
-            case ANNOTATION_RECREATED, NOT_COMPARABLE -> PEACH;
-            default -> RED;
-        };
+        return k == Kind.FIELD ? RED : PEACH;
     }
 
     private static Label label(String text, String color, int size, FontWeight weight) {
