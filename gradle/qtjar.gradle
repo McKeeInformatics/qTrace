@@ -1,0 +1,41 @@
+// Builds build/libs/<name>-<version>.qtjar: the module JAR, signed, for the qTrace loader
+// (docs/architecture/loader.md § 10-11). The Qtrace-* manifest attributes come from the
+// `jar` task; this only signs. Key: -PqtraceSigningKeystore / QTRACE_SIGNING_KEYSTORE
+// (PKCS12) and -PqtraceSigningPassword / QTRACE_SIGNING_PASSWORD, defaulting to the
+// maintainer's ~/.qtrace-signing/qtrace-primary.p12 + primary.password. Never commit keys.
+
+tasks.register('qtjar') {
+    group = 'build'
+    description = 'Signs the module JAR as a .qtjar for the qTrace loader.'
+    dependsOn tasks.named('jar')
+    def src = tasks.named('jar').flatMap { it.archiveFile }
+    def out = layout.buildDirectory.file("libs/${project.name}-${project.version}.qtjar")
+    inputs.file(src)
+    outputs.file(out)
+    doLast {
+        def home = System.getProperty('user.home')
+        def ksPath = project.findProperty('qtraceSigningKeystore') ?: System.getenv('QTRACE_SIGNING_KEYSTORE') ?:
+            "${home}/.qtrace-signing/qtrace-primary.p12"
+        def ks = file(ksPath)
+        if (!ks.isFile()) throw new GradleException("qtjar: signing keystore not found: ${ks} (see loader.md § 10)")
+        def pwText = project.findProperty('qtraceSigningPassword') ?: System.getenv('QTRACE_SIGNING_PASSWORD')
+        if (pwText == null) {
+            def pwFile = new File("${home}/.qtrace-signing/primary.password")
+            if (!pwFile.isFile()) throw new GradleException("qtjar: signing password not provided")
+            pwText = pwFile.text.trim()
+        }
+        char[] pw = pwText.toString().toCharArray()
+        def store = java.security.KeyStore.getInstance('PKCS12')
+        ks.withInputStream { store.load(it, pw) }
+        def alias = store.aliases().nextElement()
+        def key = (java.security.PrivateKey) store.getKey(alias, pw)
+        def chain = java.security.cert.CertificateFactory.getInstance('X.509')
+            .generateCertPath(Arrays.asList(store.getCertificateChain(alias)))
+        def signer = new jdk.security.jarsigner.JarSigner.Builder(key, chain)
+            .digestAlgorithm('SHA-256').signerName('QTRACE').build()
+        new java.util.zip.ZipFile(src.get().asFile).withCloseable { zf ->
+            out.get().asFile.withOutputStream { os -> signer.sign(zf, os) }
+        }
+        logger.lifecycle("qtjar: signed ${out.get().asFile.name} with ${alias}")
+    }
+}

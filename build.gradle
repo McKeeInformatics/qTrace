@@ -45,7 +45,13 @@ jar {
     manifest {
         attributes 'Implementation-Title':   'QTrace Core',
                    'Implementation-Version': version,
-                   'Built-By':               'Romain Tourte'
+                   'Built-By':               'Romain Tourte',
+                   // Self-description read by the qTrace loader (docs/architecture/loader.md § 14)
+                   'Qtrace-Module':          'core',
+                   'Qtrace-Version':         version,
+                   'Qtrace-Load-Order':      '10',
+                   'Qtrace-Entry-Point':     'io.qtrace.QTraceExtension',
+                   'Qtrace-Packages':        'io.qtrace'
     }
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
@@ -53,3 +59,5 @@ jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     exclude 'qupath/**', 'javafx/**', 'com/sun/**', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
 }
+
+apply from: 'gradle/qtjar.gradle'
