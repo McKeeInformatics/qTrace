@@ -80,6 +80,9 @@ public class QTracePanel {
     private Label    stepCountLabel;
     private Label    preExistingLabel;
     private Label    corrCountLabel;
+    private HBox     integrityRow;
+    private Label    integrityLabel;
+    private Button   btnIntegrityWhy;
 
     // Capture status — top-right, on the title's line (passive, non-clickable)
     private Circle   captureDot;
@@ -412,8 +415,49 @@ public class QTracePanel {
         correctionsBox.setId("counter-corrections"); // looked up by the screenshot harness — see ScreenshotHarness
         countersRow.getChildren().addAll(stepsBox, correctionsBox);
 
-        section.getChildren().addAll(statusRow, imageRow, countersRow);
+        // Row 2b: integrity alert for the open image — hidden unless its stamp is corrupted or
+        // its data no longer matches the stamp (see StampIntegrity / QTraceController.refreshIntegrity)
+        integrityLabel = styledLabel("", RED, FontWeight.BOLD, 11);
+        integrityLabel.setWrapText(true);
+        btnIntegrityWhy = new Button("🔍 Why?");
+        btnIntegrityWhy.setStyle(
+            "-fx-background-color:transparent;-fx-text-fill:" + BLUE + ";"
+          + "-fx-cursor:hand;-fx-font-size:10;-fx-padding:1 6 1 6;"
+          + "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;");
+        btnIntegrityWhy.setTooltip(new Tooltip("Show exactly what differs from the stamp"));
+        Region integritySpacer = new Region();
+        HBox.setHgrow(integritySpacer, Priority.ALWAYS);
+        integrityRow = new HBox(6, integrityLabel, integritySpacer, btnIntegrityWhy);
+        integrityRow.setAlignment(Pos.CENTER_LEFT);
+        integrityRow.setPadding(new Insets(4, 8, 4, 8));
+        integrityRow.setVisible(false);
+        integrityRow.setManaged(false);
+
+        section.getChildren().addAll(statusRow, imageRow, integrityRow, countersRow);
         return section;
+    }
+
+    /**
+     * Shows or hides the integrity alert for the open image. Only SIGNATURE_INVALID and
+     * DATA_CHANGED are shown; {@code onWhy} opens the diff window.
+     */
+    public void setIntegrity(StampIntegrity.State state, Runnable onWhy) {
+        Platform.runLater(() -> {
+            boolean alert = state == StampIntegrity.State.SIGNATURE_INVALID
+                         || state == StampIntegrity.State.DATA_CHANGED;
+            integrityRow.setVisible(alert);
+            integrityRow.setManaged(alert);
+            if (!alert) return;
+            boolean corrupted = state == StampIntegrity.State.SIGNATURE_INVALID;
+            String color = corrupted ? RED : PEACH;
+            integrityLabel.setText(corrupted
+                ? "⛔ Stamp corrupted — the .qtrace was edited after signing"
+                : "⚠ Image data changed since the last stamp");
+            integrityLabel.setTextFill(Color.web(color));
+            integrityRow.setStyle("-fx-border-color:" + color + ";-fx-border-radius:4;-fx-background-radius:4;"
+                + "-fx-background-color:" + (corrupted ? "rgba(243,139,168,0.10)" : "rgba(250,179,135,0.10)") + ";");
+            btnIntegrityWhy.setOnAction(e -> onWhy.run());
+        });
     }
 
     private VBox buildCounter(String title, String color, Label numberLabel) {

@@ -210,6 +210,7 @@ public class QTraceController {
             syncPanelState();
         }
         panel.show();
+        refreshIntegrity();
         attachScriptEditorHook();
     }
 
@@ -393,6 +394,43 @@ public class QTraceController {
         } else {
             commitGraph.minimize();
         }
+    }
+
+    private final java.util.concurrent.atomic.AtomicInteger integrityGen = new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * Re-checks the open image's latest stamp (signature + .qpdata on disk) and shows the
+     * panel's integrity alert when it is corrupted or the data changed since. Hashing runs
+     * off the FX thread; a result for an image that has since been replaced is dropped.
+     */
+    public void refreshIntegrity() {
+        if (panel == null) return;
+        int gen = integrityGen.incrementAndGet();
+        var imageData = logger != null ? logger.getCurrentImageData() : null;
+        File qtrace = currentQtraceFile();
+        if (imageData == null || qtrace == null) {
+            panel.setIntegrity(StampIntegrity.State.NO_STAMP, null);
+            return;
+        }
+        var project = qupath.getProject();
+        ProjectImageEntry<?> entry = project != null ? project.getEntry(imageData) : null;
+        Thread t = new Thread(() -> {
+            try {
+                JsonObject root = JsonParser.parseString(Files.readString(qtrace.toPath())).getAsJsonObject();
+                String sha = null;
+                if (entry != null && entry.getEntryPath() != null) {
+                    Path qpdata = entry.getEntryPath().resolve("data.qpdata");
+                    if (Files.exists(qpdata)) sha = io.qtrace.chain.Hashing.sha256Hex(qpdata);
+                }
+                StampIntegrity.State state = StampIntegrity.check(root, sha);
+                if (gen != integrityGen.get()) return;
+                panel.setIntegrity(state, () -> ProvenanceDiffDialog.show(qupath.getStage(), root, qtrace, entry));
+            } catch (Exception e) {
+                System.err.println("[qTrace] refreshIntegrity: " + e.getMessage());
+            }
+        }, "qtrace-integrity");
+        t.setDaemon(true);
+        t.start();
     }
 
     /** Resolves the .qtrace path for the current image, or null if none yet. */
@@ -690,6 +728,7 @@ public class QTraceController {
                     if (panel != null && panel.isShowing()) {
                         Platform.runLater(panel::refreshStatus);
                         refreshPushAvailability();
+                        refreshIntegrity();
                     }
                 };
                 if (!maybePromptForgottenStamp(oldData, switchImage)) switchImage.run();
@@ -794,6 +833,7 @@ public class QTraceController {
                         panel.setValidated(true, stamp.validator());
                     }
                     exportReport();
+                    refreshIntegrity();
                 },
                 () -> { if (panel != null) panel.log("Record cancelled."); }
             );
