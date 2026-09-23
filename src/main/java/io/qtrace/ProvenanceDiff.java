@@ -72,8 +72,12 @@ public final class ProvenanceDiff {
             String a = ref.getOrDefault(key, "∅"), b = cur.getOrDefault(key, "∅");
             if (!a.equals(b)) out.add(new Finding(Kind.FIELD, key, a, b));
         }
+        // The root status mirrors validation.statusLabel (Dashboard's Status column). Report it
+        // only when it drifted on its own — when the stamp field changed too, that finding
+        // already says it.
         String stampedStatus = ref.get("validation.statusLabel");
-        if (currentRootStatus != null && stampedStatus != null
+        boolean labelEdited = stampedStatus != null && !stampedStatus.equals(cur.get("validation.statusLabel"));
+        if (!labelEdited && currentRootStatus != null && stampedStatus != null
                 && !stampedStatus.equals("\"" + currentRootStatus + "\""))
             out.add(new Finding(Kind.FIELD, "status", stampedStatus, "\"" + currentRootStatus + "\""));
         return out;

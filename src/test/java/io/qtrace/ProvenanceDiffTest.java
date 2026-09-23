@@ -69,6 +69,14 @@ class ProvenanceDiffTest {
         assertEquals("status", f.get(0).subject());
     }
 
+    @Test
+    void rootStatusEditedTogetherWithTheStampIsReportedOnce() {
+        JsonObject stamped = json("{\"validation\":{\"statusLabel\":\"1-In Progress\"}}");
+        JsonObject current = json("{\"validation\":{\"statusLabel\":\"2-Finished\"}}");
+        List<Finding> f = ProvenanceDiff.diffSession(stamped, current, "2-Finished");
+        assertEquals(List.of("validation.statusLabel"), f.stream().map(Finding::subject).toList());
+    }
+
     // ── annotations ─────────────────────────────────────────────────────────
 
     @Test
