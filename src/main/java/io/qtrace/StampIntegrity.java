@@ -81,7 +81,10 @@ public final class StampIntegrity {
         return filesChanged ? State.FILES_CHANGED : base;
     }
 
-    /** The .qtcert payload of the latest stamped session, in {@code <exportDir>/case_<caseId>/certs/}. */
+    /**
+     * The .qtcert payload of the latest stamped session, in {@code <exportDir>/case_<caseId>/certs/}
+     * — the signed session text for v1.1 certificates (see {@link #signedPayload}).
+     */
     public static JsonObject findCertPayload(JsonObject root, java.nio.file.Path exportDir) {
         JsonObject session = latestValidatedSession(root);
         if (session == null || exportDir == null) return null;
@@ -94,13 +97,26 @@ public final class StampIntegrity {
         try (var files = java.nio.file.Files.list(certs)) {
             for (var p : (Iterable<java.nio.file.Path>) files.filter(f -> f.toString().endsWith(".qtcert"))::iterator) {
                 try {
-                    JsonObject payload = obj(com.google.gson.JsonParser.parseString(
-                        java.nio.file.Files.readString(p)).getAsJsonObject(), "qtrace_payload");
+                    JsonObject payload = signedPayload(com.google.gson.JsonParser.parseString(
+                        java.nio.file.Files.readString(p)).getAsJsonObject());
                     if (payload != null && sessionId.equals(str(payload, "session_id", null))) return payload;
                 } catch (Exception ignored) {}
             }
         } catch (Exception ignored) {}
         return null;
+    }
+
+    /**
+     * The stamped session of a .qtcert: in v1.1 the signed text (qtrace_payload_json) — covered by
+     * the signature, unlike the readable qtrace_payload copy; in v1.0 the readable copy.
+     */
+    static JsonObject signedPayload(JsonObject cert) {
+        if (cert.has("qtrace_payload_json") && cert.get("qtrace_payload_json").isJsonPrimitive()) {
+            try {
+                return com.google.gson.JsonParser.parseString(cert.get("qtrace_payload_json").getAsString()).getAsJsonObject();
+            } catch (Exception ignored) {}
+        }
+        return obj(cert, "qtrace_payload");
     }
 
     /** Last session carrying a validation block (sessions exported without a stamp are skipped). */

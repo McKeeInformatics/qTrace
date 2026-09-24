@@ -146,4 +146,17 @@ class StampIntegrityTest {
             "{\"certificate_id\":\"qtc_X\",\"qtrace_payload\":{\"session_id\":\"s-42\"}}");
         assertEquals("s-42", StampIntegrity.findCertPayload(root, dir).get("session_id").getAsString());
     }
+
+    @Test
+    void v11CertificateReferenceIsTheSignedSessionText(@TempDir Path dir) throws Exception {
+        session().addProperty("session_id", "s-42");
+        validation().addProperty("case_id", "proj/p.qpproj");
+        Path certs = Files.createDirectories(dir.resolve("case_proj_p.qpproj").resolve("certs"));
+        // Readable copy edited to hide a change; the signed text still says what was stamped.
+        Files.writeString(certs.resolve("qtc_X.qtcert"), "{\"qtcert_version\":\"1.1\","
+            + "\"qtrace_payload\":{\"session_id\":\"s-42\",\"steps_captured\":99},"
+            + "\"qtrace_payload_json\":\"{\\\"session_id\\\":\\\"s-42\\\",\\\"steps_captured\\\":10}\"}");
+        JsonObject ref = StampIntegrity.findCertPayload(root, dir);
+        assertEquals(10, ref.get("steps_captured").getAsInt());
+    }
 }
