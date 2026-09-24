@@ -65,6 +65,7 @@ public class QTraceExporter {
     private final String          gitHash;
     private final ValidationStamp stamp;
     private       JsonArray        extensions = null;
+    private       String           sessionId  = null;
 
     public QTraceExporter(ActionLogger logger, String gitHash, ValidationStamp stamp) {
         this.logger  = logger;
@@ -74,6 +75,11 @@ public class QTraceExporter {
 
     public void setExtensions(JsonArray extensions) {
         this.extensions = extensions;
+    }
+
+    /** Reuses the live draft's session id, so a session keeps one id from first autosave to commit. */
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -268,7 +274,7 @@ public class QTraceExporter {
                                      Path outputDir, String imageName) throws IOException {
         JsonObject session = new JsonObject();
 
-        session.addProperty("session_id",     UUID.randomUUID().toString());
+        session.addProperty("session_id",     sessionId != null ? sessionId : UUID.randomUUID().toString());
         // Authoritative contributor (one commit = one author): Compliance license → config → OS login.
         session.addProperty("user",           QTraceController.currentContributor());
         session.addProperty("os_user",        System.getProperty("user.name", "unknown"));  // forensic
@@ -303,6 +309,8 @@ public class QTraceExporter {
         } else {
             session.add("validation", JsonNull.INSTANCE);
         }
+        // Explicit so readers never have to infer it (see StampIntegrity.isStamped).
+        session.addProperty("validation_state", stamp != null ? "stamped" : "unstamped");
 
         // Workflow steps
         List<WorkflowStep> rawSteps = imageData.getHistoryWorkflow().getSteps();

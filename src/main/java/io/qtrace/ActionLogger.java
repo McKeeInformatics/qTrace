@@ -104,6 +104,16 @@ public class ActionLogger implements WorkflowListener {
     /** Called once the background SHA-256 of the current image finishes (see computeHashAsync). */
     public void setOnHashReady(Runnable r) { this.onHashReady = r; }
 
+    // Live draft autosave: nudged whenever the captured state changes, so the draft is
+    // written within seconds. Not exhaustive by design — the autosave safety net compares
+    // the whole state every 30 s and catches anything not notified here.
+    private volatile Runnable onChanged;
+    public void setOnChanged(Runnable r) { this.onChanged = r; }
+    private void notifyChanged() {
+        Runnable r = onChanged;
+        if (r != null) r.run();
+    }
+
     private final List<JsonObject> capturedSteps = new ArrayList<>();
     private int lastKnownStepCount = 0;
     private int manualAnnotationCount = 0;
@@ -498,6 +508,7 @@ public class ActionLogger implements WorkflowListener {
 
         if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
         if (panel != null) panel.setRecordReady(!capturedSteps.isEmpty());
+        notifyChanged();
     }
 
     // ── Serialization ────────────────────────────────────────────────────────
@@ -732,6 +743,7 @@ public class ActionLogger implements WorkflowListener {
         if (j.has("script_fragment") && !j.get("script_fragment").isJsonNull()) {
             deletedFragments.add(j.get("script_fragment").getAsString());
         }
+        notifyChanged();
     }
 
     /**
@@ -897,6 +909,7 @@ public class ActionLogger implements WorkflowListener {
         }
 
         manualDetectionCorrections.add(record);
+        notifyChanged();
         if (panel != null) panel.setRecordReady(true);
 
         String msg = type.equals("split")
@@ -957,6 +970,7 @@ public class ActionLogger implements WorkflowListener {
         record.add("deleted", deletedArr);
 
         manualAnnotationCorrections.add(record);
+        notifyChanged();
         if (panel != null) panel.setRecordReady(true);
 
         String msg = "Annotation" + (removed.size() > 1 ? "s" : "") + " deleted: " + removed.size();
@@ -1088,6 +1102,96 @@ public class ActionLogger implements WorkflowListener {
         if (panel != null) panel.updateStepCount(0, 0, 0);
         if (panel != null) panel.setRecordReady(false);
         if (panel != null) panel.log("— Reset — history cleared. Tracking from this point forward.");
+        notifyChanged();
+    }
+
+    // ── Live draft (autosave / crash recovery) ───────────────────────────────
+
+    /**
+     * Deep copy of everything needed to resume this capture — written to the live draft.
+     * Must run on the JavaFX thread (where the capture state is mutated); the copy can then
+     * be serialized on any thread.
+     */
+    public io.qtrace.draft.CaptureState snapshotState() {
+        var s = new io.qtrace.draft.CaptureState();
+        capturedSteps.forEach(j -> s.capturedSteps.add(j.deepCopy()));
+        s.annotationStepIndex.putAll(annotationStepIndex);
+        s.manualAnnotationLatestIndex.putAll(manualAnnotationLatestIndex);
+        s.snapshotAnnotationIds.addAll(snapshotAnnotationIds);
+        s.deletedFragments.addAll(deletedFragments);
+        manualDetectionCorrections.forEach(j -> s.manualDetectionCorrections.add(j.deepCopy()));
+        pendingRemovedDetections.forEach(j -> s.pendingRemovedDetections.add(j.deepCopy()));
+        pendingAddedDetections.forEach(j -> s.pendingAddedDetections.add(j.deepCopy()));
+        manualAnnotationCorrections.forEach(j -> s.manualAnnotationCorrections.add(j.deepCopy()));
+        pendingRemovedAnnotations.forEach(j -> s.pendingRemovedAnnotations.add(j.deepCopy()));
+        s.knownClassifiers.putAll(knownClassifiers);
+        knownObjectClassifiers.forEach(j -> s.knownObjectClassifiers.add(j.deepCopy()));
+        s.knownImportedFiles.putAll(knownImportedFiles);
+        s.currentAlignment = currentAlignment;
+        s.measurementMapRecords.addAll(measurementMapRecords);
+        s.displaySettingsRecords.addAll(displaySettingsRecords);
+        s.cellIntensityRecords.putAll(cellIntensityRecords);
+        s.replayedFrom          = replayedFrom != null ? replayedFrom.deepCopy() : null;
+        s.lastKnownStepCount    = lastKnownStepCount;
+        s.preExistingStepCount  = preExistingStepCount;
+        s.manualAnnotationCount = manualAnnotationCount;
+        s.importCounter         = importCounter;
+        s.imageHash             = imageHash;
+        return s;
+    }
+
+    /**
+     * Resumes a capture from a draft after a crash. Called right after {@link #attach} on the
+     * restored image, it replaces what attach() captured retroactively with the exact
+     * pre-crash state; watchers and listeners set up by attach() keep running.
+     */
+    public void restoreState(io.qtrace.draft.CaptureState s) {
+        if (currentImageData == null) return;
+        capturedSteps.clear();
+        capturedSteps.addAll(s.capturedSteps);
+        annotationStepIndex.clear();
+        annotationStepIndex.putAll(s.annotationStepIndex);
+        manualAnnotationLatestIndex.clear();
+        manualAnnotationLatestIndex.putAll(s.manualAnnotationLatestIndex);
+        snapshotAnnotationIds.clear();
+        snapshotAnnotationIds.addAll(s.snapshotAnnotationIds);
+        deletedFragments.clear();
+        deletedFragments.addAll(s.deletedFragments);
+        manualDetectionCorrections.clear();
+        manualDetectionCorrections.addAll(s.manualDetectionCorrections);
+        pendingRemovedDetections.clear();
+        pendingRemovedDetections.addAll(s.pendingRemovedDetections);
+        pendingAddedDetections.clear();
+        pendingAddedDetections.addAll(s.pendingAddedDetections);
+        manualAnnotationCorrections.clear();
+        manualAnnotationCorrections.addAll(s.manualAnnotationCorrections);
+        pendingRemovedAnnotations.clear();
+        pendingRemovedAnnotations.addAll(s.pendingRemovedAnnotations);
+        knownClassifiers.clear();
+        knownClassifiers.putAll(s.knownClassifiers);
+        knownObjectClassifiers.clear();
+        knownObjectClassifiers.addAll(s.knownObjectClassifiers);
+        knownImportedFiles.clear();
+        knownImportedFiles.putAll(s.knownImportedFiles);
+        if (s.currentAlignment != null) currentAlignment = s.currentAlignment;
+        measurementMapRecords.clear();
+        measurementMapRecords.addAll(s.measurementMapRecords);
+        displaySettingsRecords.clear();
+        displaySettingsRecords.addAll(s.displaySettingsRecords);
+        cellIntensityRecords.clear();
+        cellIntensityRecords.putAll(s.cellIntensityRecords);
+        replayedFrom          = s.replayedFrom;
+        // The restored image's workflow is the one the draft was taken with, so the step
+        // cursor lines up; clamp in case the snapshot is older than the state.
+        lastKnownStepCount    = Math.min(s.lastKnownStepCount, currentImageData.getHistoryWorkflow().size());
+        preExistingStepCount  = s.preExistingStepCount;
+        manualAnnotationCount = s.manualAnnotationCount;
+        importCounter         = s.importCounter;
+        if (imageHash == null && s.imageHash != null) imageHash = s.imageHash;
+
+        if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
+        if (panel != null) panel.setRecordReady(!capturedSteps.isEmpty());
+        if (panel != null) panel.log("Capture restored from the live draft — " + capturedSteps.size() + " steps.");
     }
 
     public void refreshAllAnnotationCaptures() {
@@ -1139,6 +1243,7 @@ public class ActionLogger implements WorkflowListener {
                 file.getName(), companionFilename, file.getAbsolutePath(),
                 rawBytes, sha256, objectCount, Instant.now(), user);
             knownImportedFiles.put(companionFilename, record);
+            notifyChanged();
 
             String fragment =
                 "// Replay: import objects from file (" + record.name + ")\n" +
@@ -1411,6 +1516,7 @@ public class ActionLogger implements WorkflowListener {
             double min = measurementMapSliders.size() > 0 ? measurementMapSliders.get(0).getValue() : Double.NaN;
             double max = measurementMapSliders.size() > 1 ? measurementMapSliders.get(1).getValue() : Double.NaN;
             measurementMapRecords.add(new MeasurementMapRecord(measurement, colormap, min, max, Instant.now()));
+            notifyChanged();
             if (panel != null) panel.log("[MeasurementMap] " + reason + " — measurement: " + measurement
                 + ", colormap: " + colormap + ", range: [" + min + ", " + max + "]");
         } catch (Exception e) {
@@ -1496,6 +1602,7 @@ public class ActionLogger implements WorkflowListener {
             DisplaySettingsRecord record = new DisplaySettingsRecord(
                 channels, gamma, display.useGrayscaleLuts(), display.useInvertedBackground(), Instant.now());
             displaySettingsRecords.add(record);
+            notifyChanged();
             if (panel != null) panel.log("[DisplaySettings] " + reason + " — " + channels.size()
                 + " channel(s), gamma " + gamma);
         } catch (Exception e) {
@@ -1820,6 +1927,7 @@ public class ActionLogger implements WorkflowListener {
             measurement, thresholds, Instant.now(),
             QTraceController.currentContributor()));
         if (panel != null) panel.log("[Cell intensity] '" + measurement + "' → " + Arrays.toString(thresholds));
+        notifyChanged();
     }
 
     // ── Classifier detection from workflow steps (PC-Load) ──────────────────
@@ -1891,6 +1999,7 @@ public class ActionLogger implements WorkflowListener {
                 List.of(), ""
             );
             knownClassifiers.put(name, record);
+            notifyChanged();
 
             if (panel != null) panel.log("[Pixel classifier loaded] " + name);
             if (panel != null) panel.log("  type   : " + meta.type() + " / " + meta.outputType());
@@ -2042,6 +2151,7 @@ public class ActionLogger implements WorkflowListener {
         rec.addProperty("name_policy_valid", nameValid);
         knownObjectClassifiers.removeIf(o -> name.equals(o.get("name").getAsString()));
         knownObjectClassifiers.add(rec);
+        notifyChanged();
         if (panel != null) panel.log("[Object classifier saved] " + name
             + (nameValid ? "" : "  ⚠ name does not match naming policy"));
 
@@ -2102,6 +2212,7 @@ public class ActionLogger implements WorkflowListener {
                 trainingIds, trainHash
             );
             knownClassifiers.put(name, record);
+            notifyChanged();
 
             // ── Log ─────────────────────────────────────────────────────────
             if (panel != null) panel.log("[Pixel classifier saved] " + name);
@@ -2489,6 +2600,7 @@ public class ActionLogger implements WorkflowListener {
             boolean affected = record.trainingAnnotationIds.stream().anyMatch(changedIds::contains);
             if (affected) {
                 record.modifiedAfterTraining = true;
+                notifyChanged();
                 if (panel != null) panel.log("⚠ INTEGRITY: training data for '" + record.name
                     + "' modified after save → Classifier_Fidelity = DEGRADED");
             }

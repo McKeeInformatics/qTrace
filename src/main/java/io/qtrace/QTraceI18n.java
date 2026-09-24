@@ -58,4 +58,13 @@ public class QTraceI18n {
             return key;
         }
     }
+
+    /** {@link #t} + {@link java.text.MessageFormat} arguments ({0}, {1}…; quotes doubled in the bundle). */
+    public static String f(String key, Object... args) {
+        try {
+            return java.text.MessageFormat.format(t(key), args);
+        } catch (IllegalArgumentException e) {
+            return t(key);
+        }
+    }
 }

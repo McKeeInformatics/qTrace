@@ -143,6 +143,10 @@ public class QTraceController {
     private QTraceDashboard dashboard;
     private QTraceCommitGraph commitGraph;
     private ActionLogger    logger;
+    // Live draft of the open image (autosave, unstamped sessions, crash recovery).
+    private DraftManager    drafts;
+    // The running controller — lets static entry points (Compliance Player) reach its draft.
+    private static volatile QTraceController active;
     private boolean         scriptHookInstalled = false;
 
     // Script output capture — written from Logback thread, read from FX thread
@@ -189,12 +193,196 @@ public class QTraceController {
         // Upload availability depends on the image SHA-256, computed asynchronously;
         // re-check once it's ready instead of leaving the button stuck disabled.
         logger.setOnHashReady(this::refreshPushAvailability);
+        drafts = new DraftManager(qupath, logger, e -> { if (panel != null) panel.setAutosaveStatus(e); });
+        logger.setOnChanged(drafts::markDirty);
+        active = this;
         ImageData<BufferedImage> current = qupath.getImageData();
-        if (current != null) {
-            logger.attach(current);
-            fireRecordingState(true);
-        }
+        if (current != null) attachImage(current);
         attachViewerListener();
+        installExitHooks();
+    }
+
+    // ── Live draft: autosave, unstamped sessions, crash recovery ────────────
+
+    /** Attaches the logger to an image, then either resumes its orphaned draft or starts a new one. */
+    private void attachImage(ImageData<BufferedImage> data) {
+        logger.attach(data);
+        fireRecordingState(data != null);
+        if (data == null) { drafts.end(); return; }
+        Optional<io.qtrace.draft.DraftStore.Draft> orphan = drafts.findOrphan(data);
+        if (orphan.isPresent()) {
+            // Not tracked until the user chooses — a fresh draft would overwrite the orphan.
+            drafts.end();
+            Platform.runLater(() -> offerRecovery(data, orphan.get()));
+        } else {
+            drafts.begin(data);
+        }
+    }
+
+    /**
+     * Leaving the current image (switch, close, QuPath exit): what was captured since the
+     * last commit becomes an unstamped session of the .qtrace, and the draft is dropped.
+     * If writing fails the draft stays on disk, so the work is offered back next time.
+     */
+    private void leaveImage() {
+        if (logger == null || !logger.isAttached()) return;
+        if (commitUnstamped()) drafts.end();
+    }
+
+    /** Commits the open image's uncommitted capture as an unstamped session. True unless it failed. FX thread. */
+    private boolean commitUnstamped() {
+        if (!QTraceConfig.get().isAutosaveEnabled() || logger == null || !logger.isAttached()) return true;
+        if (!logger.hasSteps() || !drafts.hasUncommittedChanges()) {
+            drafts.markCommitted();
+            return true;
+        }
+        try {
+            var exporter = new QTraceExporter(logger, null, null);
+            exporter.setExtensions(collectLoadedExtensions());
+            exporter.setSessionId(drafts.sessionId());
+            Path out = exporter.export(QTraceConfig.get().outputExportDir());
+            drafts.markCommitted();
+            if (panel != null) panel.log(QTraceI18n.f("autosave.committed", out.getFileName()));
+            return true;
+        } catch (Exception e) {
+            System.err.println("[qTrace] unstamped session not written: " + e.getMessage());
+            if (panel != null) panel.log("Unstamped session not written — the draft is kept: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** QuPath closing: commit after QuPath's own save prompt; on SIGTERM, at least flush the draft. */
+    private void installExitHooks() {
+        var stage = qupath.getStage();
+        if (stage != null) {
+            stage.addEventHandler(javafx.stage.WindowEvent.WINDOW_HIDDEN, e -> {
+                leaveImage();
+                drafts.close();
+            });
+        }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> drafts.flushNow(), "qtrace-draft-flush"));
+    }
+
+    /**
+     * A draft survived its QuPath (crash, kill, power loss): offer to put the image and the
+     * capture back exactly as they were, or to keep the work as an unstamped session and
+     * start again from the image as saved. Nothing is dropped silently — closing the dialog
+     * keeps the work. FX thread.
+     */
+    private void offerRecovery(ImageData<BufferedImage> data, io.qtrace.draft.DraftStore.Draft draft) {
+        if (logger.getCurrentImageData() != data) return;   // moved on; asked again next time
+        String name  = data.getServer().getMetadata().getName();
+        int    steps = draft.state().capturedSteps.size();
+        String when  = "?";
+        try {
+            when = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+                .withZone(java.time.ZoneId.systemDefault())
+                .format(Instant.parse(draft.header().get("last_saved_at").getAsString()));
+        } catch (Exception ignored) {}
+        boolean qpdataChanged = drafts.qpdataChangedSince(draft, data);
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        if (qupath.getStage() != null) alert.initOwner(qupath.getStage());
+        alert.setTitle(QTraceI18n.t("recover.title"));
+        alert.setHeaderText(QTraceI18n.f("recover.header", name));
+        String content = draft.snapshot() != null
+            ? QTraceI18n.f("recover.content", steps, when)
+            : QTraceI18n.f("recover.content.noSnapshot", steps, when);
+        if (qpdataChanged) content += "\n\n" + QTraceI18n.t("recover.content.qpdataChanged");
+        alert.setContentText(content);
+        ButtonType btnRestore = new ButtonType(QTraceI18n.t("recover.restore"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType btnKeep    = new ButtonType(QTraceI18n.t("recover.keep"),    ButtonBar.ButtonData.CANCEL_CLOSE);
+        if (qpdataChanged) alert.getButtonTypes().setAll(btnKeep);
+        else               alert.getButtonTypes().setAll(btnRestore, btnKeep);
+        alert.getDialogPane().setMinWidth(520);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        boolean restore = !qpdataChanged && result.isPresent() && result.get() == btnRestore;
+        restoreDraft(data, draft, !restore);
+    }
+
+    /**
+     * Puts the draft back: image snapshot (objects, history, type, stains, properties) read in
+     * the background, then applied on the FX thread before the logger resumes the capture.
+     * With {@code keepOnly}, the restored work is committed as an unstamped session and the
+     * image goes back to its saved .qpdata.
+     */
+    private void restoreDraft(ImageData<BufferedImage> data, io.qtrace.draft.DraftStore.Draft draft,
+                              boolean keepOnly) {
+        CompletableFuture
+            .supplyAsync(() -> {
+                try {
+                    return draft.snapshot() != null ? DraftManager.readSnapshot(draft, data) : null;
+                } catch (Exception e) {
+                    throw new java.util.concurrent.CompletionException(e);
+                }
+            })
+            .whenComplete((restored, err) -> Platform.runLater(() -> {
+                if (logger.getCurrentImageData() != data) return;   // draft stays; offered again later
+                if (err != null) {
+                    Throwable cause = err.getCause() != null ? err.getCause() : err;
+                    Path kept = drafts.setAside(draft);
+                    showRecoveryError(cause, kept);
+                    drafts.begin(data);
+                    return;
+                }
+                logger.detach();
+                if (restored != null) {
+                    applyImage(data, restored);
+                    data.setChanged(true);
+                }
+                logger.attach(data);
+                logger.restoreState(draft.state());
+                drafts.adopt(data, draft);
+                if (keepOnly && commitUnstamped() && restored != null) revertToSaved(data);
+                if (panel != null && panel.isShowing()) {
+                    panel.refreshStatus();
+                    refreshIntegrity();
+                }
+                fireRecordingState(true);
+            }));
+    }
+
+    private void showRecoveryError(Throwable cause, Path keptAt) {
+        System.err.println("[qTrace] draft restore failed: " + cause);
+        Alert a = new Alert(Alert.AlertType.ERROR);
+        if (qupath.getStage() != null) a.initOwner(qupath.getStage());
+        a.setTitle(QTraceI18n.t("recover.title"));
+        a.setHeaderText(QTraceI18n.f("recover.failed", String.valueOf(cause.getMessage())));
+        a.setContentText(String.valueOf(keptAt != null ? keptAt : QTraceConfig.DRAFTS_DIR));
+        a.showAndWait();
+    }
+
+    /** Back to the image as saved on disk (or empty when it was never saved), with a fresh capture. */
+    private void revertToSaved(ImageData<BufferedImage> data) {
+        try {
+            logger.detach();
+            Path qpdata = drafts.qpdataPath(data);
+            if (qpdata != null) {
+                applyImage(data, PathIO.readImageData(qpdata, null, data.getServer(), BufferedImage.class));
+            } else {
+                data.getHierarchy().clearAll();
+                data.getHistoryWorkflow().clear();
+            }
+            data.setChanged(false);
+        } catch (Exception e) {
+            System.err.println("[qTrace] revert to saved image failed: " + e.getMessage());
+        } finally {
+            logger.attach(data);
+            drafts.begin(data);
+        }
+    }
+
+    /** Copies a snapshot's content into the ImageData the viewer and the project entry hold. */
+    private static void applyImage(ImageData<BufferedImage> target, ImageData<BufferedImage> source) {
+        target.getHierarchy().setHierarchy(source.getHierarchy());
+        var workflow = target.getHistoryWorkflow();
+        workflow.clear();
+        workflow.addSteps(source.getHistoryWorkflow().getSteps());
+        if (source.getImageType() != null) target.setImageType(source.getImageType());
+        if (source.getColorDeconvolutionStains() != null)
+            target.setColorDeconvolutionStains(source.getColorDeconvolutionStains());
+        source.getProperties().forEach(target::setProperty);
     }
 
     // ── Panel lifecycle ──────────────────────────────────────────────────────
@@ -726,8 +914,8 @@ public class QTraceController {
                                          ImageData<BufferedImage> newData) {
                 Runnable switchImage = () -> {
                     if (logger != null) {
-                        logger.attach(newData);
-                        fireRecordingState(newData != null);
+                        leaveImage();
+                        attachImage(newData);
                     }
                     if (panel != null && panel.isShowing()) {
                         Platform.runLater(panel::refreshStatus);
@@ -741,6 +929,8 @@ public class QTraceController {
             @Override public void visibleRegionChanged(QuPathViewer v, java.awt.Shape s) {}
             @Override public void selectedObjectChanged(QuPathViewer v, PathObject o)     {}
             @Override public void viewerClosed(QuPathViewer v) {
+                leaveImage();
+                drafts.end();
                 if (logger != null) logger.detach();
                 fireRecordingState(false);
             }
@@ -777,7 +967,9 @@ public class QTraceController {
                 "You captured actions on this image but never validated & stamped it. "
               + "Stamp it now before continuing?");
             ButtonType btnStamp   = new ButtonType("Stamp now", ButtonBar.ButtonData.OK_DONE);
-            ButtonType btnSkip    = new ButtonType("Continue without stamping", ButtonBar.ButtonData.CANCEL_CLOSE);
+            ButtonType btnSkip    = new ButtonType(QTraceConfig.get().isAutosaveEnabled()
+                ? "Continue — keep it as an unstamped session" : "Continue without stamping",
+                ButtonBar.ButtonData.CANCEL_CLOSE);
             ButtonType btnDontAsk = new ButtonType("Don't ask again this session", ButtonBar.ButtonData.OTHER);
             alert.getButtonTypes().setAll(btnStamp, btnSkip, btnDontAsk);
 
@@ -923,7 +1115,9 @@ public class QTraceController {
             Path outDir  = QTraceConfig.get().outputExportDir();
             var exporter = new QTraceExporter(logger, null, lastStamp);
             exporter.setExtensions(collectLoadedExtensions());
+            exporter.setSessionId(drafts.sessionId());
             Path outFile = exporter.export(outDir);
+            drafts.markCommitted();
             Path csvFile = exporter.appendToMasterCsv(outDir);
             QTraceExporter.appendExternalFile(outFile, "csv", csvFile);
 
@@ -1281,7 +1475,9 @@ public class QTraceController {
         Path exportDir = QTraceConfig.get().outputExportDir();
         var  exporter  = new QTraceExporter(logger, null, lastStamp);
         exporter.setExtensions(collectLoadedExtensions());
+        exporter.setSessionId(drafts.sessionId());
         Path out       = exporter.export(exportDir);
+        drafts.markCommitted();
         Path csvFile   = exporter.appendToMasterCsv(exportDir);
         QTraceExporter.appendExternalFile(out, "csv", csvFile);
         return out.getFileName().toString();
@@ -1297,7 +1493,12 @@ public class QTraceController {
         // No master_validation_log.csv row: that log lists validations, and this isn't one.
         var exporter = new QTraceExporter(logger, null, null);
         exporter.setExtensions(collectLoadedExtensions(qupath));
-        return exporter.export(QTraceConfig.get().outputExportDir());
+        QTraceController c = active;
+        boolean ours = c != null && c.logger == logger && c.drafts != null;
+        if (ours) exporter.setSessionId(c.drafts.sessionId());
+        Path out = exporter.export(QTraceConfig.get().outputExportDir());
+        if (ours) c.drafts.markCommitted();   // not committed a second time on image switch
+        return out;
     }
 
     /**
@@ -1330,6 +1531,7 @@ public class QTraceController {
     public void resetCapture() {
         if (logger == null) return;
         logger.resetCapture();
+        drafts.discard();
         lastStamp = null;
         lastStampStepCount = -1;
         if (panel != null) {

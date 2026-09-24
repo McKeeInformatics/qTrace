@@ -307,7 +307,13 @@ public class QTraceSettingsDialog {
         chkUnstampedReminder.setWrapText(true);
         chkUnstampedReminder.setTooltip(hintTooltip(
             "When disabled, closing or switching away from an image with unstamped modifications "
-          + "happens silently — no prompt, and the stamp is potentially lost."));
+          + "happens silently — no prompt. With autosave on, the work is still kept as an unstamped session."));
+
+        CheckBox chkAutosave = new CheckBox(QTraceI18n.t("settings.autosave"));
+        chkAutosave.setSelected(cfg.isAutosaveEnabled());
+        chkAutosave.setTextFill(Color.web(TEXT_SUB));
+        chkAutosave.setWrapText(true);
+        chkAutosave.setTooltip(hintTooltip(QTraceI18n.t("settings.autosave.hint")));
 
         // ── Security (activity report) — folded into Preferences ────────────────
         CheckBox chkReportConfirm = new CheckBox(QTraceI18n.t("settings.security.confirm"));
@@ -340,7 +346,7 @@ public class QTraceSettingsDialog {
 
         VBox captureBox = new VBox(10,
             subTitle("General"),
-            chkDetectionNote, chkUnstampedReminder,
+            chkAutosave, chkDetectionNote, chkUnstampedReminder,
             subTitle("Security"),
             chkReportConfirm, langRow, pseudoRow);
         captureBox.setPadding(new Insets(4, 20, 8, 20));
@@ -358,6 +364,7 @@ public class QTraceSettingsDialog {
             updateLicenseStatus(licenseStatusLbl, "", tfValidator, tfEmail);
             chkDetectionNote.setSelected(true);
             chkUnstampedReminder.setSelected(true);
+            chkAutosave.setSelected(true);
         });
 
         btnCancel.setOnAction(e -> dlg.close());
@@ -378,6 +385,7 @@ public class QTraceSettingsDialog {
             if (langBox.getValue() != null) cfg.setReportLanguage(langBox.getValue());
             cfg.setPromptDetectionNote(chkDetectionNote.isSelected());
             cfg.setPromptUnstampedReminder(chkUnstampedReminder.isSelected());
+            cfg.setAutosaveEnabled(chkAutosave.isSelected());
             cfg.save();
             if (chkProjectFolder.isSelected() && projectBaseDir != null) {
                 try { QTraceConfig.createProjectDirs(projectBaseDir); } catch (IOException ignored) {}

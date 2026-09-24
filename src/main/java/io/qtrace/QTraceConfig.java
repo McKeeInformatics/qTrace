@@ -46,6 +46,10 @@ public class QTraceConfig {
     private static final Path DEFAULT_LOGS_DIR =
         Path.of(System.getProperty("user.home"), ".qTrace", "replay-logs");
 
+    /** Live drafts (autosave + crash recovery) — machine-local, never exported or synced. */
+    public static final Path DRAFTS_DIR =
+        Path.of(System.getProperty("user.home"), ".qTrace", "drafts");
+
     // ── Project Folder mode — <project>/qTrace/{trace,geoJson,logs,gitTrack} ──────
     public static final String PROJECT_SUBDIR   = "qTrace";
     public static final String TRACE_SUBDIR     = "trace";
@@ -83,6 +87,9 @@ public class QTraceConfig {
 
     // Unstamped-image reminder on image close/switch — null = prompt by default
     private Boolean promptUnstampedReminder;
+
+    // Live autosave of the capture + unstamped sessions — null = on by default
+    private Boolean autosaveEnabled;
 
     private QTraceConfig() {}
 
@@ -278,6 +285,9 @@ public class QTraceConfig {
     /** Whether to prompt to stamp when unstamped modifications are detected while closing/switching an image. Default: yes. */
     public boolean isPromptUnstampedReminder()           { return promptUnstampedReminder == null || promptUnstampedReminder; }
     public void    setPromptUnstampedReminder(boolean b) { this.promptUnstampedReminder = b; }
+
+    public boolean isAutosaveEnabled()                   { return autosaveEnabled == null || autosaveEnabled; }
+    public void    setAutosaveEnabled(boolean b)         { this.autosaveEnabled = b; }
 
     // ── Raw string getters (for the dialog text fields) ───────────────────────
 

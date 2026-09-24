@@ -87,6 +87,9 @@ public class QTracePanel {
     // Capture status — top-right, on the title's line (passive, non-clickable)
     private Circle   captureDot;
     private Label    captureLabel;
+    private Label    autosaveLabel;
+    private Timeline autosaveTicker;
+    private io.qtrace.draft.AutosaveScheduler.Event autosaveEvent;
     private Timeline captureBlink;
 
     // Record button (header) — CTA "Stamp"
@@ -189,9 +192,53 @@ public class QTracePanel {
     private HBox buildCaptureStatus() {
         captureDot = new Circle(3.2, Color.web(TEXT_MUTED));
         captureLabel = styledLabel("Paused", TEXT_MUTED, FontWeight.BOLD, 10);
-        HBox box = new HBox(5, captureDot, captureLabel);
+        // Live autosave status — "Saved · 3 s ago", like a document editor.
+        autosaveLabel = styledLabel("", TEXT_MUTED, FontWeight.NORMAL, 10);
+        HBox box = new HBox(5, autosaveLabel, captureDot, captureLabel);
         box.setAlignment(Pos.CENTER_RIGHT);
+        autosaveTicker = new Timeline(new KeyFrame(Duration.seconds(5), e -> renderAutosave()));
+        autosaveTicker.setCycleCount(Timeline.INDEFINITE);
+        autosaveTicker.play();
         return box;
+    }
+
+    /** Called by the autosave writer (any thread) on each save attempt. */
+    public void setAutosaveStatus(io.qtrace.draft.AutosaveScheduler.Event event) {
+        Platform.runLater(() -> {
+            autosaveEvent = event;
+            renderAutosave();
+        });
+    }
+
+    private void renderAutosave() {
+        if (autosaveLabel == null) return;
+        var e = autosaveEvent;
+        if (e == null || !QTraceConfig.get().isAutosaveEnabled()) {
+            autosaveLabel.setText("");
+            autosaveLabel.setTooltip(null);
+            return;
+        }
+        switch (e.status()) {
+            case SAVING -> {
+                autosaveLabel.setText(QTraceI18n.t("autosave.saving"));
+                autosaveLabel.setTextFill(Color.web(TEXT_MUTED));
+                autosaveLabel.setTooltip(null);
+            }
+            case SAVED -> {
+                long secs = Math.max(0, java.time.Duration.between(e.at(), java.time.Instant.now()).getSeconds());
+                String ago = secs < 5  ? QTraceI18n.t("autosave.saved.now")
+                           : secs < 60 ? QTraceI18n.f("autosave.saved.seconds", secs)
+                                       : QTraceI18n.f("autosave.saved.minutes", secs / 60);
+                autosaveLabel.setText(QTraceI18n.f("autosave.saved", ago));
+                autosaveLabel.setTextFill(Color.web(TEXT_MUTED));
+                autosaveLabel.setTooltip(null);
+            }
+            case FAILED -> {
+                autosaveLabel.setText("⚠ " + QTraceI18n.t("autosave.failed.short"));
+                autosaveLabel.setTextFill(Color.web(RED));
+                autosaveLabel.setTooltip(new Tooltip(QTraceI18n.f("autosave.failed", e.message())));
+            }
+        }
     }
 
     private void startCaptureBlink() {

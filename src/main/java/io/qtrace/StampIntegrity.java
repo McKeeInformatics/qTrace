@@ -138,11 +138,35 @@ public final class StampIntegrity {
     }
 
     /**
+     * Whether a session was validated by a stamp. {@code validation_state} is written since
+     * live autosave; older .qtrace files fall back to the presence of a validation block.
+     */
+    public static boolean isStamped(JsonObject session) {
+        if (session == null) return false;
+        String state = str(session, "validation_state", null);
+        if (state != null) return "stamped".equals(state);
+        return obj(session, "validation") != null;
+    }
+
+    /** Sessions recorded (autosaved, never stamped) after the last stamp — or in total if none. */
+    public static int unstampedSinceLastStamp(JsonObject root) {
+        if (root == null || !root.has("sessions") || !root.get("sessions").isJsonArray()) return 0;
+        JsonArray sessions = root.getAsJsonArray("sessions");
+        int n = 0;
+        for (int i = sessions.size() - 1; i >= 0; i--) {
+            if (isStamped(sessions.get(i).getAsJsonObject())) break;
+            n++;
+        }
+        return n;
+    }
+
+    /**
      * @param currentQpdataSha256 SHA-256 of the image's data.qpdata now, or null if unknown
      *                            (no project, file missing) — then only the signature is checked.
      */
     public static State check(JsonObject root, String currentQpdataSha256) {
-        JsonObject session = latestSession(root);
+        // The latest *stamped* session: unstamped sessions autosaved after it must not hide it.
+        JsonObject session = latestValidatedSession(root);
         JsonObject val = session != null ? obj(session, "validation") : null;
         if (val == null || str(val, "validator", "").isEmpty()) return State.NO_STAMP;
 

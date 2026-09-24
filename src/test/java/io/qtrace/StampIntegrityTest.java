@@ -16,6 +16,8 @@ import java.security.Signature;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StampIntegrityTest {
 
@@ -95,6 +97,41 @@ class StampIntegrityTest {
     void traceWithoutValidationHasNoStamp() {
         root.getAsJsonArray("sessions").get(0).getAsJsonObject().remove("validation");
         assertEquals(StampIntegrity.State.NO_STAMP, StampIntegrity.check(root, QPDATA));
+    }
+
+    // ── unstamped sessions (live autosave) ──────────────────────────────────
+
+    private static JsonObject unstamped() {
+        JsonObject s = new JsonObject();
+        s.add("validation", com.google.gson.JsonNull.INSTANCE);
+        s.addProperty("validation_state", "unstamped");
+        return s;
+    }
+
+    @Test
+    void unstampedSessionAfterTheStampDoesNotHideIt() {
+        root.getAsJsonArray("sessions").add(unstamped());
+        assertEquals(StampIntegrity.State.OK, StampIntegrity.check(root, QPDATA));
+        validation().addProperty("validator", "Mallory");
+        assertEquals(StampIntegrity.State.SIGNATURE_INVALID, StampIntegrity.check(root, QPDATA));
+    }
+
+    @Test
+    void countsUnstampedSessionsSinceTheLastStamp() {
+        assertEquals(0, StampIntegrity.unstampedSinceLastStamp(root));
+        root.getAsJsonArray("sessions").add(unstamped());
+        root.getAsJsonArray("sessions").add(unstamped());
+        assertEquals(2, StampIntegrity.unstampedSinceLastStamp(root));
+    }
+
+    @Test
+    void stampedStateFollowsTheFieldAndFallsBackToTheValidationBlock() {
+        assertTrue(StampIntegrity.isStamped(session()), "legacy: validation block present");
+        assertFalse(StampIntegrity.isStamped(unstamped()));
+        JsonObject legacyUnstamped = new JsonObject();
+        legacyUnstamped.add("validation", com.google.gson.JsonNull.INSTANCE);
+        assertFalse(StampIntegrity.isStamped(legacyUnstamped));
+        assertFalse(StampIntegrity.isStamped(new JsonObject()));
     }
 
     // ── with the certificate payload ────────────────────────────────────────
