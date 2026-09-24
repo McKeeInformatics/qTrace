@@ -110,17 +110,11 @@ public class QTracePanel {
         stage.setResizable(true);
         stage.setMinHeight(340);
         stage.setHeight(460);
-        if (QTracePluginManager.isEntitled()) {
-            // Compliance toolbar carries 9 buttons (Stamp + Upload/Replay/Versions/Report +
-            // Dashboard/Import/Export/Reset) — 560 truncated every caption to "St…"/"Up…".
-            stage.setMinWidth(760);
-            stage.setWidth(760);
-        } else {
-            // Core toolbar now carries Dashboard + Import + Reset — widened from 340/360 so
-            // the extra icon button doesn't get squeezed or wrap onto a second line.
-            stage.setMinWidth(380);
-            stage.setWidth(400);
-        }
+        // Narrow on demand: below captionsWidth() the toolbar drops its captions (icons +
+        // tooltips), and wraps onto a second line if even that doesn't fit — see applyCompactToolbar.
+        stage.setMinWidth(MIN_WIDTH);
+        stage.setWidth(captionsWidth());
+        stage.widthProperty().addListener((obs, was, now) -> applyCompactToolbar());
         Image logo = loadLogo();
         if (logo != null) stage.getIcons().add(logo);
         stage.setScene(new Scene(buildRoot()));
@@ -254,8 +248,30 @@ public class QTracePanel {
 
     // ── Toolbar row (single line, CTA + functional groups) ──────────────────────
 
-    private HBox buildToolbarRow() {
-        HBox row = new HBox(9);
+    private static final double MIN_WIDTH = 360;
+    // Icon buttons whose caption is hidden when the panel is narrower than captionsWidth().
+    private final java.util.List<Button> captionedButtons = new java.util.ArrayList<>();
+
+    /**
+     * Width at which every toolbar caption fits: the Compliance toolbar carries 9 buttons
+     * (Stamp + Upload/Replay/Versions/Report + Dashboard/Import/Reset) — below 760 captions got
+     * truncated to "St…"/"Up…"; the Core one (Stamp + Dashboard/Import/Reset) fits in 400.
+     */
+    private static double captionsWidth() {
+        return QTracePluginManager.isEntitled() ? 760 : 400;
+    }
+
+    /** Captions only when they fit; icons alone (names in tooltips) when the panel is narrowed. */
+    private void applyCompactToolbar() {
+        boolean compact = stage.getWidth() < captionsWidth();
+        for (Button b : captionedButtons)
+            b.setContentDisplay(compact ? ContentDisplay.GRAPHIC_ONLY : ContentDisplay.TOP);
+    }
+
+    private FlowPane buildToolbarRow() {
+        captionedButtons.clear();
+        // Wraps onto a second line once even the caption-less buttons don't fit on one.
+        FlowPane row = new FlowPane(9, 6);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(6, 0, 0, 0));
 
@@ -634,7 +650,8 @@ public class QTracePanel {
     private Button iconButton(Function<Color, Node> iconFactory, String captionText, String tooltipText, Color hoverColor) {
         Button btn = new Button(captionText);
         btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
-        btn.setContentDisplay(ContentDisplay.TOP);
+        btn.setContentDisplay(stage.getWidth() < captionsWidth() ? ContentDisplay.GRAPHIC_ONLY : ContentDisplay.TOP);
+        captionedButtons.add(btn);
         btn.setGraphicTextGap(3);
         btn.setFont(Font.font("System", 10.5));
         btn.setTextFill(Color.web(TEXT_MUTED));
@@ -909,14 +926,9 @@ public class QTracePanel {
     public void refresh() {
         Platform.runLater(() -> {
             stage.setTitle(QTraceController.getEditionLabel());
-            if (QTracePluginManager.isEntitled()) {
-                stage.setMinWidth(760);
-                if (stage.getWidth() < 760) stage.setWidth(760);
-            } else {
-                stage.setMinWidth(380);
-                if (stage.getWidth() < 380) stage.setWidth(400);
-            }
+            stage.setMinWidth(MIN_WIDTH);
             stage.setScene(new Scene(buildRoot()));
+            applyCompactToolbar();
             refreshStatus();
         });
     }
