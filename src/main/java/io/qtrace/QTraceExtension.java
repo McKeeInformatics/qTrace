@@ -106,7 +106,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         MenuItem player      = new MenuItem("Player");
         player.setOnAction(e -> controller.openReplayDialog());
 
-        MenuItem preferences = new MenuItem("Preferences...");
+        MenuItem preferences = new MenuItem("Settings...");
         preferences.setOnAction(e -> controller.showPreferences());
 
         MenuItem about       = new MenuItem("About QTrace...");
@@ -222,7 +222,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         MenuItem miPlayer = new MenuItem("Player");
         miPlayer.setOnAction(e -> controller.openReplayDialog());
 
-        MenuItem miPrefs  = new MenuItem("Preferences...");
+        MenuItem miPrefs  = new MenuItem("Settings...");
         miPrefs.setOnAction(e -> controller.showPreferences());
 
         MenuItem miAbout  = new MenuItem("About qTrace...");
