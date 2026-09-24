@@ -1,3 +1,17 @@
+## What's new in v1.1.6
+
+### Added — Integrity alert in the panel and the Dashboard
+qTrace now checks the open image's latest stamp whenever you open or switch images, open the panel, or stamp. A line under the image name warns in red when the stamp itself was tampered with (**Stamp corrupted** — a signed field was edited; **.qtrace edited** — a step, parameter or other field no longer matches the certificate) and in orange when the evidence around it changed (**Image data changed since the last stamp**; **Satellite files changed** — thumbnail, GeoJSON or validation log). The Dashboard's Image & Validation card shows the same status on an **Integrity** line. Nothing is shown when everything is intact.
+
+### Added — "🔍 Why?": see exactly what differs from the stamp
+Next to every alert, **Why?** opens a window comparing the current state with the stamp's certificate: the edited `.qtrace` fields (only the changed passage of long scripts), modified or missing satellite files, and — read from the image data on disk — annotations removed, added, recreated, moved or reclassified, plus detection counts per class. The same diagnosis is available offline with `qtrace-verify explain`.
+
+### Added — Detections, annotations and GeoJSON fingerprints in each stamp
+Each stamp now records the number of detections per class and an order-independent fingerprint of detections and annotations, plus the hash of the annotations GeoJSON, so a later change to them can be pinpointed.
+
+### Fixed — Stamping an image with unsaved changes
+The stamp certifies the image data as saved on disk; stamping unsaved work could certify a file that did not contain what was validated. Stamp now asks you to save the image first (File › Save, Ctrl+S).
+
 ## What's new in v1.1.5
 
 ### Added — Brightness & contrast capture, replayed as a real step in the Player
