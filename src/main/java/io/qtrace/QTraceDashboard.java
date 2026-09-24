@@ -1494,6 +1494,10 @@ public class QTraceDashboard {
                         status.setText("⛔ Stamp corrupted — .qtrace edited after signing");
                         status.setTextFill(Color.web(RED));
                     }
+                    case CERTIFICATE_INVALID -> {
+                        status.setText("⛔ Certificate missing or altered — chain of custody broken");
+                        status.setTextFill(Color.web(RED));
+                    }
                     case TRACE_EDITED -> {
                         status.setText("⛔ .qtrace no longer matches its certificate");
                         status.setTextFill(Color.web(RED));

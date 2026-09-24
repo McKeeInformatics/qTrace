@@ -44,6 +44,8 @@ public final class StampIntegrity {
         OK,
         /** The .qtrace stamp fields were edited after signing. */
         SIGNATURE_INVALID,
+        /** The stamp's certificate (.qtcert) is missing, altered, badly signed, or out of chain.jsonl. */
+        CERTIFICATE_INVALID,
         /** Signature valid, but the stamped session no longer matches its certificate
          *  (unsigned fields such as steps or parameters were edited). */
         TRACE_EDITED,
@@ -54,19 +56,24 @@ public final class StampIntegrity {
 
         /** States the panel and the Dashboard alert on. */
         public boolean isAlert() {
-            return this == SIGNATURE_INVALID || this == TRACE_EDITED || this == DATA_CHANGED || this == FILES_CHANGED;
+            return this == SIGNATURE_INVALID || this == CERTIFICATE_INVALID || this == TRACE_EDITED
+                || this == DATA_CHANGED || this == FILES_CHANGED;
         }
     }
 
     /**
-     * Full check against the stamp's certificate: signature, then the stamped session vs
+     * Full check against the stamp's certificate: signature, then the certificate itself
+     * ({@link io.qtrace.chain.CertificateCheck}), then the stamped session vs
      * {@code certPayload} (null when there is no certificate — Core), then the .qpdata,
      * then satellite files in {@code exportDir} and the GeoJSON in {@code trainingDir}.
      */
     public static State check(JsonObject root, String currentQpdataSha256, JsonObject certPayload,
                               java.nio.file.Path exportDir, java.nio.file.Path trainingDir) {
         State base = check(root, currentQpdataSha256);
-        if (base == State.NO_STAMP || base == State.SIGNATURE_INVALID || certPayload == null) return base;
+        if (base == State.NO_STAMP || base == State.SIGNATURE_INVALID) return base;
+        // Checked even without a payload: a deleted certificate is precisely the case where none is found.
+        if (!io.qtrace.chain.CertificateCheck.check(root, exportDir).isEmpty()) return State.CERTIFICATE_INVALID;
+        if (certPayload == null) return base;
         JsonObject session = latestValidatedSession(root);
         if (session != null && !ProvenanceDiff.diffSession(certPayload, session, null).isEmpty())
             return State.TRACE_EDITED;

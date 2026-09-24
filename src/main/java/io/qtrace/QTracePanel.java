@@ -448,10 +448,12 @@ public class QTracePanel {
             integrityRow.setManaged(alert);
             if (!alert) return;
             boolean corrupted = state == StampIntegrity.State.SIGNATURE_INVALID
+                             || state == StampIntegrity.State.CERTIFICATE_INVALID
                              || state == StampIntegrity.State.TRACE_EDITED;
             String color = corrupted ? RED : PEACH;
             integrityLabel.setText(switch (state) {
                 case SIGNATURE_INVALID -> "⛔ Stamp corrupted — the .qtrace was edited after signing";
+                case CERTIFICATE_INVALID -> "⛔ Certificate missing or altered — chain of custody broken";
                 case TRACE_EDITED      -> "⛔ .qtrace edited — it no longer matches its certificate";
                 case DATA_CHANGED      -> "⚠ Image data changed since the last stamp";
                 default                -> "⚠ Satellite files changed since the last stamp";

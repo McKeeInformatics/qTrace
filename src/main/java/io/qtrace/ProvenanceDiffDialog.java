@@ -123,6 +123,13 @@ public final class ProvenanceDiffDialog {
         }
         out.add(new Section(".qtrace file", sigText, sigColor, fields));
 
+        // 1b ── certificate & chain
+        Path certExportDir = qtraceFile != null ? qtraceFile.toPath().getParent() : null;
+        List<Finding> certFindings = io.qtrace.chain.CertificateCheck.check(root, certExportDir);
+        out.add(new Section("Certificate & chain (.qtcert, chain.jsonl)",
+            certFindings.isEmpty() ? "Present, unchanged, validly signed and in the chain (or no certificate for this stamp)" : null,
+            GREEN, certFindings));
+
         // 2 ── satellite files
         Path exportDir = qtraceFile != null ? qtraceFile.toPath().getParent() : null;
         List<Finding> files = new ArrayList<>(ProvenanceDiff.checkFiles(arr(ref, "external_files"), exportDir));
@@ -195,7 +202,7 @@ public final class ProvenanceDiffDialog {
 
     private static String icon(Kind k) {
         return switch (k) {
-            case FIELD, FILE, ANNOTATION_MODIFIED, DETECTIONS -> "≠";
+            case FIELD, FILE, ANNOTATION_MODIFIED, DETECTIONS, CERTIFICATE -> "≠";
             case ANNOTATION_REMOVED -> "−";
             case ANNOTATION_ADDED -> "+";
             case ANNOTATION_RECREATED -> "↻";
@@ -203,9 +210,9 @@ public final class ProvenanceDiffDialog {
         };
     }
 
-    /** Same severity as the panel alert: the .qtrace (the proof itself) is red, data and satellites orange. */
+    /** Same severity as the panel alert: the proof itself (.qtrace, certificate) is red, data and satellites orange. */
     private static String color(Kind k) {
-        return k == Kind.FIELD ? RED : PEACH;
+        return k == Kind.FIELD || k == Kind.CERTIFICATE ? RED : PEACH;
     }
 
     private static Label label(String text, String color, int size, FontWeight weight) {

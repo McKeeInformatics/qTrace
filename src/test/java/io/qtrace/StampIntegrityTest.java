@@ -159,4 +159,18 @@ class StampIntegrityTest {
         JsonObject ref = StampIntegrity.findCertPayload(root, dir);
         assertEquals(10, ref.get("steps_captured").getAsInt());
     }
+
+    @Test
+    void referencedCertificateDeletedIsCertificateInvalid(@TempDir Path dir) throws Exception {
+        validation().addProperty("case_id", "proj/p.qpproj");
+        JsonObject ref = new JsonObject();
+        ref.addProperty("type", "cert");
+        ref.addProperty("filename", "qtc_GONE.qtcert");
+        ref.addProperty("sha256", "0".repeat(64));
+        JsonArray files = new JsonArray();
+        files.add(ref);
+        session().add("external_files", files);
+        // No certificate payload can be found either — the deletion itself must raise the alert.
+        assertEquals(StampIntegrity.State.CERTIFICATE_INVALID, StampIntegrity.check(root, QPDATA, null, dir, dir));
+    }
 }

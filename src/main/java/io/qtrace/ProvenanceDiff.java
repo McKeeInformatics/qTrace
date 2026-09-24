@@ -49,7 +49,7 @@ public final class ProvenanceDiff {
 
     public enum Kind {
         FIELD, ANNOTATION_REMOVED, ANNOTATION_ADDED, ANNOTATION_RECREATED, ANNOTATION_MODIFIED,
-        DETECTIONS, FILE, NOT_COMPARABLE
+        DETECTIONS, FILE, CERTIFICATE, NOT_COMPARABLE
     }
 
     /** One divergence. {@code stamped}/{@code current} are display strings. */
