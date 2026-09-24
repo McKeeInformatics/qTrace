@@ -783,7 +783,7 @@ public class QTraceDashboard {
             case 3  -> getRegionFromRow(rd);
             case 4  -> String.format("%09d", getAnnotationCountFromRow(rd));
             case 5  -> {
-                JsonObject s = latestSession(rd.qtrace());
+                JsonObject s = StampIntegrity.latestValidatedSession(rd.qtrace());
                 if (s == null) yield "z";
                 JsonObject val = jsonObj(s, "validation");
                 if (val == null) yield "z";
@@ -852,15 +852,19 @@ public class QTraceDashboard {
             : "—";
         String annColor = annCount > 0 ? TEXT_SUB : TEXT_MUTED;
 
-        // Col 5 — ✓ Validated
+        // Col 5 — ✓ Validated: the latest *stamped* session (unstamped ones never validate),
+        // plus how many unstamped sessions were recorded since.
+        JsonObject stampedSession = hasTrace ? StampIntegrity.latestValidatedSession(root) : null;
+        int        unstamped      = hasTrace ? StampIntegrity.unstampedSinceLastStamp(root) : 0;
         String valText, valColor;
         if (hasSession) {
-            JsonObject val = jsonObj(session, "validation");
+            JsonObject val = stampedSession != null ? jsonObj(stampedSession, "validation") : null;
             if (val != null) {
                 String conf = str(val, "confidence", "");
                 valText  = "✔  " + truncate(str(val, "validator", "?"), 14) + " — " + conf;
                 valColor = confidenceColor(conf);
             } else { valText = "Not validated"; valColor = TEXT_MUTED; }
+            if (unstamped > 0) valText += "  " + QTraceI18n.f("dashboard.unstampedSince", unstamped);
         } else { valText = "—"; valColor = TEXT_MUTED; }
 
         // Col 6 — Alignment
@@ -914,7 +918,7 @@ public class QTraceDashboard {
         // Col 10 — 🛡 Signature
         String shieldText, shieldColor;
         {
-            JsonObject val = hasSession ? jsonObj(session, "validation") : null;
+            JsonObject val = stampedSession != null ? jsonObj(stampedSession, "validation") : null;
             Boolean valid = val != null ? StampIntegrity.verifyValidation(val, root, true) : null;
             if (valid != null) {
                 boolean ok = valid;
@@ -1325,9 +1329,13 @@ public class QTraceDashboard {
                 validatedSessions.add(s);
         }
 
+        int unstamped = StampIntegrity.unstampedSinceLastStamp(root);
         if (validatedSessions.isEmpty()) {
             imageCardContent.getChildren().add(
                 lbl("Not validated", TEXT_MUTED, 11, FontWeight.NORMAL, true));
+            if (unstamped > 0)
+                imageCardContent.getChildren().add(lbl(QTraceI18n.f("dashboard.unstampedSessions", unstamped),
+                    TEXT_MUTED, 11, FontWeight.NORMAL, true));
             return;
         }
 
@@ -1335,6 +1343,9 @@ public class QTraceDashboard {
         JsonObject latestSession = validatedSessions.get(validatedSessions.size() - 1);
         JsonObject latestVal = latestSession.getAsJsonObject("validation");
         imageCardContent.getChildren().add(buildValidationRow(latestVal, root, true));
+        if (unstamped > 0)
+            imageCardContent.getChildren().add(lbl(QTraceI18n.f("dashboard.unstampedSinceStamp", unstamped),
+                PEACH, 11, FontWeight.NORMAL, true));
 
         // Anchor (OTS) badge — M2
         File qtraceFile = (selectedData != null) ? selectedData.qtraceFile() : null;
@@ -2421,7 +2432,7 @@ public class QTraceDashboard {
                 ? s.getAsJsonObject("validation") : null;
             String validStr    = val != null
                 ? "✅ " + str(val, "validator", "?") + " (" + str(val, "confidence", "") + ")"
-                : "(not validated)";
+                : "◌ " + QTraceI18n.t("graph.unstamped");
             String validColor  = val != null ? GREEN : TEXT_MUTED;
 
             String machineStr  = machine.isEmpty() ? "" : "  @" + machine;
@@ -2549,7 +2560,7 @@ public class QTraceDashboard {
     }
 
     private static String getValidatedTextFromRow(RowData rd) {
-        JsonObject session = latestSession(rd.qtrace());
+        JsonObject session = StampIntegrity.latestValidatedSession(rd.qtrace());
         if (session == null) return "";
         JsonObject val = jsonObj(session, "validation");
         if (val == null) return "";
@@ -2599,7 +2610,7 @@ public class QTraceDashboard {
     /** "signed" | "corrupted" | "not signed" | "" — mirrors buildTableRow()'s 🛡 column. */
     private static String getSignatureStatusFromRow(RowData rd) {
         JsonObject root    = rd.qtrace();
-        JsonObject session = latestSession(root);
+        JsonObject session = StampIntegrity.latestValidatedSession(root);
         JsonObject val     = session != null ? jsonObj(session, "validation") : null;
         Boolean valid = val != null ? StampIntegrity.verifyValidation(val, root, true) : null;
         if (valid != null) {

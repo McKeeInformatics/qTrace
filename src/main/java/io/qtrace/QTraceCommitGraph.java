@@ -80,6 +80,7 @@ public class QTraceCommitGraph {
         String  id, parentId, branch;
         String  contributor, validator, confidence, fidelity, notes, scope, exportedAt, imageHashShort;
         boolean signed;
+        boolean stamped = true;     // false: autosaved session, never validated
         int     stepsCaptured, preTracking;
         JsonObject contributions;   // { contributor, actions:{cat:count} }
         double  cx, cy;             // canvas centre (for hit-testing)
@@ -223,6 +224,7 @@ public class QTraceCommitGraph {
         n.contributor   = str(s, "user", "unknown");
         n.exportedAt    = str(s, "exported_at", "");
         n.stepsCaptured = s.has("steps_captured") ? s.get("steps_captured").getAsInt() : 0;
+        n.stamped       = StampIntegrity.isStamped(s);
 
         if (s.has("steps") && s.get("steps").isJsonArray()) {
             for (JsonElement el : s.getAsJsonArray("steps")) {
@@ -290,11 +292,22 @@ public class QTraceCommitGraph {
             g.setLineWidth(3);
             g.strokeOval(n.cx - NODE_R - 4, n.cy - NODE_R - 4, (NODE_R + 4) * 2, (NODE_R + 4) * 2);
         }
-        g.setFill(nodeColor);
-        g.fillOval(n.cx - NODE_R, n.cy - NODE_R, NODE_R * 2, NODE_R * 2);
+        if (n.stamped) {
+            g.setFill(nodeColor);
+            g.fillOval(n.cx - NODE_R, n.cy - NODE_R, NODE_R * 2, NODE_R * 2);
+        } else {
+            // Unstamped (autosaved) session: hollow, dashed — recorded, not validated.
+            g.setFill(Color.web(BG_BASE));
+            g.fillOval(n.cx - NODE_R, n.cy - NODE_R, NODE_R * 2, NODE_R * 2);
+            g.setStroke(Color.web(TEXT_MUTED));
+            g.setLineWidth(2);
+            g.setLineDashes(4, 4);
+            g.strokeOval(n.cx - NODE_R, n.cy - NODE_R, NODE_R * 2, NODE_R * 2);
+            g.setLineDashes();
+        }
 
         // Commit index inside the node.
-        g.setFill(Color.web(BG_BASE));
+        g.setFill(Color.web(n.stamped ? BG_BASE : TEXT_MUTED));
         g.setFont(Font.font("System", FontWeight.BOLD, 13));
         g.setTextAlign(TextAlignment.CENTER);
         g.fillText("#" + (n.index + 1), n.cx, n.cy + 4);
@@ -318,8 +331,12 @@ public class QTraceCommitGraph {
         g.setFont(Font.font("System", FontWeight.BOLD, 11));
         g.fillText(ellipsis(title(n), 22), n.cx, n.cy + NODE_R + 18);
 
-        // Validator + signature mark.
-        if (n.validator != null) {
+        // Validator + signature mark — or the unstamped mark.
+        if (!n.stamped) {
+            g.setFill(Color.web(TEXT_MUTED));
+            g.setFont(Font.font("System", FontWeight.BOLD, 10));
+            g.fillText(QTraceI18n.t("graph.unstamped"), n.cx, n.cy + NODE_R + 34);
+        } else if (n.validator != null) {
             g.setFill(n.signed ? Color.web(GREEN) : Color.web(TEXT_MUTED));
             g.setFont(Font.font("System", 10));
             g.fillText((n.signed ? "✓ " : "") + ellipsis(n.validator, 20), n.cx, n.cy + NODE_R + 34);
@@ -343,6 +360,8 @@ public class QTraceCommitGraph {
         detailBox.getChildren().add(sectionTitle("#" + (n.index + 1) + " — " + title(n)));
 
         addBadgeRow(n);
+        detailBox.getChildren().add(kv(QTraceI18n.t("graph.detail.validation"),
+            QTraceI18n.t(n.stamped ? "graph.detail.stamped" : "graph.detail.unstamped")));
         if (n.validator != null)
             detailBox.getChildren().add(kv(QTraceI18n.t("graph.detail.validator"),
                 (n.signed ? "✓ " : "") + n.validator));
