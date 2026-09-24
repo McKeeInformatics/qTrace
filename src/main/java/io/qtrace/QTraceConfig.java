@@ -131,13 +131,44 @@ public class QTraceConfig {
     public void    setUseProjectFolder(boolean b) { this.useProjectFolder = b; }
 
     /**
+     * {@code <projectBaseDir>/qTrace} — or the folder already there under another case
+     * ({@code qtrace/}, {@code QTRACE/}). Synology Drive, OneDrive and Windows/macOS disks treat
+     * those names as one: creating {@code qTrace/} next to {@code qtrace/} makes a sync client
+     * rename it {@code qTrace_<host>_<date>_CaseConflict} on every export.
+     */
+    public static Path projectQTraceDir(Path projectBaseDir) {
+        return existingChild(projectBaseDir, PROJECT_SUBDIR);
+    }
+
+    /** {@code <projectBaseDir>/qTrace/<subdir>}, each level reusing a folder that differs only by case. */
+    private static Path projectSubdir(Path projectBaseDir, String subdir) {
+        return existingChild(projectQTraceDir(projectBaseDir), subdir);
+    }
+
+    /** {@code parent/name}, unless only a case variant of it exists — then that one. */
+    private static Path existingChild(Path parent, String name) {
+        Path exact = parent.resolve(name);
+        if (Files.isDirectory(exact) || !Files.isDirectory(parent)) return exact;
+        try (var children = Files.list(parent)) {
+            return children
+                .filter(Files::isDirectory)
+                .filter(p -> p.getFileName().toString().equalsIgnoreCase(name))
+                .sorted()
+                .findFirst()
+                .orElse(exact);
+        } catch (IOException e) {
+            return exact;
+        }
+    }
+
+    /**
      * Resolves a path that may be redirected under {@code <projectBaseDir>/qTrace/<subdir>}
      * when Project Folder mode is on and a project is open; otherwise returns {@code fallback}.
      * Pure/static so it's testable without the config singleton.
      */
     public static Path resolveDir(boolean useProjectFolder, Path projectBaseDir, String subdir, Path fallback) {
         if (useProjectFolder && projectBaseDir != null) {
-            return projectBaseDir.resolve(PROJECT_SUBDIR).resolve(subdir);
+            return projectSubdir(projectBaseDir, subdir);
         }
         return fallback;
     }
@@ -155,7 +186,7 @@ public class QTraceConfig {
     public static Optional<Path> readDir(boolean useProjectFolder, Path projectBaseDir, String subdir, Path fallback) {
         if (useProjectFolder) {
             return projectBaseDir == null ? Optional.empty()
-                : Optional.of(projectBaseDir.resolve(PROJECT_SUBDIR).resolve(subdir));
+                : Optional.of(projectSubdir(projectBaseDir, subdir));
         }
         return Optional.ofNullable(fallback);
     }
@@ -196,7 +227,7 @@ public class QTraceConfig {
     /** Creates the four Project Folder mode subfolders under {@code <projectBaseDir>/qTrace/} if missing. */
     public static void createProjectDirs(Path projectBaseDir) throws IOException {
         for (String sub : new String[] { TRACE_SUBDIR, GEOJSON_SUBDIR, LOGS_SUBDIR, GITTRACK_SUBDIR }) {
-            Files.createDirectories(projectBaseDir.resolve(PROJECT_SUBDIR).resolve(sub));
+            Files.createDirectories(projectSubdir(projectBaseDir, sub));
         }
     }
 

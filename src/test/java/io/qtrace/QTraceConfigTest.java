@@ -54,6 +54,48 @@ class QTraceConfigTest {
         assertTrue(Files.isDirectory(root.resolve("gitTrack")));
     }
 
+    // ── Folder that already exists with another case (qtrace/, QTRACE/, Trace/…) ─────
+    // Synology Drive, OneDrive or a Windows/macOS disk treat qTrace/ and qtrace/ as the same
+    // name: creating qTrace/ next to an existing qtrace/ makes the sync client rename it
+    // "qTrace_<host>_<date>_CaseConflict" on every export.
+
+    @Test
+    void resolveDir_reusesExistingFolderWithOtherCase(@TempDir Path project) throws Exception {
+        Files.createDirectories(project.resolve("qtrace"));
+        assertEquals(project.resolve("qtrace").resolve("trace"),
+            QTraceConfig.resolveDir(true, project, QTraceConfig.TRACE_SUBDIR, FALLBACK));
+    }
+
+    @Test
+    void resolveDir_reusesExistingSubfolderWithOtherCase(@TempDir Path project) throws Exception {
+        Files.createDirectories(project.resolve("qTrace").resolve("GeoJSON"));
+        assertEquals(project.resolve("qTrace").resolve("GeoJSON"),
+            QTraceConfig.resolveDir(true, project, QTraceConfig.GEOJSON_SUBDIR, FALLBACK));
+    }
+
+    @Test
+    void readDir_reusesExistingFolderWithOtherCase(@TempDir Path project) throws Exception {
+        Files.createDirectories(project.resolve("qtrace").resolve("trace"));
+        assertEquals(Optional.of(project.resolve("qtrace").resolve("trace")),
+            QTraceConfig.readDir(true, project, QTraceConfig.TRACE_SUBDIR, FALLBACK));
+    }
+
+    @Test
+    void createProjectDirs_intoExistingFolderWithOtherCase(@TempDir Path project) throws Exception {
+        Files.createDirectories(project.resolve("qtrace"));
+        QTraceConfig.createProjectDirs(project);
+
+        assertTrue(Files.isDirectory(project.resolve("qtrace").resolve("trace")));
+        assertEquals(1, Files.list(project).count(), "no second qTrace/ next to qtrace/");
+    }
+
+    @Test
+    void exactCaseWins_whenBothExist(@TempDir Path project) throws Exception {
+        Files.createDirectories(project.resolve("qtrace"));
+        Files.createDirectories(project.resolve("qTrace"));
+        assertEquals(project.resolve("qTrace"), QTraceConfig.projectQTraceDir(project));
+    }
+
     // ── Reading side (Dashboard, version graph) ──────────────────────────────
 
     @Test

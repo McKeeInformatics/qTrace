@@ -130,7 +130,7 @@ public class QTraceSettingsDialog {
         btnOpenProject.setDisable(projectBaseDir == null);
         btnOpenProject.setOnAction(e -> {
             if (projectBaseDir == null) return;
-            Path qDir = projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR);
+            Path qDir = QTraceConfig.projectQTraceDir(projectBaseDir);
             openUrl(java.nio.file.Files.isDirectory(qDir) ? qDir.toString() : projectBaseDir.toString());
         });
         btnOpenProject.visibleProperty().bind(chkProjectFolder.selectedProperty());
@@ -154,10 +154,10 @@ public class QTraceSettingsDialog {
             tfLogs.setDisable(useProj);
             if (useProj) {
                 if (projectBaseDir != null) {
-                    tfExport.setText(projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR).resolve(QTraceConfig.TRACE_SUBDIR).toString());
-                    tfClassifier.setText(projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR).resolve(QTraceConfig.GITTRACK_SUBDIR).toString());
-                    tfTraining.setText(projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR).resolve(QTraceConfig.GEOJSON_SUBDIR).toString());
-                    tfLogs.setText(projectBaseDir.resolve(QTraceConfig.PROJECT_SUBDIR).resolve(QTraceConfig.LOGS_SUBDIR).toString());
+                    tfExport.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.TRACE_SUBDIR, null).toString());
+                    tfClassifier.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.GITTRACK_SUBDIR, null).toString());
+                    tfTraining.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.GEOJSON_SUBDIR, null).toString());
+                    tfLogs.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.LOGS_SUBDIR, null).toString());
                 } else {
                     for (TextField tf : new TextField[] { tfExport, tfClassifier, tfTraining, tfLogs }) {
                         tf.setText("");
