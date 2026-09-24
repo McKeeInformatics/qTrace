@@ -44,6 +44,7 @@ import qupath.lib.projects.ProjectImageEntry;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -1214,6 +1215,10 @@ public class QTraceController {
     // ── Extension capture ─────────────────────────────────────────────────────
 
     private JsonArray collectLoadedExtensions() {
+        return collectLoadedExtensions(qupath);
+    }
+
+    private static JsonArray collectLoadedExtensions(QuPathGUI qupath) {
         JsonArray arr = new JsonArray();
 
         // QuPath 0.5.x: getLoadedExtensions() on QuPathGUI
@@ -1280,6 +1285,19 @@ public class QTraceController {
         Path csvFile   = exporter.appendToMasterCsv(exportDir);
         QTraceExporter.appendExternalFile(out, "csv", csvFile);
         return out.getFileName().toString();
+    }
+
+    /**
+     * Writes the attached image's .qtrace session without a stamp — used by the Compliance
+     * Player at the end of a replay on each target, so every target gets its own .qtrace
+     * (steps + replayed_from) even when it's never stamped. Stamping later appends a
+     * stamped session as usual.
+     */
+    public static Path exportUnstamped(QuPathGUI qupath, ActionLogger logger) throws IOException {
+        // No master_validation_log.csv row: that log lists validations, and this isn't one.
+        var exporter = new QTraceExporter(logger, null, null);
+        exporter.setExtensions(collectLoadedExtensions(qupath));
+        return exporter.export(QTraceConfig.get().outputExportDir());
     }
 
     /**

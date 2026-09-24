@@ -161,6 +161,11 @@ public class ActionLogger implements WorkflowListener {
     // Cell intensity classifications ─────────────────────────────────────────
     private final Map<String, CellIntensityRecord> cellIntensityRecords = new LinkedHashMap<>();
 
+    // Replay recording — see markReplayStart()/beginReplayStep()/endReplayStep(). Null
+    // replayStepIndex = no replay instruction running, workflow captured live as usual.
+    private JsonObject       replayedFrom     = null;
+    private volatile Integer replayStepIndex  = null;
+
     // Pre-existing step count — set once at attach(), used by the panel to
     // distinguish history captured retroactively from new steps in this session.
     private int preExistingStepCount = 0;
@@ -371,8 +376,10 @@ public class ActionLogger implements WorkflowListener {
                 }
         };
         imageData.getHierarchy().getSelectionModel().addPathObjectSelectionListener(selectionListener);
-        startClassifierWatcher();
-        startObjectClassifierWatcher();
+        // Headless (no QuPathGUI — e.g. unit tests): workflow capture only, no GUI watchers.
+        boolean gui = qupath != null;
+        if (gui) startClassifierWatcher();
+        if (gui) startObjectClassifierWatcher();
 
         // Retroactively detect classifiers and cell intensity steps from existing workflow.
         for (WorkflowStep step : existing) {
@@ -382,11 +389,13 @@ public class ActionLogger implements WorkflowListener {
             }
         }
 
-        startWarpyFileWatcher();
-        snapshotAlignment();
-        startAlignmentWatcher();
-        startMeasurementMapWatcher();
-        startDisplaySettingsWatcher();
+        if (gui) {
+            startWarpyFileWatcher();
+            snapshotAlignment();
+            startAlignmentWatcher();
+            startMeasurementMapWatcher();
+            startDisplaySettingsWatcher();
+        }
 
         refreshManualAnnotationCount();
         if (panel != null) panel.setRecordingActive(true);
@@ -431,6 +440,8 @@ public class ActionLogger implements WorkflowListener {
         lastSelectedAnnotations.clear();
         currentImageData      = null;
         imageHash             = null;
+        replayedFrom          = null;
+        replayStepIndex       = null;
         lastKnownStepCount    = 0;
         manualAnnotationCount = 0;
         capturedSteps.clear();
@@ -457,13 +468,20 @@ public class ActionLogger implements WorkflowListener {
 
     @Override
     public void workflowUpdated(Workflow workflow) {
-        List<WorkflowStep> steps = workflow.getSteps();
+        // A replay instruction is running: its workflow entries are reconciled first (exactly
+        // one per OK instruction, none otherwise) and captured by endReplayStep().
+        if (replayStepIndex != null) return;
+        captureNewSteps(workflow.getSteps(), null);
+    }
+
+    private void captureNewSteps(List<WorkflowStep> steps, Integer replayedStep) {
         int newSize = steps.size();
         if (newSize <= lastKnownStepCount) return;
 
         for (int i = lastKnownStepCount; i < newSize; i++) {
             WorkflowStep step = steps.get(i);
             JsonObject json   = serializeStep(step, i);
+            if (replayedStep != null) json.addProperty("replayed_step", replayedStep);
             capturedSteps.add(json);
             if (panel != null) panel.log("Step " + (i + 1) + " captured: " + step.getName());
             if (step instanceof ScriptableWorkflowStep s) {
@@ -765,6 +783,44 @@ public class ActionLogger implements WorkflowListener {
     public QuPathGUI        getQuPath()                   { return qupath; }
     public void             setScriptRunning(boolean b)   { scriptRunning = b; }
     public Set<UUID>        getSessionAnnotationIds()     { return Collections.unmodifiableSet(annotationStepIndex.keySet()); }
+
+    // ── Replay recording (driven by the Compliance Player's ReplayRecorder) ─────
+
+    /** Source of the replay applied to this image (its .qtrace name/hash/id), or null outside a replay. */
+    public JsonObject getReplayedFrom() { return replayedFrom; }
+
+    /**
+     * Marks the start of a replay on the attached image. Unless {@code keepHistory} (the image
+     * had saved data, or was already open with possibly unsaved work), everything captured so
+     * far is left out of the exported session ({@code replay_excluded}): on a never-opened
+     * image those are QuPath's own first-open steps (e.g. "Set image type"), not instructions.
+     */
+    public void markReplayStart(JsonObject replayedFrom, boolean keepHistory) {
+        this.replayedFrom = replayedFrom;
+        if (keepHistory) return;
+        for (JsonObject step : capturedSteps) step.addProperty("replay_excluded", true);
+    }
+
+    /**
+     * Defers workflow capture while replay instruction {@code sourceIndex} runs; its objects
+     * are also not captured as manual annotations (same guard as a running script).
+     */
+    public void beginReplayStep(int sourceIndex) {
+        scriptRunning   = true;
+        replayStepIndex = sourceIndex;
+    }
+
+    /** Captures what the instruction left in the workflow, tagged {@code replayed_step}. */
+    public void endReplayStep() {
+        Integer idx = replayStepIndex;
+        replayStepIndex = null;
+        scriptRunning   = false;
+        if (currentImageData == null || idx == null) return;
+        List<WorkflowStep> steps = currentImageData.getHistoryWorkflow().getSteps();
+        // A failed instruction's partial entries were removed — never index past the end.
+        if (lastKnownStepCount > steps.size()) lastKnownStepCount = steps.size();
+        captureNewSteps(steps, idx);
+    }
 
     public Set<String> getDeletedFragments() {
         return Collections.unmodifiableSet(deletedFragments);
@@ -1774,7 +1830,7 @@ public class ActionLogger implements WorkflowListener {
      * Covers the "Load pixel classifier" dialog workflow (no file-write event fires).
      */
     private void detectClassifierFromScript(String script) {
-        if (script == null || script.isBlank()) return;
+        if (script == null || script.isBlank() || qupath == null) return;
         var project = qupath.getProject();
         if (project == null || project.getPath() == null) return;
 

@@ -307,14 +307,13 @@ public class QTraceExporter {
         // Workflow steps
         List<WorkflowStep> rawSteps = imageData.getHistoryWorkflow().getSteps();
         JsonArray stepsArr = new JsonArray();
-        for (JsonObject captured : logger.getCapturedSteps()) {
-            if (!captured.has("deleted") || !captured.get("deleted").getAsBoolean())
-                stepsArr.add(captured);
-        }
+        for (JsonObject captured : selectSessionSteps(logger.getCapturedSteps())) stepsArr.add(captured);
         session.addProperty("steps_raw",         rawSteps.size());
         session.addProperty("steps_captured",     stepsArr.size());
         session.addProperty("manual_annotations", logger.getManualAnnotationCount());
         session.add("steps", stepsArr);
+        // This session came from replaying another .qtrace — keep the link to its source.
+        if (logger.getReplayedFrom() != null) session.add("replayed_from", logger.getReplayedFrom().deepCopy());
 
         // Contributions: categorized summary of this commit's actions, attributed to its
         // single author. Pre-tracking steps (prior contributor's inherited state) excluded.
@@ -396,6 +395,23 @@ public class QTraceExporter {
             session.add("extensions", extensions);
 
         return session;
+    }
+
+    /**
+     * The captured steps that belong in a session's {@code steps[]} — deleted ones dropped, and
+     * those a replay left out ({@code replay_excluded}, see ActionLogger#markReplayStart).
+     */
+    public static List<JsonObject> selectSessionSteps(List<JsonObject> captured) {
+        List<JsonObject> out = new ArrayList<>();
+        for (JsonObject step : captured) {
+            if (flag(step, "deleted") || flag(step, "replay_excluded")) continue;
+            out.add(step);
+        }
+        return out;
+    }
+
+    private static boolean flag(JsonObject o, String key) {
+        return o.has(key) && o.get(key).getAsBoolean();
     }
 
     /**
