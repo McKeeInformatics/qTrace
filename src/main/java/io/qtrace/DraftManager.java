@@ -25,6 +25,7 @@ import io.qtrace.draft.AutosaveScheduler;
 import io.qtrace.draft.CaptureState;
 import io.qtrace.draft.CaptureStateCodec;
 import io.qtrace.draft.DraftStore;
+import io.qtrace.draft.SnapshotPolicy;
 import javafx.application.Platform;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -76,14 +77,23 @@ final class DraftManager {
     private volatile String     baselineFingerprint;   // state at the last commit (or at open)
     private volatile String     lastWrittenFingerprint;
     private volatile boolean    draftOnDisk;
-    private final AtomicBoolean imageDirty = new AtomicBoolean(false);
+    // Image changes since the last image copy, split by weight (see SnapshotPolicy).
+    private final AtomicBoolean keyPending   = new AtomicBoolean(false);
+    private final AtomicBoolean minorPending = new AtomicBoolean(false);
+    private volatile boolean hasSnapshot;          // the draft on disk holds an image copy
+    private volatile long    lastSnapshotBytes;    // size of this image's last copy (0 = unknown)
+    private volatile long    lastSnapshotAt;
     // Sessions already in the .qtrace — a write racing a commit must not resurrect their draft.
     private final java.util.Set<String> committedSessionIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    private final PathObjectHierarchyListener hierarchyListener = e -> onImageChanged();
-    private final WorkflowListener            workflowListener  = w -> onImageChanged();
+    private final PathObjectHierarchyListener hierarchyListener = e ->
+        onImageChanged(SnapshotPolicy.isKeyHierarchyChange(e.getChangedObjects().size()));
+    private final WorkflowListener workflowListener = w -> {
+        var last = w.getLastStep();
+        onImageChanged(last != null && SnapshotPolicy.isKeyWorkflowStep(last.getName()));
+    };
 
-    private record Capture(CaptureState state, boolean imageUnsaved, boolean imageDirty,
+    private record Capture(CaptureState state, boolean imageUnsaved, boolean keyPending, boolean minorPending,
                            ImageData<BufferedImage> image, String key, JsonObject header) {}
 
     DraftManager(QuPathGUI qupath, ActionLogger logger, Consumer<AutosaveScheduler.Event> ui) {
@@ -141,7 +151,11 @@ final class DraftManager {
         baselineFingerprint    = uncommitted ? "" : fp;
         lastWrittenFingerprint = recoveredHeader != null ? null : fp;
         draftOnDisk            = recoveredHeader != null;
-        imageDirty.set(recoveredHeader != null);
+        keyPending.set(false);
+        minorPending.set(recoveredHeader != null);
+        hasSnapshot       = recoveredHeader != null && recoveredHeader.has("snapshot_file");
+        lastSnapshotBytes = 0;
+        lastSnapshotAt    = 0;
         data.getHierarchy().addListener(hierarchyListener);
         data.getHistoryWorkflow().addWorkflowListener(workflowListener);
     }
@@ -205,7 +219,9 @@ final class DraftManager {
         baselineFingerprint    = fp;
         lastWrittenFingerprint = fp;
         header = newHeader(data);
-        imageDirty.set(false);
+        keyPending.set(false);
+        minorPending.set(false);
+        hasSnapshot = false;
         discardFile();
     }
 
@@ -252,9 +268,14 @@ final class DraftManager {
 
     AutosaveScheduler.Event lastEvent() { return scheduler.lastEvent(); }
 
-    private void onImageChanged() {
-        imageDirty.set(true);
+    private void onImageChanged(boolean keyStep) {
+        (keyStep ? keyPending : minorPending).set(true);
         markDirty();
+    }
+
+    private void restorePending(Capture c) {
+        if (c.keyPending())   keyPending.set(true);
+        if (c.minorPending()) minorPending.set(true);
     }
 
     // ── Writer thread ─────────────────────────────────────────────────────────
@@ -266,24 +287,34 @@ final class DraftManager {
         Capture c = onFx(() -> {
             var data = imageData;
             if (data == null || logger.getCurrentImageData() != data) return null;
-            return new Capture(logger.snapshotState(), data.isChanged(), imageDirty.getAndSet(false),
+            return new Capture(logger.snapshotState(), data.isChanged(),
+                               keyPending.getAndSet(false), minorPending.getAndSet(false),
                                data, key, header != null ? header.deepCopy() : null);
         });
         if (c == null || c.key() == null || c.header() == null)
             return new AutosaveScheduler.FlushResult(false, 0);
 
         String fp = fingerprint(CaptureStateCodec.toJson(c.state()));
-        boolean needSnapshot = c.imageUnsaved() && (c.imageDirty() || !draftOnDisk);
-        boolean untouched    = fp.equals(baselineFingerprint) && !draftOnDisk && !c.imageDirty();
+        boolean imageChanged = c.keyPending() || c.minorPending();
+        long    now          = System.currentTimeMillis();
+        SnapshotPolicy policy = QTraceConfig.get().getSnapshotPolicy();
+        // Unsaved image: copy it the first time, then as the policy allows (large images are
+        // throttled). Changes not copied yet stay pending for a later pass.
+        boolean needSnapshot = c.imageUnsaved() && (!hasSnapshot
+            || policy.shouldSnapshot(lastSnapshotBytes, lastSnapshotAt, now, c.keyPending(), c.minorPending()));
+        if (c.imageUnsaved() && !needSnapshot) restorePending(c);
+        boolean untouched    = fp.equals(baselineFingerprint) && !draftOnDisk && !imageChanged;
         if (untouched || (changedOnly && fp.equals(lastWrittenFingerprint) && !needSnapshot))
             return new AutosaveScheduler.FlushResult(false, 0);
 
         long snapshotMillis = 0;
+        long snapshotSize   = 0;
         DraftStore.SnapshotMode mode;
         if (needSnapshot) {
             long t0 = System.nanoTime();
             byte[] bytes = snapshotBytes(c.image());
             snapshotMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0);
+            snapshotSize   = bytes.length;
             mode = DraftStore.SnapshotMode.write(out -> out.write(bytes));
         } else if (!c.imageUnsaved()) {
             // Saved image: its .qpdata is the snapshot. Remember which one, to spot a later save elsewhere.
@@ -295,8 +326,15 @@ final class DraftManager {
         try {
             store.write(c.key(), c.header(), c.state(), mode);
         } catch (Exception e) {
-            if (needSnapshot) imageDirty.set(true);
+            if (needSnapshot) restorePending(c);
             throw e;
+        }
+        if (needSnapshot) {
+            hasSnapshot       = true;
+            lastSnapshotBytes = snapshotSize;
+            lastSnapshotAt    = now;
+        } else if (!c.imageUnsaved()) {
+            hasSnapshot = false;
         }
         // Committed while we were writing: that draft must not outlive its session.
         String writtenId = c.header().has("session_id") ? c.header().get("session_id").getAsString() : null;

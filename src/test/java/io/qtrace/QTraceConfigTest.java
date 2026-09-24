@@ -136,4 +136,14 @@ class QTraceConfigTest {
             QTraceConfig.setProjectDirSupplier(() -> null);
         }
     }
+
+    @Test
+    void snapshotPolicy_autoUnlessCustomIsChosen() {
+        assertEquals(io.qtrace.draft.SnapshotPolicy.auto(), QTraceConfig.snapshotPolicy(null, 200, 10, true));
+        assertEquals(io.qtrace.draft.SnapshotPolicy.auto(), QTraceConfig.snapshotPolicy("auto", 200, 10, true));
+        assertEquals(io.qtrace.draft.SnapshotPolicy.custom(200, 10, true),
+                     QTraceConfig.snapshotPolicy("custom", 200, 10, true));
+        assertEquals(io.qtrace.draft.SnapshotPolicy.custom(50, 60, false),
+                     QTraceConfig.snapshotPolicy("custom", null, null, null));
+    }
 }

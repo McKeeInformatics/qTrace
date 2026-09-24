@@ -346,10 +346,115 @@ public class QTraceSettingsDialog {
 
         VBox captureBox = new VBox(10,
             subTitle("General"),
-            chkAutosave, chkDetectionNote, chkUnstampedReminder,
+            chkDetectionNote, chkUnstampedReminder,
             subTitle("Security"),
             chkReportConfirm, langRow, pseudoRow);
         captureBox.setPadding(new Insets(4, 20, 8, 20));
+
+        // ── Autosave (live draft + image copy for crash recovery) ───────────────
+        Label snapIntro = new Label(QTraceI18n.t("settings.snapshot.intro"));
+        snapIntro.setTextFill(Color.web(TEXT_SUB));
+        snapIntro.setFont(Font.font("System", 11));
+        snapIntro.setWrapText(true);
+
+        ToggleGroup snapMode = new ToggleGroup();
+        RadioButton rbAuto   = new RadioButton(QTraceI18n.f("settings.snapshot.auto", io.qtrace.draft.SnapshotPolicy.DEFAULT_INTERVAL_S));
+        RadioButton rbCustom = new RadioButton(QTraceI18n.t("settings.snapshot.custom"));
+        for (RadioButton rb : new RadioButton[]{rbAuto, rbCustom}) {
+            rb.setToggleGroup(snapMode);
+            rb.setTextFill(Color.web(TEXT_SUB));
+            rb.setWrapText(true);
+        }
+        (cfg.isSnapshotCustom() ? rbCustom : rbAuto).setSelected(true);
+
+        Spinner<Integer> spThreshold = new Spinner<>(io.qtrace.draft.SnapshotPolicy.MIN_THRESHOLD_MB,
+            io.qtrace.draft.SnapshotPolicy.MAX_THRESHOLD_MB, cfg.getSnapshotLargeThresholdMb(), 10);
+        Spinner<Integer> spInterval  = new Spinner<>(io.qtrace.draft.SnapshotPolicy.MIN_INTERVAL_S,
+            io.qtrace.draft.SnapshotPolicy.MAX_INTERVAL_S, cfg.getSnapshotLargeIntervalSec(), 10);
+        for (Spinner<Integer> sp : java.util.List.of(spThreshold, spInterval)) {
+            sp.setEditable(true);
+            sp.setPrefWidth(110);
+            // A typed value is only committed on Enter — also commit it when leaving the field.
+            sp.focusedProperty().addListener((o, was, now) -> { if (!now) sp.increment(0); });
+        }
+        CheckBox chkKeyOnly = new CheckBox(QTraceI18n.t("settings.snapshot.keyOnly"));
+        chkKeyOnly.setSelected(cfg.isSnapshotLargeKeyStepsOnly());
+        chkKeyOnly.setTextFill(Color.web(TEXT_SUB));
+        chkKeyOnly.setWrapText(true);
+        chkKeyOnly.setTooltip(hintTooltip(QTraceI18n.t("settings.snapshot.keyOnly.hint")));
+
+        Label lblThreshold = new Label(QTraceI18n.t("settings.snapshot.threshold"));
+        Label lblInterval  = new Label(QTraceI18n.t("settings.snapshot.interval"));
+        for (Label l : new Label[]{lblThreshold, lblInterval}) {
+            l.setTextFill(Color.web(TEXT_SUB));
+            l.setFont(Font.font("System", 12));
+            l.setWrapText(true);
+        }
+        GridPane snapGrid = new GridPane();
+        snapGrid.setHgap(10);
+        snapGrid.setVgap(8);
+        snapGrid.setPadding(new Insets(0, 0, 0, 24));
+        snapGrid.add(lblThreshold, 0, 0); snapGrid.add(spThreshold, 1, 0);
+        snapGrid.add(lblInterval,  0, 1); snapGrid.add(spInterval,  1, 1);
+        snapGrid.add(chkKeyOnly,   0, 2, 2, 1);
+
+        Label consequences = new Label();
+        consequences.setWrapText(true);
+        consequences.setFont(Font.font("System", 11));
+        consequences.setTextFill(Color.web(TEXT_SUB));
+        consequences.setPadding(new Insets(8, 10, 8, 10));
+        consequences.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-background-radius: 6;"
+            + "-fx-border-color: " + BORDER + "; -fx-border-radius: 6;");
+        consequences.setMaxWidth(Double.MAX_VALUE);
+
+        Runnable refreshSnapshot = () -> {
+            boolean on     = chkAutosave.isSelected();
+            boolean custom = rbCustom.isSelected();
+            rbAuto.setDisable(!on);
+            rbCustom.setDisable(!on);
+            snapGrid.setDisable(!on || !custom);
+            var p = custom
+                ? io.qtrace.draft.SnapshotPolicy.custom(spThreshold.getValue(), spInterval.getValue(), chkKeyOnly.isSelected())
+                : io.qtrace.draft.SnapshotPolicy.auto();
+            if (!custom) {   // show what Auto actually uses
+                spThreshold.getValueFactory().setValue(p.thresholdMb());
+                spInterval.getValueFactory().setValue(p.intervalS());
+                chkKeyOnly.setSelected(p.largeKeyStepsOnly());
+            }
+            consequences.setText(on ? snapshotConsequences(p) : QTraceI18n.t("settings.snapshot.off"));
+        };
+        // The user's custom values, kept across an Auto ↔ Custom round trip (Auto shows its own).
+        int[] customValues = {cfg.getSnapshotLargeThresholdMb(), cfg.getSnapshotLargeIntervalSec(),
+                              cfg.isSnapshotLargeKeyStepsOnly() ? 1 : 0};
+        Runnable recordCustom = () -> {
+            if (!rbCustom.isSelected()) return;
+            customValues[0] = spThreshold.getValue();
+            customValues[1] = spInterval.getValue();
+            customValues[2] = chkKeyOnly.isSelected() ? 1 : 0;
+        };
+        chkAutosave.setOnAction(e -> refreshSnapshot.run());
+        spThreshold.valueProperty().addListener((o, a, b) -> { recordCustom.run(); refreshSnapshot.run(); });
+        spInterval.valueProperty().addListener((o, a, b) -> { recordCustom.run(); refreshSnapshot.run(); });
+        chkKeyOnly.setOnAction(e -> { recordCustom.run(); refreshSnapshot.run(); });
+        snapMode.selectedToggleProperty().addListener((o, a, b) -> {
+            if (b == rbCustom) {
+                int[] saved = customValues.clone();   // setValue() below re-records as it goes
+                spThreshold.getValueFactory().setValue(saved[0]);
+                spInterval.getValueFactory().setValue(saved[1]);
+                chkKeyOnly.setSelected(saved[2] == 1);
+                recordCustom.run();
+            }
+            refreshSnapshot.run();
+        });
+        refreshSnapshot.run();
+
+        VBox autosaveBox = new VBox(10,
+            chkAutosave,
+            subTitle(QTraceI18n.t("settings.snapshot.title")),
+            snapIntro, rbAuto, rbCustom, snapGrid,
+            subTitle(QTraceI18n.t("settings.snapshot.consequences")),
+            consequences);
+        autosaveBox.setPadding(new Insets(4, 20, 8, 20));
 
         // ── Buttons ────────────────────────────────────────────────────────────
         Button btnReset  = flatButton("Reset all to default", TEXT_MUTED);
@@ -365,6 +470,11 @@ public class QTraceSettingsDialog {
             chkDetectionNote.setSelected(true);
             chkUnstampedReminder.setSelected(true);
             chkAutosave.setSelected(true);
+            rbAuto.setSelected(true);
+            customValues[0] = io.qtrace.draft.SnapshotPolicy.DEFAULT_THRESHOLD_MB;
+            customValues[1] = io.qtrace.draft.SnapshotPolicy.DEFAULT_INTERVAL_S;
+            customValues[2] = 0;
+            refreshSnapshot.run();
         });
 
         btnCancel.setOnAction(e -> dlg.close());
@@ -386,6 +496,10 @@ public class QTraceSettingsDialog {
             cfg.setPromptDetectionNote(chkDetectionNote.isSelected());
             cfg.setPromptUnstampedReminder(chkUnstampedReminder.isSelected());
             cfg.setAutosaveEnabled(chkAutosave.isSelected());
+            if (rbCustom.isSelected())
+                cfg.setSnapshotSettings(true, spThreshold.getValue(), spInterval.getValue(), chkKeyOnly.isSelected());
+            else
+                cfg.setSnapshotSettings(false, customValues[0], customValues[1], customValues[2] == 1);
             cfg.save();
             if (chkProjectFolder.isSelected() && projectBaseDir != null) {
                 try { QTraceConfig.createProjectDirs(projectBaseDir); } catch (IOException ignored) {}
@@ -405,6 +519,7 @@ public class QTraceSettingsDialog {
         VBox pageLicense    = new VBox(licenseGrid);
         VBox pagePaths      = new VBox(projectFolderBox, grid, hint);
         VBox pagePreferences = captureBox;
+        VBox pageAutosave    = autosaveBox;
 
         Label appearanceSoon = new Label("Theme customization — coming soon.");
         appearanceSoon.setTextFill(Color.web(TEXT_MUTED));
@@ -448,12 +563,13 @@ public class QTraceSettingsDialog {
             {"Licence",        pageLicense},
             {"Paths",          pagePaths},
             {"Preferences",    pagePreferences},
+            {"Autosave",       pageAutosave},
             {"Appearance",     pageAppearance},
             {"About qTrace",   pageAbout},
         };
         // Looked up by the screenshot harness to click into a section without a real mouse —
         // see ScreenshotHarness / tools/screenshots.
-        String[] sectionIds = {"identity", "licence", "paths", "preferences", "appearance", "about"};
+        String[] sectionIds = {"identity", "licence", "paths", "preferences", "autosave", "appearance", "about"};
 
         for (int i = 0; i < sections.length; i++) {
             Object[] s = sections[i];
@@ -688,6 +804,18 @@ public class QTraceSettingsDialog {
                 pb.start();
             } catch (Exception ignored) {}
         }, "qtrace-browser").start();
+    }
+
+    /** What the image-copy settings mean for the user — shown live under them. */
+    static String snapshotConsequences(io.qtrace.draft.SnapshotPolicy p) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(QTraceI18n.t("settings.snapshot.c.capture")).append("\n\n");
+        sb.append("• ").append(QTraceI18n.f("settings.snapshot.c.small", p.thresholdMb())).append("\n");
+        sb.append("• ").append(p.largeKeyStepsOnly()
+            ? QTraceI18n.f("settings.snapshot.c.largeKeyOnly", p.thresholdMb())
+            : QTraceI18n.f("settings.snapshot.c.largeInterval", p.thresholdMb(), p.intervalS())).append("\n\n");
+        sb.append(QTraceI18n.t("settings.snapshot.c.disk"));
+        return sb.toString();
     }
 
     private static Label subTitle(String text) {

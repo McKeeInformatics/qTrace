@@ -91,6 +91,12 @@ public class QTraceConfig {
     // Live autosave of the capture + unstamped sessions — null = on by default
     private Boolean autosaveEnabled;
 
+    // Image copy in the live draft (Settings › Autosave) — null = auto / defaults
+    private String  snapshotMode;             // "auto" | "custom"
+    private Integer snapshotLargeThresholdMb;
+    private Integer snapshotLargeIntervalSec;
+    private Boolean snapshotLargeKeyStepsOnly;
+
     private QTraceConfig() {}
 
     public static QTraceConfig get() {
@@ -288,6 +294,33 @@ public class QTraceConfig {
 
     public boolean isAutosaveEnabled()                   { return autosaveEnabled == null || autosaveEnabled; }
     public void    setAutosaveEnabled(boolean b)         { this.autosaveEnabled = b; }
+
+    public boolean isSnapshotCustom()                    { return "custom".equals(snapshotMode); }
+    public int     getSnapshotLargeThresholdMb()         { return snapshotPolicy("custom", snapshotLargeThresholdMb, snapshotLargeIntervalSec, snapshotLargeKeyStepsOnly).thresholdMb(); }
+    public int     getSnapshotLargeIntervalSec()         { return snapshotPolicy("custom", snapshotLargeThresholdMb, snapshotLargeIntervalSec, snapshotLargeKeyStepsOnly).intervalS(); }
+    public boolean isSnapshotLargeKeyStepsOnly()         { return Boolean.TRUE.equals(snapshotLargeKeyStepsOnly); }
+
+    public void setSnapshotSettings(boolean custom, int thresholdMb, int intervalSec, boolean keyStepsOnly) {
+        this.snapshotMode              = custom ? "custom" : "auto";
+        this.snapshotLargeThresholdMb  = thresholdMb;
+        this.snapshotLargeIntervalSec  = intervalSec;
+        this.snapshotLargeKeyStepsOnly = keyStepsOnly;
+    }
+
+    /** The image-copy policy the live draft applies (see {@link io.qtrace.draft.SnapshotPolicy}). */
+    public io.qtrace.draft.SnapshotPolicy getSnapshotPolicy() {
+        return snapshotPolicy(snapshotMode, snapshotLargeThresholdMb, snapshotLargeIntervalSec, snapshotLargeKeyStepsOnly);
+    }
+
+    /** Auto unless "custom" is chosen; missing custom values fall back to the auto defaults. */
+    static io.qtrace.draft.SnapshotPolicy snapshotPolicy(String mode, Integer thresholdMb, Integer intervalSec,
+                                                         Boolean keyStepsOnly) {
+        if (!"custom".equals(mode)) return io.qtrace.draft.SnapshotPolicy.auto();
+        return io.qtrace.draft.SnapshotPolicy.custom(
+            thresholdMb != null ? thresholdMb : io.qtrace.draft.SnapshotPolicy.DEFAULT_THRESHOLD_MB,
+            intervalSec != null ? intervalSec : io.qtrace.draft.SnapshotPolicy.DEFAULT_INTERVAL_S,
+            Boolean.TRUE.equals(keyStepsOnly));
+    }
 
     // ── Raw string getters (for the dialog text fields) ───────────────────────
 
