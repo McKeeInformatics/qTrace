@@ -1,4 +1,9 @@
-## What's new in v1.1.6
+## What's new in v1.2.0
+
+### Changed — qTrace now installs through a single loader
+qTrace is now installed as one small file, `qtrace-loader.jar`, in the QuPath extensions folder. On first start it downloads qTrace Core from this release and, with a license, qTrace Compliance from qtrace.ca, then starts right away. Modules are signed `.qtjar` files kept in `extensions/qtrace/`, which QuPath never locks: updates no longer get stuck on Windows, and only modules signed by qTrace are ever loaded.
+
+**Upgrading from 1.1.x (one time):** quit QuPath, delete `qtrace-core-….jar` and `qtrace-compliance-….jar` from the extensions folder (keep your `.qtlicense`), put `qtrace-loader.jar` there instead and start QuPath. Your license and settings are kept.
 
 ### Added — Integrity alert in the panel and the Dashboard
 qTrace now checks the open image's latest stamp whenever you open or switch images, open the panel, or stamp. A line under the image name warns in red when the stamp itself was tampered with (**Stamp corrupted** — a signed field was edited; **.qtrace edited** — a step, parameter or other field no longer matches the certificate) and in orange when the evidence around it changed (**Image data changed since the last stamp**; **Satellite files changed** — thumbnail, GeoJSON or validation log). The Dashboard's Image & Validation card shows the same status on an **Integrity** line. Nothing is shown when everything is intact.
