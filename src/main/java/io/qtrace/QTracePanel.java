@@ -130,7 +130,9 @@ public class QTracePanel {
         stage.widthProperty().addListener((obs, was, now) -> applyCompactToolbar());
         Image logo = loadLogo();
         if (logo != null) stage.getIcons().add(logo);
-        stage.setScene(new Scene(buildRoot()));
+        // Sized on the Scene too: the stage width alone was once dropped on first show (the window
+        // opening at the root's preferred width — icons only, since the 360 px minimum).
+        stage.setScene(new Scene(buildRoot(), captionsWidth(), 460));
         if (QTraceConfig.get().isPanelLogCollapsed()) Platform.runLater(() -> applyLogCollapsed(true, false));
         stage.setOnCloseRequest(e -> {
             log("Panel closed — recording state preserved until QuPath restarts.");
@@ -1036,7 +1038,7 @@ public class QTracePanel {
         Platform.runLater(() -> {
             stage.setTitle(QTraceController.getEditionLabel());
             stage.setMinWidth(MIN_WIDTH);
-            stage.setScene(new Scene(buildRoot()));
+            stage.setScene(new Scene(buildRoot(), stage.getWidth(), stage.getHeight())); // keep the user's size
             if (QTraceConfig.get().isPanelLogCollapsed()) applyLogCollapsed(true, false);
             applyCompactToolbar();
             refreshStatus();
