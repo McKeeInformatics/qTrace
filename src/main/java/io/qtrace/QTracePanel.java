@@ -100,6 +100,13 @@ public class QTracePanel {
 
     // Log
     private TextArea logArea;
+    // Collapsible Activity log — folded, only its title (with the last line) stays visible.
+    private Label    logTitle;
+    private VBox     logSection;
+    private String   lastLogLine = "";
+    private double   expandedHeight = 460;
+    private static final double MIN_HEIGHT           = 340;
+    private static final double MIN_HEIGHT_COLLAPSED = 200;
     private Label    progressLabel;
     private Timeline progressTimeline;
 
@@ -121,6 +128,7 @@ public class QTracePanel {
         Image logo = loadLogo();
         if (logo != null) stage.getIcons().add(logo);
         stage.setScene(new Scene(buildRoot()));
+        if (QTraceConfig.get().isPanelLogCollapsed()) Platform.runLater(() -> applyLogCollapsed(true, false));
         stage.setOnCloseRequest(e ->
             log("Panel closed — recording state preserved until QuPath restarts."));
     }
@@ -132,8 +140,7 @@ public class QTracePanel {
         root.setPadding(new Insets(16, 16, 4, 16));
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
 
-        VBox logSection = buildLogSection();
-        VBox.setVgrow(logSection, Priority.ALWAYS);
+        logSection = buildLogSection();
 
         root.getChildren().addAll(
             buildHeader(),
@@ -548,7 +555,12 @@ public class QTracePanel {
     private VBox buildLogSection() {
         VBox section = new VBox(4);
 
-        Label title = styledLabel("Activity log", TEXT_MUTED, FontWeight.NORMAL, 10);
+        logTitle = styledLabel("", TEXT_MUTED, FontWeight.NORMAL, 10);
+        logTitle.setStyle("-fx-cursor: hand;");
+        logTitle.setMaxWidth(Double.MAX_VALUE);
+        logTitle.setTextOverrun(OverrunStyle.ELLIPSIS);
+        Tooltip.install(logTitle, new Tooltip("Show / hide the activity log"));
+        logTitle.setOnMouseClicked(e -> applyLogCollapsed(!QTraceConfig.get().isPanelLogCollapsed(), true));
 
         logArea = new TextArea();
         logArea.setId("activity-log"); // looked up by the screenshot harness — see ScreenshotHarness
@@ -573,8 +585,46 @@ public class QTracePanel {
           + "-fx-font-family: monospace;"
         );
 
-        section.getChildren().addAll(title, logArea, progressLabel);
+        section.getChildren().addAll(logTitle, logArea, progressLabel);
+        VBox.setVgrow(section, Priority.ALWAYS);
+        renderLogTitle();
         return section;
+    }
+
+    /**
+     * Folds or unfolds the Activity log. Folded, the panel shrinks to fit the rest (its
+     * unfolded height is restored on unfold); the choice is remembered across sessions.
+     */
+    private void applyLogCollapsed(boolean collapsed, boolean remember) {
+        if (remember) {
+            QTraceConfig cfg = QTraceConfig.get();
+            cfg.setPanelLogCollapsed(collapsed);
+            try { cfg.save(); } catch (Exception ignored) {}
+        }
+        boolean wasCollapsed = !logArea.isVisible();
+        logArea.setVisible(!collapsed);
+        logArea.setManaged(!collapsed);
+        VBox.setVgrow(logSection, collapsed ? Priority.NEVER : Priority.ALWAYS);
+        renderLogTitle();
+        if (collapsed && !wasCollapsed) {
+            // A rebuilt panel (refresh()) is already at its folded size — keep the real one.
+            if (stage.getMinHeight() != MIN_HEIGHT_COLLAPSED) expandedHeight = stage.getHeight();
+            stage.setMinHeight(MIN_HEIGHT_COLLAPSED);
+            double width = stage.getWidth();
+            stage.sizeToScene();
+            stage.setWidth(width);
+        } else if (!collapsed && wasCollapsed) {
+            stage.setMinHeight(MIN_HEIGHT);
+            stage.setHeight(Math.max(MIN_HEIGHT, expandedHeight));
+        }
+    }
+
+    private void renderLogTitle() {
+        if (logTitle == null) return;
+        boolean collapsed = logArea != null && !logArea.isVisible();
+        logTitle.setText(collapsed
+            ? "▸ Activity log" + (lastLogLine.isBlank() ? "" : "  ·  " + lastLogLine)
+            : "▾ Activity log");
     }
 
     // ── Footer / resize grip ─────────────────────────────────────────────────
@@ -975,6 +1025,7 @@ public class QTracePanel {
             stage.setTitle(QTraceController.getEditionLabel());
             stage.setMinWidth(MIN_WIDTH);
             stage.setScene(new Scene(buildRoot()));
+            if (QTraceConfig.get().isPanelLogCollapsed()) applyLogCollapsed(true, false);
             applyCompactToolbar();
             refreshStatus();
         });
@@ -984,6 +1035,8 @@ public class QTracePanel {
         Platform.runLater(() -> {
             logArea.appendText(message + "\n");
             logArea.setScrollTop(Double.MAX_VALUE);
+            if (message != null && !message.isBlank()) lastLogLine = message.strip();
+            renderLogTitle();
         });
     }
 

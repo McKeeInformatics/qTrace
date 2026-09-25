@@ -91,6 +91,9 @@ public class QTraceConfig {
     // Live autosave of the capture + unstamped sessions — null = on by default
     private Boolean autosaveEnabled;
 
+    // Panel: Activity log folded — null = unfolded
+    private Boolean panelLogCollapsed;
+
     // Image copy in the live draft (Settings › Autosave) — null = auto / defaults
     private String  snapshotMode;             // "auto" | "custom"
     private Integer snapshotLargeThresholdMb;
@@ -291,6 +294,9 @@ public class QTraceConfig {
     /** Whether to prompt to stamp when unstamped modifications are detected while closing/switching an image. Default: yes. */
     public boolean isPromptUnstampedReminder()           { return promptUnstampedReminder == null || promptUnstampedReminder; }
     public void    setPromptUnstampedReminder(boolean b) { this.promptUnstampedReminder = b; }
+
+    public boolean isPanelLogCollapsed()                 { return Boolean.TRUE.equals(panelLogCollapsed); }
+    public void    setPanelLogCollapsed(boolean b)       { this.panelLogCollapsed = b; }
 
     public boolean isAutosaveEnabled()                   { return autosaveEnabled == null || autosaveEnabled; }
     public void    setAutosaveEnabled(boolean b)         { this.autosaveEnabled = b; }
