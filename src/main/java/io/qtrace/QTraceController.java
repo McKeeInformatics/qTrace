@@ -188,7 +188,8 @@ public class QTraceController {
             var project = qupath.getProject();
             return project != null && project.getPath() != null ? project.getPath().getParent() : null;
         });
-        // Logger starts immediately — panel-less, silent until panel is attached
+        ActivityLog.add("[QTrace " + VERSION + "] Initialized.");
+        // Logger starts immediately — panel-less; its lines are kept by ActivityLog until the panel opens
         this.logger = new ActionLogger(qupath, null);
         // Upload availability depends on the image SHA-256, computed asynchronously;
         // re-check once it's ready instead of leaving the button stuck disabled.
@@ -242,11 +243,11 @@ public class QTraceController {
             exporter.setSessionId(drafts.sessionId());
             Path out = exporter.export(QTraceConfig.get().outputExportDir());
             drafts.markCommitted();
-            if (panel != null) panel.log(QTraceI18n.f("autosave.committed", out.getFileName()));
+            ActivityLog.add(QTraceI18n.f("autosave.committed", out.getFileName()));
             return true;
         } catch (Exception e) {
             System.err.println("[qTrace] unstamped session not written: " + e.getMessage());
-            if (panel != null) panel.log("Unstamped session not written — the draft is kept: " + e.getMessage());
+            ActivityLog.add("Unstamped session not written — the draft is kept: " + e.getMessage());
             return false;
         }
     }
@@ -414,9 +415,9 @@ public class QTraceController {
             panel.updateStepCount(steps, preExisting, manual);
             panel.setRecordReady(steps > 0);
             if (attached && steps > 0)
-                panel.log("qTrace already recording — " + steps + " step(s) captured before panel opened.");
+                ActivityLog.add("qTrace already recording — " + steps + " step(s) captured before panel opened.");
             else if (attached)
-                panel.log("qTrace recording — waiting for first action.");
+                ActivityLog.add("qTrace recording — waiting for first action.");
         });
         refreshPushAvailability();
     }
@@ -708,14 +709,14 @@ public class QTraceController {
                 ScriptEditor se = qupath.getScriptEditor();
                 if (se == null) {
                     if (panel != null)
-                        panel.log("Script hook: Script Editor not open — reopen panel after opening it.");
+                        ActivityLog.add("Script hook: Script Editor not open — reopen panel after opening it.");
                     return;
                 }
 
                 Object rawRunningTask = findField(se, "runningTask", Object.class);
                 if (!(rawRunningTask instanceof javafx.beans.value.ObservableValue<?> runningTask)) {
                     if (panel != null)
-                        panel.log("Script hook: runningTask not observable (type="
+                        ActivityLog.add("Script hook: runningTask not observable (type="
                             + (rawRunningTask == null ? "null" : rawRunningTask.getClass().getSimpleName()) + ").");
                     return;
                 }
@@ -746,7 +747,7 @@ public class QTraceController {
                             capturingOutput = false;
                             if (logger != null) logger.setScriptRunning(false);
                             if (!capturedOutput.isEmpty() && panel != null) {
-                                capturedOutput.forEach(line -> panel.log("  out> " + line));
+                                capturedOutput.forEach(line -> ActivityLog.add("  out> " + line));
                             }
                         });
                         pause.play();
@@ -755,10 +756,10 @@ public class QTraceController {
 
                 scriptHookInstalled = true;
                 if (panel != null)
-                    panel.log("Script Editor hook installed — runs + output will be recorded.");
+                    ActivityLog.add("Script Editor hook installed — runs + output will be recorded.");
 
             } catch (Exception e) {
-                if (panel != null) panel.log("Script hook error: " + e.getMessage());
+                ActivityLog.add("Script hook error: " + e.getMessage());
             }
         });
     }
@@ -772,7 +773,7 @@ public class QTraceController {
         try {
             Object factory = LoggerFactory.getILoggerFactory();
             if (!(factory instanceof ch.qos.logback.classic.LoggerContext ctx)) {
-                if (panel != null) panel.log("  [warn] Logback not found — output capture unavailable.");
+                ActivityLog.add("  [warn] Logback not found — output capture unavailable.");
                 return;
             }
 
@@ -791,7 +792,7 @@ public class QTraceController {
             scriptLogger.addAppender(appender);
 
         } catch (Exception e) {
-            if (panel != null) panel.log("  [warn] Logback appender failed: " + e.getMessage());
+            ActivityLog.add("  [warn] Logback appender failed: " + e.getMessage());
         }
     }
 
@@ -815,10 +816,10 @@ public class QTraceController {
             var step = new DefaultScriptableWorkflowStep("Script: " + name, scriptText);
             imageData.getHistoryWorkflow().addStep(step);
 
-            if (panel != null && path != null) panel.log("  path: " + path);
+            if (path != null) ActivityLog.add("  path: " + path);
 
         } catch (Exception e) {
-            if (panel != null) panel.log("Script capture error: " + e.getMessage());
+            ActivityLog.add("Script capture error: " + e.getMessage());
         }
     }
 
@@ -997,7 +998,7 @@ public class QTraceController {
 
     public void recordTrace() {
         if (logger == null || !logger.hasSteps()) {
-            if (panel != null) panel.log("Nothing to record — no steps captured yet.");
+            ActivityLog.add("Nothing to record — no steps captured yet.");
             return;
         }
         // The stamp binds qpdata_sha256 to the file on disk: stamping unsaved work would
@@ -1005,7 +1006,7 @@ public class QTraceController {
         var imageData = logger.getCurrentImageData();
         if (imageData != null && imageData.isChanged()) {
             showSaveBeforeStampInfo();
-            if (panel != null) panel.log("Stamp cancelled — save your work on this image first (File › Save, Ctrl+S).");
+            ActivityLog.add("Stamp cancelled — save your work on this image first (File › Save, Ctrl+S).");
             return;
         }
         logger.refreshAllAnnotationCaptures();
@@ -1019,19 +1020,17 @@ public class QTraceController {
                 stamp -> {
                     lastStamp = stamp;
                     lastStampStepCount = logger.getCapturedSteps().size();
-                    if (panel != null) {
-                        panel.log("Validation stamp recorded:");
-                        panel.log("  validator  : " + stamp.validator());
-                        panel.log("  scope      : " + stamp.scope());
-                        panel.log("  confidence : " + stamp.confidence());
-                        if (!stamp.notes().isEmpty())
-                            panel.log("  notes      : " + stamp.notes());
-                        panel.setValidated(true, stamp.validator());
-                    }
+                    ActivityLog.add("Validation stamp recorded:");
+                    ActivityLog.add("  validator  : " + stamp.validator());
+                    ActivityLog.add("  scope      : " + stamp.scope());
+                    ActivityLog.add("  confidence : " + stamp.confidence());
+                    if (!stamp.notes().isEmpty())
+                        ActivityLog.add("  notes      : " + stamp.notes());
+                    if (panel != null) panel.setValidated(true, stamp.validator());
                     exportReport();
                     refreshIntegrity();
                 },
-                () -> { if (panel != null) panel.log("Record cancelled."); }
+                () -> { ActivityLog.add("Record cancelled."); }
             );
     }
 
@@ -1111,7 +1110,7 @@ public class QTraceController {
 
     public void exportReport() {
         if (logger == null || !logger.hasSteps()) {
-            if (panel != null) panel.log("Nothing to export — capture steps first.");
+            ActivityLog.add("Nothing to export — capture steps first.");
             return;
         }
         try {
@@ -1124,11 +1123,9 @@ public class QTraceController {
             Path csvFile = exporter.appendToMasterCsv(outDir);
             QTraceExporter.appendExternalFile(outFile, "csv", csvFile);
 
-            if (panel != null) {
-                panel.log(".qtrace written:");
-                panel.log("  " + outFile.getFileName());
-                panel.log("  CSV: " + csvFile.getFileName());
-            }
+            ActivityLog.add(".qtrace written:");
+            ActivityLog.add("  " + outFile.getFileName());
+            ActivityLog.add("  CSV: " + csvFile.getFileName());
 
             lastThumbnailPath = null;
             try {
@@ -1138,10 +1135,10 @@ public class QTraceController {
                     String base = outFile.getFileName().toString().replaceAll("\\.qtrace$", "");
                     lastThumbnailPath = ThumbnailGenerator.generate(snapshot, outDir, base);
                     QTraceExporter.appendExternalFile(outFile, "thumbnail", lastThumbnailPath);
-                    if (panel != null) panel.log("  thumbnail: " + lastThumbnailPath.getFileName());
+                    ActivityLog.add("  thumbnail: " + lastThumbnailPath.getFileName());
                 }
             } catch (Exception e) {
-                if (panel != null) panel.log("  thumbnail: " + e.getMessage());
+                ActivityLog.add("  thumbnail: " + e.getMessage());
             }
 
             // Manual annotations GeoJSON — written by the exporter into outputTrainingDir(),
@@ -1177,17 +1174,15 @@ public class QTraceController {
                     if (certPath != null) {
                         lastCertPath = certPath;
                         QTraceExporter.appendExternalFile(outFile, "cert", certPath);
-                        if (panel != null) {
-                            panel.log("  .qtcert: " + certPath.getFileName());
-                            panel.setPushEnabled(true);
-                        }
+                        ActivityLog.add("  .qtcert: " + certPath.getFileName());
+                        if (panel != null) panel.setPushEnabled(true);
                     }
                 } catch (Exception e) {
-                    if (panel != null) panel.log("  .qtcert: " + e.getMessage());
+                    ActivityLog.add("  .qtcert: " + e.getMessage());
                 }
             }
         } catch (Exception e) {
-            if (panel != null) panel.log("Export error: " + e.getMessage());
+            ActivityLog.add("Export error: " + e.getMessage());
         }
     }
 
@@ -1255,28 +1250,28 @@ public class QTraceController {
         QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep == null) return;
         if (lastCertPath == null || lastQtracePath == null) {
-            if (panel != null) panel.log("☁ Nothing to push — export first.");
+            ActivityLog.add("☁ Nothing to push — export first.");
             return;
         }
         // chain.jsonl is at case_<id>/chain.jsonl, cert at case_<id>/certs/<id>.qtcert
         Path chainLog = lastCertPath.getParent().getParent().resolve("chain.jsonl");
         if (!chainLog.toFile().exists()) {
-            if (panel != null) panel.log("☁ chain.jsonl not found.");
+            ActivityLog.add("☁ chain.jsonl not found.");
             return;
         }
         java.util.Collection<ClassifierRecord> classifiers = logger.getKnownClassifiers().values();
         java.util.Collection<ImportedObjectFileRecord> importedFiles = logger.getImportedFiles().values();
         if (panel != null) {
-            panel.log("☁ Pushing to workspace…");
-            panel.log("  · " + lastQtracePath.getFileName());
-            panel.log("  · " + lastCertPath.getFileName());
-            panel.log("  · chain.jsonl");
+            ActivityLog.add("☁ Pushing to workspace…");
+            ActivityLog.add("  · " + lastQtracePath.getFileName());
+            ActivityLog.add("  · " + lastCertPath.getFileName());
+            ActivityLog.add("  · chain.jsonl");
             for (ClassifierRecord clf : classifiers)
-                panel.log("  · classifiers/" + clf.name + ".json");
+                ActivityLog.add("  · classifiers/" + clf.name + ".json");
             for (ImportedObjectFileRecord imp : importedFiles)
-                panel.log("  · imports/" + imp.companionFilename);
-            if (lastThumbnailPath != null) panel.log("  · thumbnail.jpg");
-            if (lastGeojsonPath != null) panel.log("  · " + lastGeojsonPath.getFileName());
+                ActivityLog.add("  · imports/" + imp.companionFilename);
+            if (lastThumbnailPath != null) ActivityLog.add("  · thumbnail.jpg");
+            if (lastGeojsonPath != null) ActivityLog.add("  · " + lastGeojsonPath.getFileName());
             panel.setPushEnabled(false);
             panel.startPushProgress();
         }
@@ -1284,11 +1279,11 @@ public class QTraceController {
           .thenAccept(url -> {
               if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {
-                  if (panel != null) panel.log("☁ " + url);
+                  ActivityLog.add("☁ " + url);
               } else {
                   if (panel != null) {
                       String detail = url != null ? url.substring("ERROR:".length()) : "network error";
-                      panel.log("☁ Push failed: " + detail);
+                      ActivityLog.add("☁ Push failed: " + detail);
                       panel.setPushEnabled(true);
                   }
               }
@@ -1296,7 +1291,7 @@ public class QTraceController {
           .exceptionally(t -> {
               if (panel != null) {
                   panel.stopPushProgress();
-                  panel.log("☁ Push error: " + t.getMessage());
+                  ActivityLog.add("☁ Push error: " + t.getMessage());
                   panel.setPushEnabled(true);
               }
               return null;
@@ -1320,12 +1315,12 @@ public class QTraceController {
             showGraphInfo(QTraceI18n.t("report.info.noqtrace"));
             return;
         }
-        if (panel != null) panel.log("▤ " + QTraceI18n.t("report.generating"));
+        ActivityLog.add("▤ " + QTraceI18n.t("report.generating"));
         // Build the digest off the FX thread — a .qtrace can be tens of MB.
         CompletableFuture.supplyAsync(() -> ep.buildReportDigest(qtrace.toPath()))
             .thenAccept(digest -> Platform.runLater(() -> {
                 if (digest == null || digest.isBlank()) {
-                    if (panel != null) panel.log("▤ " + QTraceI18n.t("report.failed"));
+                    ActivityLog.add("▤ " + QTraceI18n.t("report.failed"));
                     return;
                 }
                 String lang = QTraceConfig.get().getReportLanguage();
@@ -1333,7 +1328,7 @@ public class QTraceController {
                 if (QTraceConfig.get().isReportConfirmBeforeSend()) {
                     ReportConfirmDialog.Result r = ReportConfirmDialog.show(qupath.getStage(), digest);
                     if (!r.send) {
-                        if (panel != null) panel.log("▤ " + QTraceI18n.t("report.cancelled"));
+                        ActivityLog.add("▤ " + QTraceI18n.t("report.cancelled"));
                         return;
                     }
                     QTraceConfig cfg = QTraceConfig.get();
@@ -1351,7 +1346,7 @@ public class QTraceController {
             }))
             .exceptionally(t -> {
                 Platform.runLater(() -> {
-                    if (panel != null) panel.log("▤ " + QTraceI18n.t("report.error") + ": " + t.getMessage());
+                    ActivityLog.add("▤ " + QTraceI18n.t("report.error") + ": " + t.getMessage());
                 });
                 return null;
             });
@@ -1361,16 +1356,16 @@ public class QTraceController {
         ep.sendReportDigest(digest, lang)
           .thenAccept(markdown -> Platform.runLater(() -> {
               if (markdown == null || markdown.isBlank()) {
-                  if (panel != null) panel.log("▤ " + QTraceI18n.t("report.failed"));
+                  ActivityLog.add("▤ " + QTraceI18n.t("report.failed"));
               } else {
-                  if (panel != null) panel.log("▤ " + QTraceI18n.t("report.ready"));
+                  ActivityLog.add("▤ " + QTraceI18n.t("report.ready"));
                   ReportDialog.show(qupath.getStage(), qtrace, markdown, ep,
-                      msg -> { if (panel != null) panel.log("▤ " + msg); });
+                      msg -> { ActivityLog.add("▤ " + msg); });
               }
           }))
           .exceptionally(t -> {
               Platform.runLater(() -> {
-                  if (panel != null) panel.log("▤ " + QTraceI18n.t("report.error") + ": " + t.getMessage());
+                  ActivityLog.add("▤ " + QTraceI18n.t("report.error") + ": " + t.getMessage());
               });
               return null;
           });
@@ -1383,9 +1378,9 @@ public class QTraceController {
             if (base.endsWith(".qtrace")) base = base.substring(0, base.length() - ".qtrace".length());
             Path out = qtrace.resolveSibling(base + ".report-input.json");
             Files.write(out, digest.getBytes(StandardCharsets.UTF_8));
-            if (panel != null) panel.log("▤ " + QTraceI18n.t("report.audit.saved") + " " + out.getFileName());
+            ActivityLog.add("▤ " + QTraceI18n.t("report.audit.saved") + " " + out.getFileName());
         } catch (Exception e) {
-            if (panel != null) panel.log("▤ " + QTraceI18n.t("report.error") + ": " + e.getMessage());
+            ActivityLog.add("▤ " + QTraceI18n.t("report.error") + ": " + e.getMessage());
         }
     }
 
@@ -1513,7 +1508,7 @@ public class QTraceController {
             Method m = findMethodWithParam(qupath.getClass(), "openImageEntry", ProjectImageEntry.class);
             if (m != null) m.invoke(qupath, entry);
         } catch (Exception e) {
-            if (panel != null) panel.log("openEntry error: " + e.getMessage());
+            ActivityLog.add("openEntry error: " + e.getMessage());
         }
     }
 

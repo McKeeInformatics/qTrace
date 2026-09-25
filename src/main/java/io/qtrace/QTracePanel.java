@@ -100,6 +100,9 @@ public class QTracePanel {
 
     // Log
     private TextArea logArea;
+    // Receives new ActivityLog lines while this panel is open (history is loaded on build).
+    private final java.util.function.Consumer<String> logSink =
+        line -> Platform.runLater(() -> appendLog(line));
     // Collapsible Activity log — folded, only its title (with the last line) stays visible.
     private Label    logTitle;
     private VBox     logSection;
@@ -129,8 +132,10 @@ public class QTracePanel {
         if (logo != null) stage.getIcons().add(logo);
         stage.setScene(new Scene(buildRoot()));
         if (QTraceConfig.get().isPanelLogCollapsed()) Platform.runLater(() -> applyLogCollapsed(true, false));
-        stage.setOnCloseRequest(e ->
-            log("Panel closed — recording state preserved until QuPath restarts."));
+        stage.setOnCloseRequest(e -> {
+            log("Panel closed — recording state preserved until QuPath restarts.");
+            ActivityLog.detach(logSink);
+        });
     }
 
     // ── Root layout ──────────────────────────────────────────────────────────
@@ -575,7 +580,14 @@ public class QTracePanel {
           + "-fx-border-color: " + BORDER + ";"
           + "-fx-control-inner-background: " + BG_SURFACE + ";"
         );
-        logArea.appendText("[QTrace " + QTraceController.VERSION + "] Initialized.\n");
+        // Everything logged since QuPath started — including while the panel was closed.
+        java.util.List<String> history = ActivityLog.attach(logSink);
+        if (!history.isEmpty()) {
+            logArea.setText(String.join("\n", history) + "\n");
+            for (int i = history.size() - 1; i >= 0; i--)
+                if (!history.get(i).isBlank()) { lastLogLine = history.get(i).strip(); break; }
+            Platform.runLater(() -> logArea.setScrollTop(Double.MAX_VALUE));
+        }
 
         progressLabel = new Label();
         progressLabel.setVisible(false);
@@ -1031,13 +1043,16 @@ public class QTracePanel {
         });
     }
 
+    /** Adds a line to the Activity log (kept even while the panel is closed — see ActivityLog). */
     public void log(String message) {
-        Platform.runLater(() -> {
-            logArea.appendText(message + "\n");
-            logArea.setScrollTop(Double.MAX_VALUE);
-            if (message != null && !message.isBlank()) lastLogLine = message.strip();
-            renderLogTitle();
-        });
+        ActivityLog.add(message);
+    }
+
+    private void appendLog(String message) {
+        logArea.appendText(message + "\n");
+        logArea.setScrollTop(Double.MAX_VALUE);
+        if (!message.isBlank()) lastLogLine = message.strip();
+        renderLogTitle();
     }
 
     /** Starts an animated "uploading…" progress bar in the log panel. Call from any thread. */
