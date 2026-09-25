@@ -1,3 +1,37 @@
+## What's new in v1.2.1
+
+### Added — Your capture is saved continuously, and survives a crash
+qTrace now writes your capture to a local draft a few seconds after every change; the panel header shows **Saved · …**, **Saving…** or **⚠ Not saved**. If QuPath crashes, reopening the image offers **Recover unsaved work**: **Restore** brings the image and the capture back exactly as they were just before the crash (a few seconds lost at most), or **Keep as unstamped session, start from the saved image** keeps what was recovered as an unstamped session. A new **Settings › Autosave** section turns this on or off and sets how often the image's work is copied for recovery — **Auto** (small images at every change; large ones after each key step, and at most every 60 s otherwise) or **Custom** — with a live **What this means for you** box saying what a crash could cost and how much disk it takes. The copy is dropped as soon as you save your work in QuPath.
+
+### Added — Unstamped sessions are kept and shown
+Switching images, closing one or quitting QuPath without stamping no longer loses the work in between: it's written to the `.qtrace` as an **unstamped session**. The version graph draws it as a dashed hollow circle marked **Unstamped**; in the Dashboard, ✓ Validated and 🛡 refer to the last stamp, with **(+N unstamped)** when later work wasn't stamped, and the Image & Validation card and Session timeline point them out. The "Unstamped image" reminder now says **Continue — keep it as an unstamped session**.
+
+### Added — A minimal replay player, floating over the image
+**↻ Replay** now opens a compact player right over the image instead of a separate window: open a replay (a local `.qtrace` file, or a qtrace.ca ID or share link), play and pause, run one instruction at a time, see the replay's compatibility at a glance, and replay it on the open image or on every image of the project. A line under the buttons shows a spinner while the replay loads, "Ready to play" once it's loaded, the instruction running, and a closing summary: instructions applied, failures, `.qtrace` written. Drag the player anywhere over the image by its ⠿ handle and widen it by its borders; its position and width are remembered. **⤢** opens the full Player on the same replay and **⤡** comes back to the compact one — only one player is ever open.
+
+### Added — Each replayed image gets its own .qtrace
+When a replay ends on an image, qTrace writes that image's `.qtrace`: exactly the instructions that ran successfully (failed or unchecked ones are left out), plus a `replayed_from` link to the source replay. On a never-opened image, the steps QuPath adds by itself when opening it (e.g. "Set image type") are left out; an image that already had a history keeps it, with the replay appended. The panel's step counter now goes up by one for every instruction that ran successfully.
+
+### Added — Replay only what was validated
+In the Player, an instruction recorded only in unstamped sessions is marked **◌** (orange title, tooltip naming the session), and **Validated steps only** unchecks them all at once. The exported script comments them as `// [unstamped] session …`, and `qtrace-replay --validated-only` leaves them out.
+
+### Changed — Replay only moves forward
+An instruction applied in QuPath can't be undone, so the Player no longer offers ⏮, ◀ or ⏭, and clicking an instruction no longer moves playback (a failed one still opens its full error). **▶ after a pause now resumes where playback stopped** — it used to start over from the first instruction and apply the earlier ones a second time. With only the compact player open, a failed instruction pauses playback on that step; ▶ carries on with the next one.
+
+### Added — The stamp's certificate is checked from QuPath
+The integrity alert now also verifies the stamp's `.qtcert` certificate and its place in the case chain. **Certificate missing or altered** shows in red when the certificate was deleted (even together with its line in `chain.jsonl`), modified, removed from the chain, separated from its parent, or doesn't match its signature; **🔍 Why?** gains a "Certificate & chain" section. Certificates issued from this version on (format 1.1) sign the whole stamped session, not only its key fields.
+
+### Changed — A more compact panel, with a fuller Activity log
+The panel now shrinks down to about 360 px wide (it was locked at 760 px with a license): toolbar buttons drop their captions — names stay in the tooltips — then wrap onto a second line if needed. The **Activity log** folds away with a click on its title (the latest line stays visible next to it, and the choice is remembered), every line starts with the time it happened, and it now also shows what was done before the panel was opened. The `Extensions › qTrace` menu says **Settings...** instead of "Preferences...", like the panel's ⚙ button.
+
+### Changed — You save your work, not the image
+The image itself — its pixels — is never modified: what QuPath saves, and what a stamp certifies, is the work on top of it (annotations, detections, measurements, history) in the image's QuPath data file (`.qpdata`). The wording now says so: before stamping, "Your work on this image isn't saved yet"; the integrity alert reads "Work on this image changed since the last stamp"; **🔍 Why?** and `qtrace-verify explain` name the section "QuPath data file (.qpdata)".
+
+### Fixed — Scattered "qTrace_…_CaseConflict" folders
+With **Use Project Folder** on, a project that already had a `qtrace/` folder got a second `qTrace/` folder next to it on every export. Sync clients such as Synology Drive or OneDrive, and Windows or macOS disks, treat those names as the same and renamed each new one `qTrace_<machine>_<date>_CaseConflict`, scattering `.qtrace` files where the Dashboard and the version graph never looked. qTrace now reuses the existing folder, whatever its case. Folders already scattered are not moved automatically.
+
+---
+
 ## What's new in v1.2.0
 
 ### Changed — qTrace now installs through a single loader
