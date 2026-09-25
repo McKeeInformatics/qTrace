@@ -303,8 +303,11 @@ final class DraftManager {
         boolean needSnapshot = c.imageUnsaved() && (!hasSnapshot
             || policy.shouldSnapshot(lastSnapshotBytes, lastSnapshotAt, now, c.keyPending(), c.minorPending()));
         if (c.imageUnsaved() && !needSnapshot) restorePending(c);
+        // Saved since the last copy (Ctrl+S fires no event we listen to): the safety-net pass
+        // must still write, to drop the now-useless copy from disk.
+        boolean needDrop     = !c.imageUnsaved() && hasSnapshot;
         boolean untouched    = fp.equals(baselineFingerprint) && !draftOnDisk && !imageChanged;
-        if (untouched || (changedOnly && fp.equals(lastWrittenFingerprint) && !needSnapshot))
+        if (untouched || (changedOnly && fp.equals(lastWrittenFingerprint) && !needSnapshot && !needDrop))
             return new AutosaveScheduler.FlushResult(false, 0);
 
         long snapshotMillis = 0;
