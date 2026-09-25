@@ -2867,7 +2867,8 @@ public class ActionLogger implements WorkflowListener {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static String serverName(ImageData<BufferedImage> d) {
-        return d.getServer().getMetadata().getName();
+        // No server: headless ImageData (unit tests) — attach() logs unconditionally now.
+        return d.getServer() != null ? d.getServer().getMetadata().getName() : "(no image server)";
     }
 
     // PathObject.storeMetadataValue / retrieveMetadataValue are protected — access via reflection
