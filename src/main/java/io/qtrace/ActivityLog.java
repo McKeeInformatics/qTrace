@@ -19,6 +19,9 @@
 
 package io.qtrace;
 
+import java.time.Clock;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +32,9 @@ import java.util.function.Consumer;
  * whether or not the panel is open, so opening the panel later shows what happened before.
  * The open panel attaches as the single sink: it gets the history once, then every new line.
  *
+ * Each line is stamped with the local time it was logged (HH:mm:ss) — not when the panel
+ * displays it, so history loaded on a late panel open keeps its real times.
+ *
  * Bounded (oldest lines dropped) and thread-safe; the sink is called on the logging thread
  * — the panel hops to the FX thread itself.
  */
@@ -36,21 +42,27 @@ public final class ActivityLog {
 
     public static final int MAX_LINES = 5_000;
 
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final String INDENT = " ".repeat("HH:mm:ss".length() + 2);
+
     private static final ArrayDeque<String> LINES = new ArrayDeque<>();
     private static Consumer<String> sink;
+    private static Clock clock = Clock.systemDefaultZone();
 
     private ActivityLog() {}
 
-    public static void add(String line) {
-        if (line == null) return;
+    public static void add(String message) {
+        if (message == null) return;
         Consumer<String> s;
         synchronized (ActivityLog.class) {
+            // Continuation lines line up under the text rather than getting their own time.
+            String line = LocalTime.now(clock).format(TIME) + "  " + message.replace("\n", "\n" + INDENT);
             LINES.addLast(line);
             while (LINES.size() > MAX_LINES) LINES.removeFirst();
             s = sink;
-        }
-        if (s != null) {
-            try { s.accept(line); } catch (Exception ignored) {}
+            if (s != null) {
+                try { s.accept(line); } catch (Exception ignored) {}
+            }
         }
     }
 
@@ -72,5 +84,10 @@ public final class ActivityLog {
     static synchronized void resetForTests() {
         LINES.clear();
         sink = null;
+        clock = Clock.systemDefaultZone();
+    }
+
+    static synchronized void setClockForTests(Clock c) {
+        clock = c;
     }
 }
