@@ -1514,7 +1514,7 @@ public class QTraceDashboard {
                         status.setTextFill(Color.web(RED));
                     }
                     case DATA_CHANGED -> {
-                        status.setText("⚠ Image data changed since the stamp");
+                        status.setText("⚠ Work on the image changed since the stamp");
                         status.setTextFill(Color.web(PEACH));
                     }
                     case FILES_CHANGED -> {

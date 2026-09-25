@@ -518,7 +518,7 @@ public class QTracePanel {
                 case SIGNATURE_INVALID -> "⛔ Stamp corrupted — the .qtrace was edited after signing";
                 case CERTIFICATE_INVALID -> "⛔ Certificate missing or altered — chain of custody broken";
                 case TRACE_EDITED      -> "⛔ .qtrace edited — it no longer matches its certificate";
-                case DATA_CHANGED      -> "⚠ Image data changed since the last stamp";
+                case DATA_CHANGED      -> "⚠ Work on this image changed since the last stamp";
                 default                -> "⚠ Satellite files changed since the last stamp";
             });
             integrityLabel.setTextFill(Color.web(color));

@@ -1005,7 +1005,7 @@ public class QTraceController {
         var imageData = logger.getCurrentImageData();
         if (imageData != null && imageData.isChanged()) {
             showSaveBeforeStampInfo();
-            if (panel != null) panel.log("Stamp cancelled — save the image first (File › Save, Ctrl+S).");
+            if (panel != null) panel.log("Stamp cancelled — save your work on this image first (File › Save, Ctrl+S).");
             return;
         }
         logger.refreshAllAnnotationCaptures();
@@ -1039,10 +1039,13 @@ public class QTraceController {
         Alert a = new Alert(Alert.AlertType.INFORMATION);
         a.initOwner(qupath.getStage());
         a.setTitle("qTrace — Save before stamping");
-        a.setHeaderText("This image has unsaved changes");
+        a.setHeaderText("Your work on this image isn't saved yet");
+        // The pixels are never modified: what gets saved (and stamped) is the work on top of
+        // them — QuPath's .qpdata data file (objects, measurements, history).
         a.setContentText(
-            "The stamp certifies the image data as saved on disk. Save the image first "
-          + "(File › Save, or Ctrl+S), then click Stamp again.");
+            "The stamp certifies your work on this image — annotations, detections, measurements "
+          + "and history — as saved in its QuPath data file (.qpdata); the image pixels are never "
+          + "modified. Save your work first (File › Save, or Ctrl+S), then click Stamp again.");
         a.showAndWait();
     }
 

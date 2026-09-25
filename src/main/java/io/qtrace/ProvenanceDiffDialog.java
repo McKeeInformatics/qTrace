@@ -143,11 +143,11 @@ public final class ProvenanceDiffDialog {
         Path qpdata = entry != null && entry.getEntryPath() != null ? entry.getEntryPath().resolve("data.qpdata") : null;
         String stampedSha = str(val, "qpdata_sha256");
         if (qpdata == null || !Files.exists(qpdata)) {
-            out.add(new Section("Image data (.qpdata)", "Not found in the open project — cannot compare", MUTED, List.of()));
+            out.add(new Section("QuPath data file (.qpdata)", "Not found in the open project — cannot compare", MUTED, List.of()));
         } else if (stampedSha == null) {
-            out.add(new Section("Image data (.qpdata)", "The stamp recorded no .qpdata fingerprint", MUTED, List.of()));
+            out.add(new Section("QuPath data file (.qpdata)", "The stamp recorded no .qpdata fingerprint", MUTED, List.of()));
         } else if (stampedSha.equals(io.qtrace.chain.Hashing.sha256Hex(qpdata))) {
-            out.add(new Section("Image data (.qpdata)", "Identical to the stamped file", GREEN, List.of()));
+            out.add(new Section("QuPath data file (.qpdata)", "Identical to the stamped file", GREEN, List.of()));
         } else {
             var data = entry.readImageData();
             var hierarchy = data.getHierarchy();
@@ -159,7 +159,7 @@ public final class ProvenanceDiffDialog {
             String summary = dataFindings.isEmpty()
                 ? "File differs from the stamp, but annotations and detections are unchanged (e.g. measurements, metadata)"
                 : "File differs from the stamp";
-            out.add(new Section("Image data (.qpdata)", summary, PEACH, dataFindings));
+            out.add(new Section("QuPath data file (.qpdata)", summary, PEACH, dataFindings));
         }
         return out;
     }
