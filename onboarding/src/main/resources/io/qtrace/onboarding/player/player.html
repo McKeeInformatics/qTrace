@@ -1,0 +1,38 @@
+<!doctype html>
+<!--
+  qTrace onboarding player (docs/architecture/loader.md § 17). Played inside QuPath by a WebView:
+  embedded in the onboarding module for "Getting started", served by https://www.qtrace.ca/player/
+  for the Welcome. Content comes from Java: qtracePlayer.load(json). Actions go back to Java:
+  window.qtrace.run(action, arg) — a whitelist, nothing else. Opened in a plain browser, it plays
+  trunk.json and shows what QuPath would do.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qTrace</title>
+  <link rel="stylesheet" href="player.css">
+</head>
+<body>
+  <div class="player">
+    <header class="top">
+      <div class="brand">q<b>Trace</b></div>
+      <div class="org" id="org" hidden></div>
+      <div class="who" id="who"></div>
+    </header>
+    <main class="stage" id="stage" aria-live="polite">
+      <div class="toast" id="toast" role="status"></div>
+    </main>
+    <footer class="bar">
+      <div class="nav">
+        <button type="button" id="prev" aria-label="Previous">‹</button>
+        <button type="button" id="play" aria-label="Play">▶</button>
+        <button type="button" id="next" aria-label="Next">›</button>
+      </div>
+      <div class="track" id="track"></div>
+      <div class="meta"><span id="count"></span><a id="skip" role="button" tabindex="0">Skip</a></div>
+    </footer>
+  </div>
+  <script src="player.js"></script>
+</body>
+</html>

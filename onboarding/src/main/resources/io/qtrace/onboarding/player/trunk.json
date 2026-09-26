@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "branch": "trunk",
+  "title": "Getting started with qTrace",
+  "slides": [
+    {
+      "id": "what",
+      "eyebrow": "qTrace",
+      "title": "Every analysis, traceable",
+      "text": "qTrace records how you analyse images in QuPath, in the background. Each result can then be traced, replayed on new images and signed with your certified identity.",
+      "image": "img/panel-core-description.png",
+      "actions": []
+    },
+    {
+      "id": "network",
+      "eyebrow": "Before we start",
+      "title": "Checking your connection",
+      "text": "qTrace downloads its modules from GitHub and your certificate from qtrace.ca. If your institution uses a proxy or a firewall, your IT team may need to allow both.",
+      "visual": "network",
+      "actions": []
+    },
+    {
+      "id": "account",
+      "eyebrow": "Your account",
+      "title": "Enter your invitation code",
+      "text": "Your browser then opens qtrace.ca to create your account, and your certificate arrives in QuPath on its own. No file to handle. Already have an account? Sign in instead. You can also continue now and do this later from Extensions > QTrace > Getting started.",
+      "visual": "entry",
+      "actions": [{ "label": "Continue", "action": "continue" }]
+    },
+    {
+      "id": "code",
+      "eyebrow": "Sign in",
+      "title": "Confirm this code in your browser",
+      "text": "Check that qtrace.ca shows the same code, then click “Authorize QuPath”. If you still need to choose your passphrase, the portal asks for it there. It never leaves your browser.",
+      "visual": "device",
+      "actions": []
+    },
+    {
+      "id": "install",
+      "eyebrow": "Almost done",
+      "title": "Installing Compliance and your welcome",
+      "text": "Your certificate is saved. qTrace downloads the modules it gives you, then asks you to restart QuPath once.",
+      "visual": "install",
+      "actions": [{ "label": "Quit QuPath now", "action": "quit", "primary": true }]
+    }
+  ]
+}
