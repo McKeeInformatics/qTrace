@@ -486,7 +486,8 @@ public final class QTraceUpdater {
     public static byte[] httpGetBytes(String url, String bearer) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.ALWAYS).build();
+            // NORMAL, not ALWAYS: never follow an https → http downgrade with a bearer attached.
+            .followRedirects(HttpClient.Redirect.NORMAL).build();
         HttpRequest.Builder b = HttpRequest.newBuilder()
             .uri(URI.create(url)).timeout(Duration.ofSeconds(120)).GET();
         if (bearer != null) b.header("Authorization", "Bearer " + bearer);
