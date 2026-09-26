@@ -93,6 +93,15 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .report-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--tx-muted); font-size: 12px; }
 .report-foot strong { color: var(--green); font-weight: 600; }
 .report .send { background: var(--accent); color: var(--navy); font-weight: 700; border-radius: 6px; padding: 4px 12px; }
+.done { display: grid; gap: 16px; justify-items: center; text-align: center; color: var(--tx-sub); }
+.done p { margin: 0; }
+.done strong { color: var(--green); font-weight: 600; }
+.big-check {
+  width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 60px; color: var(--green); border: 3px solid var(--green); background: rgba(166, 227, 161, 0.08);
+  animation: pop .5s ease;
+}
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* bottom bar */
@@ -128,6 +137,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 }
 @media (prefers-reduced-motion: reduce) {
   .slide.on { animation: none; }
-  .check.wait .dot { animation: none; }
+  .check.wait .dot, .big-check { animation: none; }
   .progress i, .toast { transition: none; }
 }

@@ -10,7 +10,7 @@
  *   Preview    qtracePlayer.load / emit / goto   used when opened in a plain browser
  *
  * Slide: { id, eyebrow?, title, text, image?, visual?, actions: [{ label, action, url?, primary? }] }
- * Drawn visuals: network, entry, device, install, report. Opened without QuPath (plain browser),
+ * Drawn visuals: network, entry, device, install, report, done. Opened without QuPath (plain browser),
  * the player plays trunk.json and shows what QuPath would do.
  */
 (function () {
@@ -26,7 +26,8 @@
     'open-player': 'QuPath opens the Player',
     'issue-report': 'QuPath opens Bug or Feature Request, which creates an issue for the team',
     'unlock-key': 'QuPath opens the passphrase dialog',
-    'network-check': 'QuPath checks qtrace.ca and github.com'
+    'network-check': 'QuPath checks qtrace.ca and github.com',
+    'close': 'QuPath closes this window: you can start working'
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -125,7 +126,12 @@
       '<span class="send">Send</span></div></div>';
   }
 
-  var VISUALS = { network: networkHTML, entry: entryHTML, device: deviceHTML, install: installHTML, report: reportHTML };
+  function doneHTML() {
+    return '<div class="done"><div class="big-check">✓</div>' +
+      (content && content.who ? '<p>Certified for <strong>' + esc(content.who) + '</strong></p>' : '') + '</div>';
+  }
+
+  var VISUALS = { network: networkHTML, entry: entryHTML, device: deviceHTML, install: installHTML, report: reportHTML, done: doneHTML };
 
   function visualHTML(s) {
     if (s.image) return '<img src="' + esc(s.image) + '" alt="' + esc(s.title) + '">';
