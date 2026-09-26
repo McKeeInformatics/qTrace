@@ -9,7 +9,9 @@
  *   JS → Java  alert('qtrace:' + {action, arg})  caught by PlayerWindow, whitelisted in PlayerBridge
  *   Preview    qtracePlayer.load / emit / goto   used when opened in a plain browser
  *
- * Slide: { id, eyebrow?, title, text, image?, visual?, actions: [{ label, action, url?, primary? }] }
+ * Slide: { id, eyebrow?, title, text, image?, visual?, hidden?, actions: [{ label, action, url?, primary? }] }
+ * A hidden slide is not in the track: it is only reached by goto (e.g. the trunk's 'ready' after
+ * Continue) and is shown as a final screen, without the bottom bar.
  * Drawn visuals: network, entry, device, install, report, done. Opened without QuPath (plain browser),
  * the player plays trunk.json and shows what QuPath would do.
  */
@@ -160,8 +162,9 @@
         '<div class="actions">' + actionsHTML(s) + '</div></div>';
       stage.insertBefore(el, $('toast'));
     });
-    $('track').innerHTML = content.slides.map(function (s, i) {
-      return '<button type="button" data-go="' + i + '" aria-label="Step ' + (i + 1) + ': ' + esc(s.title) + '"><i></i><span>' +
+    $('track').innerHTML = visible().map(function (i, k) {
+      var s = content.slides[i];
+      return '<button type="button" data-go="' + i + '" aria-label="Step ' + (k + 1) + ': ' + esc(s.title) + '"><i></i><span>' +
         esc(s.eyebrow || s.title) + '</span></button>';
     }).join('');
     document.title = content.title || 'qTrace';
@@ -179,22 +182,37 @@
     });
   }
 
+  function visible() {
+    var out = [];
+    content.slides.forEach(function (s, i) { if (!s.hidden) out.push(i); });
+    return out;
+  }
+  function step(dir) {
+    var v = visible(), k = v.indexOf(cur);
+    if (k === -1) return;
+    var n = v[k + dir];
+    if (n != null) go(n);
+  }
+
   function go(i) {
     if (!content) return;
     cur = Math.max(0, Math.min(content.slides.length - 1, i));
+    var v = visible(), k = v.indexOf(cur);
+    document.querySelector('.player').classList.toggle('final', k === -1);
     seen[cur] = true;
     Array.prototype.forEach.call(document.querySelectorAll('.slide'), function (n) {
       n.classList.toggle('on', +n.dataset.i === cur);
     });
-    Array.prototype.forEach.call(document.querySelectorAll('#track button'), function (b, k) {
-      b.classList.toggle('cur', k === cur);
-      b.classList.toggle('seen', !!seen[k] && k !== cur);
-      b.querySelector('i').style.setProperty('--fill', k === cur ? '0%' : '');
+    Array.prototype.forEach.call(document.querySelectorAll('#track button'), function (b) {
+      var i = +b.dataset.go;
+      b.classList.toggle('cur', i === cur);
+      b.classList.toggle('seen', !!seen[i] && i !== cur);
+      b.querySelector('i').style.setProperty('--fill', i === cur ? '0%' : '');
     });
-    $('count').textContent = (cur + 1) + ' / ' + content.slides.length;
+    $('count').textContent = k === -1 ? '' : (k + 1) + ' / ' + v.length;
     remember(cur);
-    $('prev').disabled = cur === 0;
-    $('next').disabled = cur === content.slides.length - 1;
+    $('prev').disabled = k <= 0;
+    $('next').disabled = k === -1 || k === v.length - 1;
     var s = content.slides[cur];
     if (s.visual === 'network' && !networkAsked && !Object.keys(state.network).length) { networkAsked = true; run('network-check'); }
     started = performance.now();
@@ -206,7 +224,8 @@
     var b = document.querySelector('#track button.cur i');
     if (b) b.style.setProperty('--fill', (p * 100).toFixed(1) + '%');
     if (p >= 1) {
-      if (cur < content.slides.length - 1) go(cur + 1); else setPlaying(false);
+      var v = visible(), k = v.indexOf(cur);
+      if (k !== -1 && k < v.length - 1) go(v[k + 1]); else setPlaying(false);
     }
     raf = requestAnimationFrame(tick);
   }
@@ -241,6 +260,7 @@
       setTimeout(function () { emit('network', { name: 'github.com', ok: true }); }, 1500);
     }
     if (action === 'invite') emit('invite', { state: 'opened' });
+    if (action === 'continue') gotoId('ready');
     if (action === 'sign-in') {
       gotoId('code');
       emit('device', { state: 'starting' });
@@ -275,10 +295,10 @@
     var b = e.target.closest('[data-go]');
     if (b) { go(+b.dataset.go); if (playing) setPlaying(true); }
   });
-  $('prev').onclick = function () { go(cur - 1); if (playing) setPlaying(true); };
-  $('next').onclick = function () { go(cur + 1); if (playing) setPlaying(true); };
+  $('prev').onclick = function () { step(-1); if (playing) setPlaying(true); };
+  $('next').onclick = function () { step(1); if (playing) setPlaying(true); };
   $('play').onclick = function () { setPlaying(!playing); };
-  $('skip').onclick = function () { setPlaying(false); go(content.slides.length - 1); };
+  $('skip').onclick = function () { setPlaying(false); var v = visible(); go(v[v.length - 1]); };
   $('skip').onkeydown = function (e) { if (e.key === 'Enter') $('skip').click(); };
   document.addEventListener('keydown', function (e) {
     if (e.target.closest && e.target.closest('input, textarea')) return;

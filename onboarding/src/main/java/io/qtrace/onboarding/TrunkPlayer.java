@@ -86,8 +86,9 @@ final class TrunkPlayer {
             })
             .on("continue", a -> {
                 OnboardingState.load(qtraceDir).markTrunkDone();
-                w.close();
+                w.gotoSlide("ready");
             })
+            .on("close", a -> w.close())
             .on("quit", a -> {
                 w.close();
                 QTraceUpdater.whenNoModalOpen("quit request", qupath::sendQuitRequest);

@@ -25,7 +25,12 @@
       "title": "Enter your invitation code",
       "text": "Your browser then opens qtrace.ca to create your account, and your certificate arrives in QuPath on its own. No file to handle. Already have an account? Sign in instead. You can also continue now and do this later from Extensions > QTrace > Getting started.",
       "visual": "entry",
-      "actions": [{ "label": "Continue", "action": "continue" }]
+      "actions": [
+        {
+          "label": "Continue",
+          "action": "continue"
+        }
+      ]
     },
     {
       "id": "code",
@@ -41,7 +46,28 @@
       "title": "Installing Compliance and your welcome",
       "text": "Your certificate is saved. qTrace downloads the modules it gives you, then asks you to restart QuPath once.",
       "visual": "install",
-      "actions": [{ "label": "Quit QuPath now", "action": "quit", "primary": true }]
+      "actions": [
+        {
+          "label": "Quit QuPath now",
+          "action": "quit",
+          "primary": true
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "hidden": true,
+      "eyebrow": "All set",
+      "title": "qTrace is on board",
+      "text": "qTrace already records your work in QuPath: open a project and work as usual. Whenever you want your results signed with your certified identity, sign in from Extensions > QTrace > Getting started.",
+      "visual": "done",
+      "actions": [
+        {
+          "label": "Start using qTrace",
+          "action": "close",
+          "primary": true
+        }
+      ]
     }
   ]
 }
