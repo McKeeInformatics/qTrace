@@ -77,7 +77,8 @@ final class TrunkPlayer {
         PlayerBridge bridge = new PlayerBridge();
         PlayerWindow w = new PlayerWindow(qupath.getStage(), "Getting started with qTrace", playerUrl, content, bridge);
 
-        bridge.on("network-check", a -> checkNetwork(w))
+        AtomicBoolean networkChecked = new AtomicBoolean();
+        bridge.on("network-check", a -> { if (networkChecked.compareAndSet(false, true)) checkNetwork(w); })
             .on("sign-in", a -> signIn(w, cancelled))
             .on("invite", code -> {
                 BrowserOpener.open(SERVER + "/sign-up?invite=" + URLEncoder.encode(code, StandardCharsets.UTF_8));

@@ -1,10 +1,13 @@
 /*
  * qTrace onboarding player (docs/architecture/loader.md § 17).
  *
- *   Java → JS  qtracePlayer.load(json)          content: { title, who?, org?, slides: [...] }
- *              qtracePlayer.emit(event, data)   'network' | 'device' | 'install' | 'invite'
- *              qtracePlayer.goto(slideId)
- *   JS → Java  qtrace.run(action, arg)          whitelisted in Java (io.qtrace.player.PlayerBridge)
+ *   Java → JS  the URL fragment: #<base64url JSON> = { host, content, state, goto }
+ *              content: { title, who?, org?, slides: [...] }
+ *              state:   { network: {name: ok}, device: {...}, install: {...}, invite: {state} }
+ *              goto:    { id, seq } — shown once per seq
+ *              (read on load and on every hashchange: WebEngine.executeScript crashes QuPath 0.7)
+ *   JS → Java  alert('qtrace:' + {action, arg})  caught by PlayerWindow, whitelisted in PlayerBridge
+ *   Preview    qtracePlayer.load / emit / goto   used when opened in a plain browser
  *
  * Slide: { id, eyebrow?, title, text, image?, visual?, actions: [{ label, action, url?, primary? }] }
  * Drawn visuals: network, entry, device, install, report. Opened without QuPath (plain browser),
@@ -29,6 +32,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var content = null, cur = 0, playing = false, started = 0, raf = 0, seen = {};
   var state = { network: {}, device: { state: 'idle' }, install: { state: 'idle' }, invite: null };
+  var networkAsked = false;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -38,8 +42,8 @@
 
   // ── Talking to QuPath ─────────────────────────────────────────────────────
   function run(action, arg) {
-    if (window.qtrace && typeof window.qtrace.run === 'function') {
-      window.qtrace.run(action, arg == null ? '' : String(arg));
+    if (window.__qtraceHost) {
+      window.alert('qtrace:' + JSON.stringify({ action: action, arg: arg == null ? '' : String(arg) }));
     } else {
       toast(BROWSER_PREVIEW[action] || action);
       simulate(action, arg);
@@ -182,10 +186,11 @@
       b.querySelector('i').style.setProperty('--fill', k === cur ? '0%' : '');
     });
     $('count').textContent = (cur + 1) + ' / ' + content.slides.length;
+    remember(cur);
     $('prev').disabled = cur === 0;
     $('next').disabled = cur === content.slides.length - 1;
     var s = content.slides[cur];
-    if (s.visual === 'network' && !state.networkAsked) { state.networkAsked = true; run('network-check'); }
+    if (s.visual === 'network' && !networkAsked && !Object.keys(state.network).length) { networkAsked = true; run('network-check'); }
     started = performance.now();
   }
 
@@ -275,6 +280,48 @@
     if (e.key === 'ArrowLeft') $('prev').click();
   });
 
+  // ── The state sent by QuPath in the URL fragment ────────────────────────────
+  function readHash() {
+    var h = location.hash.slice(1);
+    if (!h) return null;
+    try {
+      var b64 = h.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  var lastContent = null, lastGoto = 0;
+  function remember(i) { try { sessionStorage.setItem('qtrace.slide', String(i)); } catch (e) { /* no storage */ } }
+  function recall() { try { return +(sessionStorage.getItem('qtrace.slide') || 0); } catch (e) { return 0; } }
+
+  function applyHash() {
+    var m = readHash();
+    if (!m || !m.content) return;
+    if (m.host) window.__qtraceHost = true;
+    var st = m.state || {};
+    state.network = st.network || {};
+    state.device = st.device || { state: 'idle' };
+    state.install = st.install || { state: 'idle' };
+    state.invite = st.invite ? st.invite.state : null;
+    var cs = JSON.stringify(m.content);
+    if (cs !== lastContent) {
+      lastContent = cs;
+      content = m.content;
+      var keep = recall(); // same page reloaded instead of a fragment change: keep the slide
+      build();
+      if (keep) go(keep);
+    } else {
+      ['network', 'entry', 'device', 'install'].forEach(refreshVisual);
+    }
+    if (m.goto && m.goto.seq > lastGoto) { lastGoto = m.goto.seq; gotoId(m.goto.id); }
+  }
+  window.addEventListener('hashchange', applyHash);
+
   window.qtracePlayer = {
     load: function (json) {
       content = typeof json === 'string' ? JSON.parse(json) : json;
@@ -284,9 +331,10 @@
     goto: gotoId
   };
 
-  // Plain browser (no QuPath calls load within a moment): play the embedded trunk.
+  // In QuPath: the fragment carries everything. In a plain browser: play the embedded trunk.
+  applyHash();
   setTimeout(function () {
-    if (content || window.qtrace) return;
+    if (content || window.__qtraceHost) return;
     fetch('trunk.json').then(function (r) { return r.json(); }).then(window.qtracePlayer.load)
       .catch(function () { /* served without trunk.json: nothing to preview */ });
   }, 600);

@@ -20,6 +20,8 @@
 package io.qtrace.player;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.qtrace.BrowserOpener;
 import javafx.application.Platform;
 import javafx.concurrent.Worker;
@@ -32,46 +34,50 @@ import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Map;
+
 /**
- * The wide onboarding window (loader.md § 17): a WebView playing the HTML player, fed with its
- * content by Java ({@code qtracePlayer.load}) and driving QuPath only through
- * {@link PlayerBridge} ({@code window.qtrace.run}), and only while the page is the player.
- * Links elsewhere open in the user's browser. Check {@link PlayerBridge#webViewAvailable()}
- * before creating one.
+ * The wide onboarding window (loader.md § 17): a WebView playing the HTML player, driving
+ * QuPath only through {@link PlayerBridge}, and only while the page is the player. Links
+ * elsewhere open in the user's browser. Check {@link PlayerBridge#webViewAvailable()} before
+ * creating one.
+ *
+ * No {@code WebEngine.executeScript} and no JSObject: in QuPath 0.7 (JavaFX 25, classpath mode)
+ * executeScript crashes the JVM (SIGSEGV in libjfxwebkit, twkExecuteScript). So:
+ * <ul>
+ *   <li>Java → page: the whole state (content, device code, install progress, slide to show)
+ *       travels in the URL fragment, {@code player.html#<base64url JSON>}; the page renders it
+ *       on load and on every {@code hashchange}.</li>
+ *   <li>page → Java: {@code alert("qtrace:{action,arg}")}, caught by {@code setOnAlert}.</li>
+ * </ul>
  */
 public final class PlayerWindow {
 
     private static final Logger log = LoggerFactory.getLogger(PlayerWindow.class);
-    private static final Gson GSON = new Gson();
+    private static final String PREFIX = "qtrace:";
 
     private final String playerUrl;
-    private final String contentJson;
     private final PlayerBridge bridge;
     private final Stage stage = new Stage();
     private final WebEngine engine;
-    // WebView keeps only a weak reference to objects handed to JavaScript: hold it here.
-    private final JsApi api = new JsApi();
-    private boolean ready;
-    private final java.util.List<String> pending = new java.util.ArrayList<>();
-
-    /** Called from JavaScript as {@code qtrace.run(action, arg)}. Public for the JS bridge. */
-    public final class JsApi {
-        public void run(String action, String arg) {
-            bridge.dispatch(action, arg);
-        }
-    }
+    private final JsonObject message = new JsonObject();
+    private final JsonObject state = new JsonObject();
+    private int seq;
 
     public PlayerWindow(Window owner, String title, String playerUrl, String contentJson, PlayerBridge bridge) {
         this.playerUrl = playerUrl;
-        this.contentJson = contentJson;
         this.bridge = bridge;
+        message.addProperty("host", true);
+        message.add("content", JsonParser.parseString(contentJson));
+        message.add("state", state);
 
         WebView view = new WebView();
         view.setContextMenuEnabled(false);
         engine = view.getEngine();
-        engine.setOnAlert(e -> log.info("[qtrace-player] page: {}", e.getData()));
+        engine.setOnAlert(e -> onMessage(e.getData()));
         engine.getLoadWorker().stateProperty().addListener((obs, old, st) -> {
-            if (st == Worker.State.SUCCEEDED) onLoaded();
             if (st == Worker.State.FAILED) log.warn("[qtrace-player] could not load {}", engine.getLocation());
         });
         // The player never navigates by itself: any other page is a link, for the browser.
@@ -79,7 +85,7 @@ public final class PlayerWindow {
             if (loc == null || loc.isEmpty() || PlayerBridge.trustedLocation(playerUrl, loc)) return;
             log.info("[qtrace-player] link opened in the browser: {}", loc);
             BrowserOpener.open(loc);
-            Platform.runLater(() -> engine.load(playerUrl));
+            Platform.runLater(this::push);
         });
 
         if (owner != null) stage.initOwner(owner);
@@ -91,7 +97,7 @@ public final class PlayerWindow {
     }
 
     public void show() {
-        engine.load(playerUrl);
+        push();
         stage.show();
     }
 
@@ -103,41 +109,57 @@ public final class PlayerWindow {
         Platform.runLater(stage::close);
     }
 
-    /** Sends {@code qtracePlayer.emit(event, data)}; queued until the page is ready. Any thread. */
-    public void emit(String event, Object data) {
-        script("qtracePlayer.emit(" + GSON.toJson(event) + "," + GSON.toJson(GSON.toJson(data)) + ")");
+    /**
+     * Updates one part of the state the page renders: {@code network} merges by
+     * {@code name} → {@code ok}; any other event replaces its entry. Any thread.
+     */
+    public void emit(String event, Map<String, ?> data) {
+        Platform.runLater(() -> {
+            JsonObject d = GSON.toJsonTree(data).getAsJsonObject();
+            if ("network".equals(event)) {
+                JsonObject net = state.has("network") ? state.getAsJsonObject("network") : new JsonObject();
+                net.add(d.get("name").getAsString(), d.get("ok"));
+                state.add("network", net);
+            } else {
+                state.add(event, d);
+            }
+            push();
+        });
     }
 
     /** Shows the slide with this id. Any thread. */
     public void gotoSlide(String id) {
-        script("qtracePlayer.goto(" + GSON.toJson(id) + ")");
-    }
-
-    private void script(String js) {
         Platform.runLater(() -> {
-            if (!ready) { pending.add(js); return; }
-            try {
-                engine.executeScript(js);
-            } catch (RuntimeException e) {
-                log.warn("[qtrace-player] script failed: {}", e.getMessage());
-            }
+            JsonObject g = new JsonObject();
+            g.addProperty("id", id);
+            g.addProperty("seq", ++seq);
+            message.add("goto", g);
+            push();
         });
     }
 
-    private void onLoaded() {
-        if (!PlayerBridge.trustedLocation(playerUrl, engine.getLocation())) return;
-        // window.qtrace = api. Reflective: JSObject lives in jdk.jsobject up to JDK 23 and in
-        // javafx.web from JavaFX 24 (QuPath 0.7): no compile-time dependency on either.
-        try {
-            Object window = engine.executeScript("window");
-            window.getClass().getMethod("setMember", String.class, Object.class).invoke(window, "qtrace", api);
-        } catch (ReflectiveOperationException e) {
-            log.warn("[qtrace-player] could not expose the bridge", e);
+    private void push() {
+        String payload = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(message.toString().getBytes(StandardCharsets.UTF_8));
+        engine.load(playerUrl + "#" + payload);
+    }
+
+    /** alert("qtrace:" + JSON) from the player (player.js run); anything else is page logging. */
+    private void onMessage(String data) {
+        if (data == null || !data.startsWith(PREFIX)) {
+            log.info("[qtrace-player] page: {}", data);
             return;
         }
-        engine.executeScript("qtracePlayer.load(" + GSON.toJson(contentJson) + ")");
-        ready = true;
-        pending.forEach(engine::executeScript);
-        pending.clear();
+        if (!PlayerBridge.trustedLocation(playerUrl, engine.getLocation())) return;
+        try {
+            JsonObject m = JsonParser.parseString(data.substring(PREFIX.length())).getAsJsonObject();
+            String action = m.has("action") ? m.get("action").getAsString() : null;
+            String arg = m.has("arg") && !m.get("arg").isJsonNull() ? m.get("arg").getAsString() : "";
+            bridge.dispatch(action, arg);
+        } catch (RuntimeException e) {
+            log.warn("[qtrace-player] unreadable message: {}", data);
+        }
     }
+
+    private static final Gson GSON = new Gson();
 }
