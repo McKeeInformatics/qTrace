@@ -327,11 +327,9 @@ public class QTraceExporter {
         // single author. Pre-tracking steps (prior contributor's inherited state) excluded.
         session.add("contributions", buildContributions(stepsArr));
 
-        // Git
-        JsonObject git = new JsonObject();
-        git.addProperty("commit",   gitHash);
-        git.addProperty("repo_dir", outputDir.toString());
-        session.add("git", git);
+        // Git — only when this session actually has a commit (never a null placeholder)
+        JsonObject git = gitBlock(gitHash, outputDir);
+        if (git != null) session.add("git", git);
 
         // Project context
         JsonObject projectObj = new JsonObject();
@@ -857,5 +855,14 @@ public class QTraceExporter {
             } catch (Exception ignored) {}
         }
         return null;
+    }
+
+    /** Session {@code git} block, or null when there is no commit to point at. */
+    static JsonObject gitBlock(String gitHash, Path repoDir) {
+        if (gitHash == null || gitHash.isBlank()) return null;
+        JsonObject git = new JsonObject();
+        git.addProperty("commit",   gitHash);
+        git.addProperty("repo_dir", repoDir.toString());
+        return git;
     }
 }
