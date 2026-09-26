@@ -134,13 +134,20 @@ public class QTraceController {
         Path project = QTraceConfig.currentProjectDir();
         if (project == null) return null;
         try {
-            String hash = new ProjectHistory(project).commitTracked(message, currentContributor());
+            String hash = new ProjectHistory(project).commitTracked(message, currentIdentity());
             if (hash != null) ActivityLog.add("  git: " + hash);
             return hash;
         } catch (Exception e) {
             ActivityLog.add("  WARNING: project history not recorded — " + e.getMessage());
             return null;
         }
+    }
+
+    /** Git identity of the current user: certified name + account email when a certificate is loaded. */
+    public static CommitIdentity currentIdentity() {
+        QTracePlugin ep = QTracePluginManager.getEntitled();
+        LicenseInfo li = ep != null ? ep.getActiveLicenseInfo() : null;
+        return CommitIdentity.of(li, currentContributor());
     }
 
     public static String currentContributor() {

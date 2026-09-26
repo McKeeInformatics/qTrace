@@ -36,13 +36,10 @@ import java.nio.file.Path;
  * the short hash ends up in the .qtrace as {@code classifiers[].git_hash}, so a record points at
  * the exact classifier version it used. Commits are not signed.
  *
- * Author = the contributor who triggered the commit; committer = qTrace.
+ * Author and committer = the user's {@link CommitIdentity}.
  * Uses JGit (bundled in the fat JAR — no external Git installation required).
  */
 public class GitBridge {
-
-    static final String QTRACE_NAME  = "qTrace";
-    static final String QTRACE_EMAIL = "noreply@qtrace.ca";
 
     private final Path repoDir;
 
@@ -56,10 +53,10 @@ public class GitBridge {
      *
      * @param file        absolute path of the file to commit (must be inside repoDir)
      * @param message     full commit message
-     * @param contributor commit author (current qTrace user); qTrace itself when null/blank
+     * @param identity    author and committer (see {@link CommitIdentity})
      * @return 7-character abbreviated SHA-1 of the new commit
      */
-    public String commit(Path file, String message, String contributor)
+    public String commit(Path file, String message, CommitIdentity identity)
             throws IOException, GitAPIException {
         File dir = repoDir.toFile();
 
@@ -75,15 +72,11 @@ public class GitBridge {
             String relative = repoDir.relativize(file).toString();
             git.add().addFilepattern(relative).call();
 
-            PersonIdent committer = new PersonIdent(QTRACE_NAME, QTRACE_EMAIL);
-            PersonIdent author = (contributor == null || contributor.isBlank())
-                ? committer
-                : new PersonIdent(contributor.strip(), "", committer.getWhenAsInstant(),
-                                  committer.getZoneId());
+            PersonIdent who = identity.person();
             RevCommit commit = git.commit()
-                .setMessage(message)
-                .setAuthor(author)
-                .setCommitter(committer)
+                .setMessage(identity.message(message))
+                .setAuthor(who)
+                .setCommitter(who)
                 .call();
 
             return commit.abbreviate(7).name();

@@ -2013,7 +2013,7 @@ public class ActionLogger implements WorkflowListener {
                 Files.writeString(dest, json);
                 record.gitHash = ProjectHistory.commitFile(dest, QTraceConfig.get().outputClassifierDir(),
                     "QTrace classifier loaded: " + name
-                        + " (user=" + user + ", sha=" + sha256.substring(0, 8) + ")", user);
+                        + " (user=" + user + ", sha=" + sha256.substring(0, 8) + ")", QTraceController.currentIdentity());
                 ActivityLog.add("  git    : " + record.gitHash);
             } catch (Exception e) {
                 ActivityLog.add("  WARNING: classifier Git commit failed — " + e.getMessage());
@@ -2512,7 +2512,7 @@ public class ActionLogger implements WorkflowListener {
             Files.writeString(dest, record.jsonContent);
             record.gitHash = ProjectHistory.commitFile(dest, classifierDir,
                 "QTrace classifier: " + name
-                + " (user=" + user + ", img=" + record.sha256.substring(0,8) + ")", user);
+                + " (user=" + user + ", img=" + record.sha256.substring(0,8) + ")", QTraceController.currentIdentity());
             ActivityLog.add("  git       : " + record.gitHash);
         } catch (Exception e) {
             ActivityLog.add("  WARNING: classifier Git commit failed — " + e.getMessage());

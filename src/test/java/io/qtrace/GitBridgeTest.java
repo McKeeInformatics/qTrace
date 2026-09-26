@@ -20,18 +20,17 @@ class GitBridgeTest {
     }
 
     @Test
-    void commit_authorIsTheContributor_committerIsQtrace(@TempDir Path repo) throws Exception {
+    void commit_authorAndCommitterAreTheContributor(@TempDir Path repo) throws Exception {
         Path file = repo.resolve("classifiers").resolve("tumor.json");
         Files.createDirectories(file.getParent());
         Files.writeString(file, "{}");
 
-        String hash = new GitBridge(repo).commit(file, "QTrace classifier: tumor", "L. Nguyen");
+        String hash = new GitBridge(repo).commit(file, "QTrace classifier: tumor", CommitIdentity.of(null, "L. Nguyen"));
 
         RevCommit c = head(repo);
         assertEquals(hash, c.abbreviate(7).name());
         assertEquals("L. Nguyen", c.getAuthorIdent().getName());
-        assertEquals("qTrace", c.getCommitterIdent().getName());
-        assertEquals("noreply@qtrace.ca", c.getCommitterIdent().getEmailAddress());
+        assertEquals("L. Nguyen", c.getCommitterIdent().getName());
     }
 
     @Test
@@ -39,7 +38,7 @@ class GitBridgeTest {
         Path file = repo.resolve("a.json");
         Files.writeString(file, "{}");
 
-        new GitBridge(repo).commit(file, "msg", null);
+        new GitBridge(repo).commit(file, "msg", CommitIdentity.of(null, null));
 
         RevCommit c = head(repo);
         assertFalse(c.getAuthorIdent().getEmailAddress().contains("astraebio"));

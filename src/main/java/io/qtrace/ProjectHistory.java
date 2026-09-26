@@ -48,7 +48,7 @@ import java.util.stream.Stream;
  * {@code qTrace/} folder — never the {@code data/} folder (.qpdata) nor temporary files. Commits
  * are restricted to those paths, so anything the lab has staged for itself stays staged.
  *
- * Author = the contributor; committer = qTrace. Commits are not signed: this is an audit trail,
+ * Author and committer = the user's {@link CommitIdentity}. Commits are not signed: this is an audit trail,
  * integrity proof comes from the signed stamp and its timestamp.
  */
 public final class ProjectHistory {
@@ -72,7 +72,7 @@ public final class ProjectHistory {
      *
      * @return 7-character abbreviated hash, or null when nothing tracked changed
      */
-    public String commitTracked(String message, String contributor) throws IOException, GitAPIException {
+    public String commitTracked(String message, CommitIdentity identity) throws IOException, GitAPIException {
         retireLegacyRepo();
         try (Git git = openOrInit()) {
             String prefix = prefix(git);
@@ -91,11 +91,8 @@ public final class ProjectHistory {
             changed.forEach(add::addFilepattern);
             add.call();
 
-            PersonIdent committer = new PersonIdent(GitBridge.QTRACE_NAME, GitBridge.QTRACE_EMAIL);
-            PersonIdent author = (contributor == null || contributor.isBlank())
-                ? committer
-                : new PersonIdent(contributor.strip(), "", committer.getWhenAsInstant(), committer.getZoneId());
-            CommitCommand commit = git.commit().setMessage(message).setAuthor(author).setCommitter(committer);
+            PersonIdent who = identity.person();
+            CommitCommand commit = git.commit().setMessage(identity.message(message)).setAuthor(who).setCommitter(who);
             changed.forEach(commit::setOnly);   // leave whatever else is staged alone
             return commit.call().abbreviate(7).name();
         }
@@ -124,15 +121,15 @@ public final class ProjectHistory {
      *
      * @return abbreviated hash of the commit that now holds the file
      */
-    static String commitFile(Path file, Path fallbackRepo, String message, String contributor)
+    static String commitFile(Path file, Path fallbackRepo, String message, CommitIdentity identity)
             throws IOException, GitAPIException {
         Path project = QTraceConfig.currentProjectDir();
         if (project != null && file.toAbsolutePath().normalize().startsWith(project.toAbsolutePath().normalize())) {
             ProjectHistory h = new ProjectHistory(project);
-            String hash = h.commitTracked(message, contributor);
+            String hash = h.commitTracked(message, identity);
             return hash != null ? hash : h.lastCommitTouching(file);   // unchanged: already recorded
         }
-        return new GitBridge(fallbackRepo).commit(file, message, contributor);
+        return new GitBridge(fallbackRepo).commit(file, message, identity);
     }
 
     /** True for a project-relative path qTrace versions (under a tracked root, not data or temp). */

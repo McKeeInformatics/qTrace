@@ -58,7 +58,7 @@ class ProjectHistoryTest {
     void firstCommit_createsTheRepoAtTheProjectRoot_andVersionsOnlyWhatQtraceTracks(@TempDir Path dir) throws Exception {
         Path project = qupathProject(dir);
 
-        String hash = new ProjectHistory(project).commitTracked("qTrace: session 1", "A. Moreau");
+        String hash = new ProjectHistory(project).commitTracked("qTrace: session 1", CommitIdentity.of(null, "A. Moreau"));
 
         assertNotNull(hash);
         assertTrue(Files.isDirectory(project.resolve(".git")));
@@ -78,11 +78,11 @@ class ProjectHistoryTest {
     @Test
     void commit_authorIsTheContributor(@TempDir Path dir) throws Exception {
         Path project = qupathProject(dir);
-        new ProjectHistory(project).commitTracked("qTrace: session 1", "A. Moreau");
+        new ProjectHistory(project).commitTracked("qTrace: session 1", CommitIdentity.of(null, "A. Moreau"));
         try (Git git = Git.open(project.toFile())) {
             RevCommit c = git.log().setMaxCount(1).call().iterator().next();
             assertEquals("A. Moreau", c.getAuthorIdent().getName());
-            assertEquals("noreply@qtrace.ca", c.getCommitterIdent().getEmailAddress());
+            assertEquals("A. Moreau", c.getCommitterIdent().getName());
         }
     }
 
@@ -90,8 +90,8 @@ class ProjectHistoryTest {
     void nothingChanged_noNewCommit(@TempDir Path dir) throws Exception {
         Path project = qupathProject(dir);
         ProjectHistory h = new ProjectHistory(project);
-        assertNotNull(h.commitTracked("first", "A. Moreau"));
-        assertNull(h.commitTracked("second", "A. Moreau"));
+        assertNotNull(h.commitTracked("first", CommitIdentity.of(null, "A. Moreau")));
+        assertNull(h.commitTracked("second", CommitIdentity.of(null, "A. Moreau")));
     }
 
     @Test
@@ -105,7 +105,7 @@ class ProjectHistoryTest {
         }
         Path project = qupathProject(lab.resolve("projects/glioma"));
 
-        new ProjectHistory(project).commitTracked("qTrace: session 1", "A. Moreau");
+        new ProjectHistory(project).commitTracked("qTrace: session 1", CommitIdentity.of(null, "A. Moreau"));
 
         assertFalse(Files.exists(project.resolve(".git")), "no nested repo when the project already sits in one");
         Set<String> files = filesIn(lab, "HEAD");
@@ -127,7 +127,7 @@ class ProjectHistoryTest {
                .setCommitter("QTrace", "qtrace@astraebio.io").call();
         }
 
-        new ProjectHistory(project).commitTracked("qTrace: session 1", "A. Moreau");
+        new ProjectHistory(project).commitTracked("qTrace: session 1", CommitIdentity.of(null, "A. Moreau"));
 
         assertFalse(Files.exists(legacy.resolve(".git")));
         assertTrue(Files.isDirectory(legacy.resolve(".git-legacy")), "old history kept on disk, out of the way");
@@ -143,15 +143,15 @@ class ProjectHistoryTest {
         ProjectHistory h = new ProjectHistory(project);
 
         assertNull(h.lastCommitTouching(qtrace), "no history yet");
-        String first = h.commitTracked("session 1", "A. Moreau");
+        String first = h.commitTracked("session 1", CommitIdentity.of(null, "A. Moreau"));
         assertEquals(first, h.lastCommitTouching(qtrace));
 
         write(project.resolve("scripts/other.groovy"), "x");
-        h.commitTracked("script only", "A. Moreau");
+        h.commitTracked("script only", CommitIdentity.of(null, "A. Moreau"));
         assertEquals(first, h.lastCommitTouching(qtrace), "a commit that doesn't touch the file doesn't move it");
 
         Files.writeString(qtrace, "{\"sessions\":[{}]}");
-        String third = h.commitTracked("session 2", "J. Kaur");
+        String third = h.commitTracked("session 2", CommitIdentity.of(null, "J. Kaur"));
         assertEquals(third, h.lastCommitTouching(qtrace));
     }
 }
