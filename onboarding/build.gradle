@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'io.qtrace'
-version = '1.0.0'
+version = '1.0.1'
 
 // Built against the Core of the same commit: it needs that Core (BrowserOpener,
 // QTraceUpdater.installModulesNow) and says so to the loader (Qtrace-Requires).

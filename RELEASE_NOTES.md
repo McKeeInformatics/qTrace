@@ -1,3 +1,13 @@
+## What's new in v1.2.3
+
+### Changed — No more waiting for the identity check
+Signing in from **Getting started** no longer waits for your identity verification: as soon as your account is ready (terms accepted, passphrase chosen), **Authorize QuPath** installs a **provisional identity certificate** and you can work and stamp right away. The panel says **Identity verification pending · provisional until …** in orange until your identity is verified on qtrace.ca; qTrace then swaps in your verified certificate by itself (at startup, then every hour) and tells you **Your identity is verified**. The stamps you made meanwhile are signed with the same key and become certified under your verified name.
+
+### Changed — Power Users are certified from the start
+Members of the qTrace Power User Group, whose identity qTrace vouches for, get a verified certificate as soon as they sign in, with no identity check to go through.
+
+---
+
 ## What's new in v1.2.2
 
 ### Added — Getting started: from nothing to your certified identity, one restart
