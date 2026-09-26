@@ -536,9 +536,9 @@ public final class QTraceUpdater {
      * modal dialog is open (typically QuPath's own Welcome window at startup). QuPath
      * silently discards a close request issued from a nested loop ("Close request from
      * nested loop - will be discarded"), so both the update prompt and the post-install
-     * quit wait for it.
+     * quit wait for it. Public: the onboarding and welcome modules wait the same way.
      */
-    private static void whenNoModalOpen(String what, Runnable action) {
+    public static void whenNoModalOpen(String what, Runnable action) {
         whenNoModalOpen(what, action, true);
     }
 

@@ -181,8 +181,16 @@ public class QTraceController {
         return logger != null && logger.isAttached();
     }
 
+    // The one controller of this QuPath session, for the modules loaded next to Core
+    // (onboarding / welcome, loader.md § 17) — they have no reference to QTraceExtension.
+    private static volatile QTraceController current;
+
+    /** The controller created by QTraceExtension, or null before Core is installed. */
+    public static QTraceController current() { return current; }
+
     public QTraceController(QuPathGUI qupath) {
         this.qupath = qupath;
+        current = this;
         // Project Folder mode resolves every qTrace folder against the open project.
         QTraceConfig.setProjectDirSupplier(() -> {
             var project = qupath.getProject();
