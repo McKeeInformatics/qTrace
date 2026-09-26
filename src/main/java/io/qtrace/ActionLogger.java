@@ -2013,7 +2013,7 @@ public class ActionLogger implements WorkflowListener {
                 Files.writeString(dest, json);
                 record.gitHash = new GitBridge(QTraceConfig.get().outputClassifierDir())
                     .commit(dest, "QTrace classifier loaded: " + name
-                        + " (user=" + user + ", sha=" + sha256.substring(0, 8) + ")");
+                        + " (user=" + user + ", sha=" + sha256.substring(0, 8) + ")", user);
                 ActivityLog.add("  git    : " + record.gitHash);
             } catch (Exception e) {
                 ActivityLog.add("  WARNING: classifier Git commit failed — " + e.getMessage());
@@ -2512,7 +2512,7 @@ public class ActionLogger implements WorkflowListener {
             Files.writeString(dest, record.jsonContent);
             record.gitHash = new GitBridge(classifierDir).commit(dest,
                 "QTrace classifier: " + name
-                + " (user=" + user + ", img=" + record.sha256.substring(0,8) + ")");
+                + " (user=" + user + ", img=" + record.sha256.substring(0,8) + ")", user);
             ActivityLog.add("  git       : " + record.gitHash);
         } catch (Exception e) {
             ActivityLog.add("  WARNING: classifier Git commit failed — " + e.getMessage());

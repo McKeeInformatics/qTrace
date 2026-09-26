@@ -29,21 +29,20 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * Phase 4 — Git provenance bridge.
+ * Local Git history for classifier files.
  *
- * Opens (or initialises) a local Git repository at the scripts output directory,
- * stages the generated Meta-Script, and creates a signed commit whose hash
- * becomes the immutable audit-trail anchor for this workflow capture.
+ * Opens (or initialises) a local Git repository at the classifier output directory and commits
+ * one file per call. Today only pixel-classifier JSON goes through here (loaded or trained);
+ * the short hash ends up in the .qtrace as {@code classifiers[].git_hash}, so a record points at
+ * the exact classifier version it used. Commits are not signed.
  *
- * The commit hash is returned to the caller for inclusion in the QTrace panel
- * and, later, in the .qtrace JSON sidecar (Phase 6).
- *
+ * Author = the contributor who triggered the commit; committer = qTrace.
  * Uses JGit (bundled in the fat JAR — no external Git installation required).
  */
 public class GitBridge {
 
-    static final PersonIdent QTRACE_IDENT =
-        new PersonIdent("QTrace", "qtrace@astraebio.io");
+    static final String QTRACE_NAME  = "qTrace";
+    static final String QTRACE_EMAIL = "noreply@qtrace.ca";
 
     private final Path repoDir;
 
@@ -55,11 +54,13 @@ public class GitBridge {
      * Stage + commit one file.
      * The repository is initialised automatically if it doesn't exist yet.
      *
-     * @param file    absolute path of the file to commit (must be inside repoDir)
-     * @param message full commit message
+     * @param file        absolute path of the file to commit (must be inside repoDir)
+     * @param message     full commit message
+     * @param contributor commit author (current qTrace user); qTrace itself when null/blank
      * @return 7-character abbreviated SHA-1 of the new commit
      */
-    public String commit(Path file, String message) throws IOException, GitAPIException {
+    public String commit(Path file, String message, String contributor)
+            throws IOException, GitAPIException {
         File dir = repoDir.toFile();
 
         Git git;
@@ -74,10 +75,15 @@ public class GitBridge {
             String relative = repoDir.relativize(file).toString();
             git.add().addFilepattern(relative).call();
 
+            PersonIdent committer = new PersonIdent(QTRACE_NAME, QTRACE_EMAIL);
+            PersonIdent author = (contributor == null || contributor.isBlank())
+                ? committer
+                : new PersonIdent(contributor.strip(), "", committer.getWhenAsInstant(),
+                                  committer.getZoneId());
             RevCommit commit = git.commit()
                 .setMessage(message)
-                .setAuthor(QTRACE_IDENT)
-                .setCommitter(QTRACE_IDENT)
+                .setAuthor(author)
+                .setCommitter(committer)
                 .call();
 
             return commit.abbreviate(7).name();
