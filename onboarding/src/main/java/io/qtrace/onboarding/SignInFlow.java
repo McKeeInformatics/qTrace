@@ -59,13 +59,17 @@ final class SignInFlow {
         this.server = server;
     }
 
-    /** Runs in the background; {@code quitDialog=false} when the caller offers the restart. */
-    void start(Listener l, BooleanSupplier cancelled, boolean quitDialog) {
+    /**
+     * Runs in the background; {@code quitDialog=false} when the caller offers the restart.
+     * {@code invite}: the invitation code typed in QuPath (the browser then creates the account
+     * for the email it was issued for), or null for an existing account.
+     */
+    void start(Listener l, BooleanSupplier cancelled, boolean quitDialog, String invite) {
         l.starting();
         DeviceFlowClient client = new DeviceFlowClient(server, Thread::sleep);
         CompletableFuture.runAsync(() -> {
             try {
-                DeviceFlowClient.Start s = client.start();
+                DeviceFlowClient.Start s = client.start(invite);
                 l.waiting(s.userCode(), s.verificationUrl());
                 BrowserOpener.open(s.verificationUrl());
                 String envelope = client.awaitLicense(s, cancelled);

@@ -21,11 +21,13 @@ class DeviceFlowClientTest {
     private String base;
     private final Deque<String[]> pollAnswers = new ArrayDeque<>(); // {httpStatus, body}
     private final List<String> pollBodies = new ArrayList<>();
+    private final List<String> startBodies = new ArrayList<>();
 
     @BeforeEach
     void start() throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/device/start", ex -> {
+            startBodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] b = ("{\"deviceCode\":\"dev-secret\",\"userCode\":\"ABCD-EFGH\","
                 + "\"verificationUrl\":\"https://qtrace.test/portal/device?code=ABCD-EFGH\","
                 + "\"interval\":5,\"expiresIn\":600}").getBytes(StandardCharsets.UTF_8);
@@ -53,7 +55,7 @@ class DeviceFlowClientTest {
 
     @Test
     void startReturnsTheCodes() throws Exception {
-        DeviceFlowClient.Start s = client().start();
+        DeviceFlowClient.Start s = client().start(null);
         assertEquals("dev-secret", s.deviceCode());
         assertEquals("ABCD-EFGH", s.userCode());
         assertEquals("https://qtrace.test/portal/device?code=ABCD-EFGH", s.verificationUrl());
@@ -62,11 +64,18 @@ class DeviceFlowClientTest {
     }
 
     @Test
+    void theInvitationCodeGoesWithTheSignIn() throws Exception {
+        client().start("WXYZ-2345-6789");
+        client().start(null);
+        assertEquals(List.of("{\"invite\":\"WXYZ-2345-6789\"}", "{}"), startBodies);
+    }
+
+    @Test
     void waitsUntilApprovedThenReturnsTheLicenseEnvelope() throws Exception {
         pollAnswers.add(new String[]{"200", "{\"status\":\"pending\"}"});
         pollAnswers.add(new String[]{"200", "{\"status\":\"approved\",\"license\":{\"jwt\":\"a.b.c\",\"sk_enc\":\"E\",\"sk_salt\":\"S\",\"sk_iv\":\"I\"}}"});
         DeviceFlowClient c = client();
-        String license = c.awaitLicense(c.start(), () -> false);
+        String license = c.awaitLicense(c.start(null), () -> false);
         assertTrue(license.contains("\"jwt\":\"a.b.c\""));
         assertTrue(license.contains("\"sk_enc\":\"E\""));
         assertEquals(2, pollBodies.size());
@@ -79,7 +88,7 @@ class DeviceFlowClientTest {
         pollAnswers.add(new String[]{"429", "{\"status\":\"slow_down\"}"});
         pollAnswers.add(new String[]{"200", "{\"status\":\"approved\",\"license\":{\"jwt\":\"a.b.c\"}}"});
         DeviceFlowClient c = client();
-        c.awaitLicense(c.start(), () -> false);
+        c.awaitLicense(c.start(null), () -> false);
         assertEquals(List.of(5000L, 10000L), slept);
     }
 
@@ -87,7 +96,7 @@ class DeviceFlowClientTest {
     void reportsADenial() {
         pollAnswers.add(new String[]{"200", "{\"status\":\"denied\"}"});
         DeviceFlowClient c = client();
-        var e = assertThrows(DeviceFlowClient.DeviceFlowException.class, () -> c.awaitLicense(c.start(), () -> false));
+        var e = assertThrows(DeviceFlowClient.DeviceFlowException.class, () -> c.awaitLicense(c.start(null), () -> false));
         assertEquals(DeviceFlowClient.Outcome.DENIED, e.outcome());
     }
 
@@ -95,23 +104,23 @@ class DeviceFlowClientTest {
     void reportsAnExpiredCode() {
         pollAnswers.add(new String[]{"404", "{\"status\":\"expired\"}"});
         DeviceFlowClient c = client();
-        var e = assertThrows(DeviceFlowClient.DeviceFlowException.class, () -> c.awaitLicense(c.start(), () -> false));
+        var e = assertThrows(DeviceFlowClient.DeviceFlowException.class, () -> c.awaitLicense(c.start(null), () -> false));
         assertEquals(DeviceFlowClient.Outcome.EXPIRED, e.outcome());
     }
 
     @Test
     void stopsWhenTheUserCancels() {
         DeviceFlowClient c = client();
-        var e = assertThrows(DeviceFlowClient.DeviceFlowException.class, () -> c.awaitLicense(c.start(), () -> true));
+        var e = assertThrows(DeviceFlowClient.DeviceFlowException.class, () -> c.awaitLicense(c.start(null), () -> true));
         assertEquals(DeviceFlowClient.Outcome.CANCELLED, e.outcome());
         assertTrue(pollBodies.isEmpty());
     }
 
     @Test
     void givesUpAfterTheExpiryDelay() {
-        // interval 5 s, expiresIn 600 s → at most 120 polls, then EXPIRED even if still pending
+        // interval 5 s, expiresIn 600 s (this fake server's value) → at most 120 polls, then EXPIRED
         DeviceFlowClient c = client();
-        var e = assertThrows(DeviceFlowClient.DeviceFlowException.class, () -> c.awaitLicense(c.start(), () -> false));
+        var e = assertThrows(DeviceFlowClient.DeviceFlowException.class, () -> c.awaitLicense(c.start(null), () -> false));
         assertEquals(DeviceFlowClient.Outcome.EXPIRED, e.outcome());
         assertEquals(120, pollBodies.size());
     }

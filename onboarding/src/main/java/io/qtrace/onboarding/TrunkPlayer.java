@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 
 import java.io.InputStream;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -79,11 +78,9 @@ final class TrunkPlayer {
 
         AtomicBoolean networkChecked = new AtomicBoolean();
         bridge.on("network-check", a -> { if (networkChecked.compareAndSet(false, true)) checkNetwork(w); })
-            .on("sign-in", a -> signIn(w, cancelled))
-            .on("invite", code -> {
-                BrowserOpener.open(SERVER + "/sign-up?invite=" + URLEncoder.encode(code, StandardCharsets.UTF_8));
-                w.emit("invite", Map.of("state", "opened"));
-            })
+            // One path: with an invitation code or an existing account, the browser does the rest.
+            .on("sign-in", a -> signIn(w, cancelled, null))
+            .on("invite", code -> signIn(w, cancelled, code))
             .on("continue", a -> {
                 OnboardingState.load(qtraceDir).markTrunkDone();
                 w.gotoSlide("ready");
@@ -109,7 +106,7 @@ final class TrunkPlayer {
         }));
     }
 
-    private void signIn(PlayerWindow w, AtomicBoolean cancelled) {
+    private void signIn(PlayerWindow w, AtomicBoolean cancelled, String invite) {
         cancelled.set(false);
         w.gotoSlide("code");
         new SignInFlow(qupath, qtraceDir, SERVER).start(new SignInFlow.Listener() {
@@ -132,6 +129,6 @@ final class TrunkPlayer {
             public void failed(String message) {
                 w.emit("device", Map.of("state", "failed", "message", message, "code", code));
             }
-        }, cancelled::get, false);
+        }, cancelled::get, false, invite);
     }
 }

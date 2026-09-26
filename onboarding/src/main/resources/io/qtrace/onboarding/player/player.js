@@ -3,7 +3,7 @@
  *
  *   Java → JS  the URL fragment: #<base64url JSON> = { host, content, state, goto }
  *              content: { title, who?, org?, slides: [...] }
- *              state:   { network: {name: ok}, device: {...}, install: {...}, invite: {state} }
+ *              state:   { network: {name: ok}, device: {...}, install: {...} }
  *              goto:    { id, seq } — shown once per seq
  *              (read on load and on every hashchange: WebEngine.executeScript crashes QuPath 0.7)
  *   JS → Java  alert('qtrace:' + {action, arg})  caught by PlayerWindow, whitelisted in PlayerBridge
@@ -20,7 +20,7 @@
 
   var BROWSER_PREVIEW = {
     'sign-in': 'QuPath opens qtrace.ca to sign in, then waits for your certificate',
-    'invite': 'QuPath opens qtrace.ca with your invitation code filled in',
+    'invite': 'QuPath opens qtrace.ca to create your account with this invitation, then waits for your certificate',
     'continue': 'QuPath closes this window: qTrace already records your work',
     'quit': 'QuPath quits; reopen it to finish',
     'open-url': 'QuPath opens this page in your browser',
@@ -33,7 +33,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var content = null, cur = 0, seen = {};
-  var state = { network: {}, device: { state: 'idle' }, install: { state: 'idle' }, invite: null };
+  var state = { network: {}, device: { state: 'idle' }, install: { state: 'idle' } };
   var networkAsked = false;
 
   function esc(s) {
@@ -73,35 +73,26 @@
   }
 
   function entryHTML() {
-    var signIn = '<div class="door"><span class="lbl">Already have an account?</span>' +
-      '<button type="button" class="btn" data-act="sign-in">Sign in to qtrace.ca</button></div>';
-    if (state.invite === 'opened') {
-      // Code sent: the next step is in the browser, then Sign in here.
-      return '<div class="entry">' +
-        '<div class="door opened"><span class="lbl">Invitation code sent</span>' +
-        '<strong>Your browser opened qtrace.ca</strong>' +
-        '<span class="hint">Create your account there. When the portal says “Open QuPath and sign in”, come back here and click Sign in.</span>' +
-        '<button type="button" class="btn primary" data-act="sign-in">Sign in to qtrace.ca</button></div></div>';
-    }
     return '<div class="entry">' +
       '<form class="door" data-form="invite">' +
       '<label for="invite" class="lbl">Invitation code</label>' +
       '<input id="invite" name="invite" class="codein" placeholder="XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" maxlength="14">' +
-      '<button type="submit" class="btn primary">Use this code</button>' +
-      '<span class="hint" id="invite-hint">The code the qTrace team sent you.</span></form>' + signIn + '</div>';
+      '<button type="submit" class="btn primary">Continue with this code</button>' +
+      '<span class="hint" id="invite-hint">In the email from the qTrace team.</span></form>' +
+      '<a class="other" data-act="sign-in" role="button" tabindex="0">I already have a qtrace.ca account →</a></div>';
   }
 
   function deviceHTML() {
     var d = state.device;
     var line = {
-      idle: 'Click Sign in to get your code.',
+      idle: 'Enter your invitation code, or use your account, to start.',
       starting: 'Contacting qtrace.ca…',
-      waiting: 'Waiting for your approval in the browser…',
+      waiting: 'Waiting for you on qtrace.ca…',
       approved: 'Approved: your certificate is in QuPath.',
       failed: d.message || 'Not connected.'
     }[d.state] || '';
     var cls = d.state === 'approved' ? 'ok' : d.state === 'failed' ? 'ko' : 'wait';
-    var retry = d.state === 'failed' ? '<button type="button" class="btn primary" data-act="sign-in">Try again</button>' : '';
+    var retry = d.state === 'failed' ? '<button type="button" class="btn primary" data-act="goto-account">Try again</button>' : '';
     var reopen = d.state === 'waiting' ? '<button type="button" class="btn" data-act="open-url" data-url="' + esc(d.url || '') + '">Open the page again</button>' : '';
     return '<div class="device"><div class="code">' + esc(d.code || '····-····') + '</div>' +
       '<div class="flow"><b>QuPath</b><span>→</span><span>qtrace.ca</span><span>→</span><b>Authorize QuPath</b></div>' +
@@ -226,7 +217,6 @@
     if (event === 'network') { state.network[data.name] = !!data.ok; refreshVisual('network'); }
     if (event === 'device') { state.device = data; refreshVisual('device'); }
     if (event === 'install') { state.install = data; refreshVisual('install'); }
-    if (event === 'invite') { state.invite = data.state; refreshVisual('entry'); }
   }
 
   function gotoId(id) {
@@ -240,7 +230,7 @@
       setTimeout(function () { emit('network', { name: 'qtrace.ca', ok: true }); }, 900);
       setTimeout(function () { emit('network', { name: 'github.com', ok: true }); }, 1500);
     }
-    if (action === 'invite') emit('invite', { state: 'opened' });
+    if (action === 'invite') action = 'sign-in';
     if (action === 'continue') gotoId('ready');
     if (action === 'sign-in') {
       gotoId('code');
@@ -256,7 +246,9 @@
   var stage = $('stage');
   stage.addEventListener('click', function (e) {
     var b = e.target.closest('[data-act]');
-    if (b) run(b.dataset.act, b.dataset.url || '');
+    if (!b) return;
+    if (b.dataset.act === 'goto-account') { gotoId('account'); return; }
+    run(b.dataset.act, b.dataset.url || '');
   });
   stage.addEventListener('submit', function (e) {
     var f = e.target.closest('[data-form=invite]');
@@ -282,6 +274,7 @@
   $('skip').onkeydown = function (e) { if (e.key === 'Enter') $('skip').click(); };
   document.addEventListener('keydown', function (e) {
     if (e.target.closest && e.target.closest('input, textarea')) return;
+    if (e.key === 'Enter' && e.target.dataset && e.target.dataset.act) { e.target.click(); return; }
     if (e.key === 'ArrowRight') $('next').click();
     if (e.key === 'ArrowLeft') $('prev').click();
   });
@@ -313,7 +306,6 @@
     state.network = st.network || {};
     state.device = st.device || { state: 'idle' };
     state.install = st.install || { state: 'idle' };
-    state.invite = st.invite ? st.invite.state : null;
     var cs = JSON.stringify(m.content);
     if (cs !== lastContent) {
       lastContent = cs;
@@ -322,7 +314,7 @@
       build();
       if (keep) go(keep);
     } else {
-      ['network', 'entry', 'device', 'install'].forEach(refreshVisual);
+      ['network', 'device', 'install'].forEach(refreshVisual);
     }
     if (m.goto && m.goto.seq > lastGoto) { lastGoto = m.goto.seq; gotoId(m.goto.id); }
   }

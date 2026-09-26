@@ -64,8 +64,11 @@ public final class DeviceFlowClient {
         this.sleeper = sleeper;
     }
 
-    public Start start() throws IOException, InterruptedException {
-        HttpResponse<String> r = post("/api/device/start", "{}");
+    /** Starts a sign-in; {@code invite} (the invitation code typed in QuPath) rides along, or null. */
+    public Start start(String invite) throws IOException, InterruptedException {
+        String body = invite == null || invite.isBlank() ? "{}"
+            : "{\"invite\":" + new com.google.gson.JsonPrimitive(invite) + "}";
+        HttpResponse<String> r = post("/api/device/start", body);
         if (r.statusCode() != 200) throw new IOException("qtrace.ca answered HTTP " + r.statusCode());
         JsonObject o = JsonParser.parseString(r.body()).getAsJsonObject();
         return new Start(o.get("deviceCode").getAsString(), o.get("userCode").getAsString(),

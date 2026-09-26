@@ -21,22 +21,22 @@
     },
     {
       "id": "account",
-      "eyebrow": "Your account",
-      "title": "Enter your invitation code",
-      "text": "Your browser then opens qtrace.ca to create your account, and your certificate arrives in QuPath on its own. No file to handle. Already have an account? Sign in instead. You can also continue now and do this later from Extensions > QTrace > Getting started.",
+      "eyebrow": "Your invitation",
+      "title": "Do you have an invitation code?",
+      "text": "It was sent to your email address. Enter it: your browser opens qtrace.ca to create your account with that address, and your certificate then arrives in QuPath on its own. No file to handle.",
       "visual": "entry",
       "actions": [
         {
-          "label": "Continue",
+          "label": "Not now",
           "action": "continue"
         }
       ]
     },
     {
       "id": "code",
-      "eyebrow": "Sign in",
-      "title": "Confirm this code in your browser",
-      "text": "Check that qtrace.ca shows the same code, then click “Authorize QuPath”. If you still need to choose your passphrase, the portal asks for it there. It never leaves your browser.",
+      "eyebrow": "In your browser",
+      "title": "Finish in your browser",
+      "text": "qtrace.ca opened in your browser: create your account or sign in, then complete the steps it asks for (terms, identity verification, passphrase). At the end, click “Authorize QuPath”. This window waits for you, up to an hour.",
       "visual": "device",
       "actions": []
     },

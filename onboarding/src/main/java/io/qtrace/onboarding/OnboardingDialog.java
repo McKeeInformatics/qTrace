@@ -147,7 +147,7 @@ final class OnboardingDialog {
             public void installing() { Platform.runLater(OnboardingDialog.this::installing); }
             public void installed(int modules) { Platform.runLater(() -> done(modules)); }
             public void failed(String message) { Platform.runLater(() -> OnboardingDialog.this.failed(message)); }
-        }, cancelled::get, true);
+        }, cancelled::get, true, null);
     }
 
     private void installing() {
