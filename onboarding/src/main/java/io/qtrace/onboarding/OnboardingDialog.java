@@ -20,8 +20,6 @@
 package io.qtrace.onboarding;
 
 import io.qtrace.BrowserOpener;
-import io.qtrace.QTraceConfig;
-import io.qtrace.QTraceUpdater;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -33,8 +31,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
 
 import java.nio.file.Path;
@@ -50,8 +46,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class OnboardingDialog {
 
-    private static final Logger log = LoggerFactory.getLogger(OnboardingDialog.class);
-    private static final String TAG = "[qtrace-onboarding] ";
 
     // Same overrides as Core's updater, so the local simulator (tools/update-sim/) drives it too.
     static final String SERVER = System.getProperty("qtrace.update.server", "https://www.qtrace.ca");
@@ -94,7 +88,7 @@ final class OnboardingDialog {
             network.setText("Your browser opened qtrace.ca. Once your account is ready, "
                 + "come back here and click “Sign in to qtrace.ca”.");
         });
-        Button coreOnly = new Button("Continue with Core only");
+        Button coreOnly = new Button("Continue");
         coreOnly.setOnAction(e -> {
             OnboardingState.load(qtraceDir).markTrunkDone();
             stage.close();
@@ -104,7 +98,7 @@ final class OnboardingDialog {
             title("Welcome to qTrace"),
             text("qTrace records how you analyse images in QuPath, so every result can be traced, "
                 + "replayed and signed with your certified identity."),
-            text("Already have a qtrace.ca account? Sign in: your license is installed automatically."),
+            text("Already have a qtrace.ca account? Sign in: your certificate is installed automatically."),
             network,
             new VBox(8, signIn, create, coreOnly),
             muted("You can reopen this window from Extensions > QTrace > Getting started…"));
@@ -139,59 +133,43 @@ final class OnboardingDialog {
             new HBox(10, spin, status),
             new HBox(8, reopen, cancel));
 
-        DeviceFlowClient client = new DeviceFlowClient(SERVER, Thread::sleep);
-        CompletableFuture.runAsync(() -> {
-            try {
-                DeviceFlowClient.Start s = client.start();
+        new SignInFlow(qupath, qtraceDir, SERVER).start(new SignInFlow.Listener() {
+            public void starting() { }
+            public void waiting(String userCode, String verificationUrl) {
                 Platform.runLater(() -> {
-                    code.setText(s.userCode());
+                    code.setText(userCode);
                     status.setText("Waiting for your approval in the browser…");
                     reopen.setDisable(false);
-                    reopen.setOnAction(e -> BrowserOpener.open(s.verificationUrl()));
+                    reopen.setOnAction(e -> BrowserOpener.open(verificationUrl));
                 });
-                BrowserOpener.open(s.verificationUrl());
-                String envelope = client.awaitLicense(s, cancelled::get);
-                Path license = LicenseInstaller.write(envelope, qtraceDir);
-                QTraceConfig.get().setLicensePath(license.toString());
-                QTraceConfig.get().save();
-                OnboardingState.load(qtraceDir).markTrunkDone();
-                log.info(TAG + "license received and saved to {}", license);
-                Platform.runLater(this::installing);
-            } catch (DeviceFlowClient.DeviceFlowException e) {
-                if (e.outcome() == DeviceFlowClient.Outcome.CANCELLED) return;
-                log.info(TAG + "sign in ended: {} ({})", e.outcome(), e.getMessage());
-                Platform.runLater(() -> failed(switch (e.outcome()) {
-                    case DENIED -> "The request was refused on qtrace.ca.";
-                    case EXPIRED -> "The code expired before it was approved.";
-                    default -> "Something went wrong: " + e.getMessage();
-                }));
-            } catch (Exception e) {
-                log.warn(TAG + "sign in failed", e);
-                Platform.runLater(() -> failed("Could not reach qtrace.ca (" + e.getMessage() + ")."));
             }
-        });
+            public void approved(Path certificate) { }
+            public void installing() { Platform.runLater(OnboardingDialog.this::installing); }
+            public void installed(int modules) { Platform.runLater(() -> done(modules)); }
+            public void failed(String message) { Platform.runLater(() -> OnboardingDialog.this.failed(message)); }
+        }, cancelled::get, true);
     }
 
     private void installing() {
         ProgressIndicator spin = new ProgressIndicator();
         spin.setPrefSize(22, 22);
-        Label status = muted("Installing the modules of your license…");
+        Label status = muted("Installing the modules of your certificate…");
         setContent(
             title("You are signed in"),
-            text("Your license is installed. qTrace now downloads Compliance and your welcome."),
+            text("Your certificate is installed. qTrace now downloads Compliance and your welcome."),
             new HBox(10, spin, status));
+    }
 
-        QTraceUpdater.installModulesNow(qupath).thenAccept(n -> Platform.runLater(() -> {
-            Button close = primary("Close");
-            close.setOnAction(e -> stage.close());
-            setContent(
-                title(n > 0 ? "Almost done: restart QuPath" : "Your license is installed"),
-                text(n > 0
-                    ? "Restart QuPath to finish. Your welcome will be waiting for you."
-                    : "Restart QuPath to activate it. If Compliance is still missing afterwards, "
-                      + "check your connection and use Extensions > QTrace > Bug or Feature Request…"),
-                close);
-        }));
+    private void done(int modules) {
+        Button close = primary("Close");
+        close.setOnAction(e -> stage.close());
+        setContent(
+            title(modules > 0 ? "Almost done: restart QuPath" : "Your certificate is installed"),
+            text(modules > 0
+                ? "Restart QuPath to finish. Your welcome will be waiting for you."
+                : "Restart QuPath to activate it. If Compliance is still missing afterwards, "
+                  + "check your connection and use Extensions > QTrace > Bug or Feature Request…"),
+            close);
     }
 
     private void failed(String why) {

@@ -71,6 +71,8 @@ public final class QTraceUpdater {
     private static final AtomicInteger openTasks = new AtomicInteger();
     private static final List<String> installedThisSession = new ArrayList<>();
     private static final java.util.Set<Path> scheduledForDeletion = new java.util.HashSet<>();
+    // installModulesNow(qupath, false): its caller shows the restart itself.
+    private static volatile boolean quietInstall;
 
     // Overridable for the local update simulator (tools/update-sim/):
     //   -Dqtrace.update.server=http://127.0.0.1:8765   (version + compliance download)
@@ -270,6 +272,15 @@ public final class QTraceUpdater {
      * install, offline or no license — the caller tells the user).
      */
     public static CompletableFuture<Integer> installModulesNow(QuPathGUI qupath) {
+        return installModulesNow(qupath, true);
+    }
+
+    /**
+     * Same, with {@code quitDialog=false} for a caller that offers the restart itself (the
+     * onboarding player's "Quit QuPath now"): no post-install dialog for this session's installs.
+     */
+    public static CompletableFuture<Integer> installModulesNow(QuPathGUI qupath, boolean quitDialog) {
+        if (!quitDialog) quietInstall = true;
         openTasks.incrementAndGet();
         return CompletableFuture.supplyAsync(() -> {
             int count = 0;
@@ -417,6 +428,7 @@ public final class QTraceUpdater {
             installed = String.join(", ", installedThisSession);
             installedThisSession.clear();
         }
+        if (quietInstall) { quietInstall = false; return; }
         promptQuit(qupath, installed);
     }
 

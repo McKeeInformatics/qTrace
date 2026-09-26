@@ -48,14 +48,14 @@ public class OnboardingExtension implements QuPathExtension {
         installed = true;
 
         MenuItem item = new MenuItem("Getting started…");
-        item.setOnAction(e -> new OnboardingDialog(qupath, QTRACE_DIR).show());
+        item.setOnAction(e -> new TrunkPlayer(qupath, QTRACE_DIR).show());
         qupath.getMenu("Extensions>QTrace", true).getItems().add(0, item);
 
         if (!OnboardingState.load(QTRACE_DIR).shouldShowTrunk(QTraceConfig.get().getLicensePath())) return;
         log.info("[qtrace-onboarding] no license yet: showing Getting started");
         // After QuPath's own Welcome window, like Core's update prompts.
         Platform.runLater(() -> QTraceUpdater.whenNoModalOpen("onboarding",
-            () -> new OnboardingDialog(qupath, QTRACE_DIR).show()));
+            () -> new TrunkPlayer(qupath, QTRACE_DIR).show()));
     }
 
     @Override
