@@ -36,7 +36,7 @@
       "id": "code",
       "eyebrow": "In your browser",
       "title": "Finish in your browser",
-      "text": "qtrace.ca opened in your browser: create your account or sign in, then complete the steps it asks for (terms, identity verification, passphrase). At the end, click “Authorize QuPath”. This window waits for you, up to an hour.",
+      "text": "qtrace.ca opened in your browser: create your account or sign in, accept the terms and choose your passphrase, then click “Authorize QuPath”. You can start working right away; if your identity still needs verifying, qTrace runs with a provisional certificate until it is done.",
       "visual": "device",
       "actions": []
     },

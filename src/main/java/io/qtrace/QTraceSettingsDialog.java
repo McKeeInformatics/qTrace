@@ -864,9 +864,17 @@ public class QTraceSettingsDialog {
                 statusLbl.setTextFill(Color.web(ORANGE));
                 return;
             }
+            if (info.verified()) {
             statusLbl.setText("✓ Verified — " + info.name() + " · " + info.institution()
                 + " · valid until " + info.expiresAtFormatted());
             statusLbl.setTextFill(Color.web(GREEN));
+        } else {
+            // Provisional certificate (loader.md § 17): replaced by the verified one automatically.
+            statusLbl.setText("⏳ Identity verification pending — " + info.name()
+                + " · provisional until " + info.expiresAtFormatted()
+                + ". Finish the identity check on qtrace.ca: the certificate updates by itself.");
+            statusLbl.setTextFill(Color.web(ORANGE));
+        }
             // Certified identity — bound to the license, not freely editable.
             tfValidator.setText(info.name());
             tfValidator.setEditable(false);

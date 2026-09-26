@@ -282,9 +282,16 @@ public class QTracePanel {
         LicenseInfo licenseInfo = null;
         if (entitled != null && entitled.getActiveLicenseInfo() != null) {
             licenseInfo = entitled.getActiveLicenseInfo();
-            text = "Certified for " + licenseInfo.name()
-                 + "  ·  until " + licenseInfo.expiresAtFormatted().replace("-", "/");
-            iconColor = GOLD;
+            if (licenseInfo.verified()) {
+                text = "Certified for " + licenseInfo.name()
+                     + "  ·  until " + licenseInfo.expiresAtFormatted().replace("-", "/");
+                iconColor = GOLD;
+            } else {
+                // Provisional certificate (loader.md § 17): everything works, the name is not verified yet.
+                text = "Identity verification pending  ·  provisional until "
+                     + licenseInfo.expiresAtFormatted().replace("-", "/");
+                iconColor = PEACH;
+            }
         } else if (QTracePluginManager.hasCompliance()) {
             text = QTraceI18n.t("license.inactive.header");
             iconColor = QTraceController.entitlementIsError() ? RED : PEACH;

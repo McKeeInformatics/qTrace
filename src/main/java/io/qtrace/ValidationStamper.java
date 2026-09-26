@@ -91,7 +91,10 @@ public class ValidationStamper {
               + "-fx-opacity: 1;"
             );
             validatorField.setTooltip(new javafx.scene.control.Tooltip(
-                "Identity locked — certified by your qTrace identity certificate.\n"
+                (activeLicense.verified()
+                    ? "Identity locked — certified by your qTrace identity certificate.\n"
+                    : "Identity not verified yet (provisional certificate): the stamp is signed with your key\n"
+                    + "and becomes certified once your identity is verified on qtrace.ca.\n")
               + "Institution: " + activeLicense.institution() + "\n"
               + "Valid until: " + activeLicense.expiresAtFormatted()
             ));
