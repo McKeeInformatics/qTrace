@@ -262,6 +262,38 @@ public final class QTraceUpdater {
         });
     }
 
+    /**
+     * Async. Under the loader, right after a license was obtained (onboarding "Sign in",
+     * loader.md § 17): downloads every module of /api/modules not yet in extensions/qtrace/,
+     * without asking — the user just asked for it. Ends with the usual single "installed —
+     * Quit QuPath Now" dialog. Completes with the number of modules it tried to install (0: nothing to
+     * install, offline or no license — the caller tells the user).
+     */
+    public static CompletableFuture<Integer> installModulesNow(QuPathGUI qupath) {
+        openTasks.incrementAndGet();
+        return CompletableFuture.supplyAsync(() -> {
+            int count = 0;
+            try {
+                String jwt = licenseJwt();
+                if (jwt == null) return 0;
+                List<ModuleUpdates.Offer> remote = ModuleUpdates.parse(
+                    new String(httpGetBytes(MODULES_URL, jwt), StandardCharsets.UTF_8), true);
+                Path dir = extensionsDir(QTraceUpdater.class);
+                for (ModuleUpdates.Offer o : ModuleUpdates.pending(remote, ModuleUpdates.localVersions(dir))) {
+                    openTasks.incrementAndGet();
+                    downloadAndInstall(qupath, o.module(), o.version(), o.sha256(), () -> httpGetBytes(o.url(), jwt));
+                    count++;
+                }
+                log.info(TAG + "install now: {} module(s) from /api/modules", count);
+            } catch (Exception e) {
+                log.info(TAG + "install now failed: {}", e.toString());
+            } finally {
+                taskDone(qupath);
+            }
+            return count;
+        });
+    }
+
     /** Reads the .qtlicense JWT from config (bare JWT or {"jwt":...} envelope). */
     static String licenseJwt() {
         try {

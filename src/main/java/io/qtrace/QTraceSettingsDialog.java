@@ -131,7 +131,7 @@ public class QTraceSettingsDialog {
         btnOpenProject.setOnAction(e -> {
             if (projectBaseDir == null) return;
             Path qDir = QTraceConfig.projectQTraceDir(projectBaseDir);
-            openUrl(java.nio.file.Files.isDirectory(qDir) ? qDir.toString() : projectBaseDir.toString());
+            BrowserOpener.open(java.nio.file.Files.isDirectory(qDir) ? qDir.toString() : projectBaseDir.toString());
         });
         btnOpenProject.visibleProperty().bind(chkProjectFolder.selectedProperty());
         btnOpenProject.managedProperty().bind(chkProjectFolder.selectedProperty());
@@ -263,7 +263,7 @@ public class QTraceSettingsDialog {
         });
 
         Button btnGetLicense = flatButton("🔗 Get license", BLUE);
-        btnGetLicense.setOnAction(e -> openUrl(PORTAL_URL));
+        btnGetLicense.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
 
         GridPane licenseGrid = new GridPane();
         licenseGrid.setHgap(8);
@@ -736,7 +736,7 @@ public class QTraceSettingsDialog {
                 if (info.explorerUrl() != null) {
                     txLbl.setTextFill(Color.web(BLUE));
                     txLbl.setStyle(txLbl.getStyle() + "-fx-cursor: hand; -fx-underline: true;");
-                    txLbl.setOnMouseClicked(e -> openUrl(info.explorerUrl()));
+                    txLbl.setOnMouseClicked(e -> BrowserOpener.open(info.explorerUrl()));
                 }
                 g.add(txLbl, 1, row++);
 
@@ -785,25 +785,12 @@ public class QTraceSettingsDialog {
         lbl.setWrapText(true);
 
         Button btn = flatButton("🎓 Manage my credentials →", BLUE);
-        btn.setOnAction(e -> openUrl(PORTAL_URL));
+        btn.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
 
         HBox row = new HBox(12, lbl, btn);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(4, 20, 8, 20));
         return row;
-    }
-
-    private static void openUrl(String url) {
-        new Thread(() -> {
-            try {
-                String os = System.getProperty("os.name", "").toLowerCase();
-                ProcessBuilder pb;
-                if (os.contains("linux"))    pb = new ProcessBuilder("xdg-open", url);
-                else if (os.contains("mac")) pb = new ProcessBuilder("open", url);
-                else                         pb = new ProcessBuilder("cmd", "/c", "start", url);
-                pb.start();
-            } catch (Exception ignored) {}
-        }, "qtrace-browser").start();
     }
 
     /** What the image-copy settings mean for the user — shown live under them. */

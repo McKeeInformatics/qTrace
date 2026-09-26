@@ -148,28 +148,10 @@ public final class QTraceLicenseGate {
             if (qupath != null && qupath.getStage() != null) a.initOwner(qupath.getStage());
 
             Optional<ButtonType> res = a.showAndWait();
-            if (res.isPresent() && res.get() == openPortal) browse(PORTAL_URL);
+            if (res.isPresent() && res.get() == openPortal) BrowserOpener.open(PORTAL_URL);
 
             // Reflect the downgrade in the panel if it is already open.
             if (controller != null) controller.refreshPanel();
         });
-    }
-
-    // Never use java.awt.Desktop here: initializing AWT inside the JavaFX/GTK
-    // process can crash the JVM on Linux. xdg-open/open/cmd start don't touch AWT.
-    private static void browse(String url) {
-        new Thread(() -> {
-            try {
-                String os = System.getProperty("os.name", "").toLowerCase();
-                ProcessBuilder pb;
-                if (os.contains("linux"))
-                    pb = new ProcessBuilder("xdg-open", url);
-                else if (os.contains("mac"))
-                    pb = new ProcessBuilder("open", url);
-                else
-                    pb = new ProcessBuilder("cmd", "/c", "start", url);
-                pb.start();
-            } catch (Exception ignored) {}
-        }, "qtrace-portal-browse").start();
     }
 }

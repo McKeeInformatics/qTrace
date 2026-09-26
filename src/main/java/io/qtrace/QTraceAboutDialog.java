@@ -383,7 +383,7 @@ public class QTraceAboutDialog {
               + "-fx-font-size: 11; -fx-font-weight: bold;"
               + "-fx-cursor: hand; -fx-padding: 4 10 4 10;"
             );
-            renew.setOnAction(e -> openUrl(PORTAL_URL));
+            renew.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
             footer.getChildren().add(renew);
         } else if (mode == Mode.CORE) {
             Button upgrade = new Button("Get Compliance ↑");
@@ -395,7 +395,7 @@ public class QTraceAboutDialog {
               + "-fx-font-size: 11; -fx-font-weight: bold;"
               + "-fx-cursor: hand; -fx-padding: 4 10 4 10;"
             );
-            upgrade.setOnAction(e -> openUrl(PORTAL_URL));
+            upgrade.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
             footer.getChildren().add(upgrade);
         } else if (mode == Mode.COMPLIANCE) {
             Button cert = new Button("Load license →");
@@ -407,11 +407,11 @@ public class QTraceAboutDialog {
               + "-fx-font-size: 11; -fx-font-weight: bold;"
               + "-fx-cursor: hand; -fx-padding: 4 10 4 10;"
             );
-            cert.setOnAction(e -> openUrl(PORTAL_URL));
+            cert.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
             footer.getChildren().add(cert);
         } else {
             Button website = ghostButton("qtrace.ca ↗", TEAL, TEAL, 11);
-            website.setOnAction(e -> openUrl(PORTAL_URL));
+            website.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
             footer.getChildren().add(website);
         }
 
@@ -490,19 +490,5 @@ public class QTraceAboutDialog {
         b.setOnMouseEntered(e -> b.setStyle(over));
         b.setOnMouseExited(e  -> b.setStyle(base));
         return b;
-    }
-
-    private static void openUrl(String url) {
-        try {
-            String os = System.getProperty("os.name", "").toLowerCase();
-            ProcessBuilder pb;
-            if (os.contains("linux"))
-                pb = new ProcessBuilder("xdg-open", url);
-            else if (os.contains("mac"))
-                pb = new ProcessBuilder("open", url);
-            else
-                pb = new ProcessBuilder("cmd", "/c", "start", url);
-            pb.start();
-        } catch (Exception ignored) {}
     }
 }
