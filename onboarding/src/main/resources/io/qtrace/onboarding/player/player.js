@@ -18,7 +18,6 @@
 (function () {
   'use strict';
 
-  var DWELL = 7000;
   var BROWSER_PREVIEW = {
     'sign-in': 'QuPath opens qtrace.ca to sign in, then waits for your certificate',
     'invite': 'QuPath opens qtrace.ca with your invitation code filled in',
@@ -33,7 +32,7 @@
   };
 
   var $ = function (id) { return document.getElementById(id); };
-  var content = null, cur = 0, playing = false, started = 0, raf = 0, seen = {};
+  var content = null, cur = 0, seen = {};
   var state = { network: {}, device: { state: 'idle' }, install: { state: 'idle' }, invite: null };
   var networkAsked = false;
 
@@ -212,7 +211,6 @@
       var i = +b.dataset.go;
       b.classList.toggle('cur', i === cur);
       b.classList.toggle('seen', !!seen[i] && i !== cur);
-      b.querySelector('i').style.setProperty('--fill', i === cur ? '0%' : '');
     });
     $('count').textContent = k === -1 ? '' : (k + 1) + ' / ' + v.length;
     remember(cur);
@@ -220,28 +218,6 @@
     $('next').disabled = k === -1 || k === v.length - 1;
     var s = content.slides[cur];
     if (s.visual === 'network' && !networkAsked && !Object.keys(state.network).length) { networkAsked = true; run('network-check'); }
-    started = performance.now();
-  }
-
-  function tick(now) {
-    if (!playing) return;
-    var p = Math.min(1, (now - started) / DWELL);
-    var b = document.querySelector('#track button.cur i');
-    if (b) b.style.setProperty('--fill', (p * 100).toFixed(1) + '%');
-    if (p >= 1) {
-      var v = visible(), k = v.indexOf(cur);
-      if (k !== -1 && k < v.length - 1) go(v[k + 1]); else setPlaying(false);
-    }
-    raf = requestAnimationFrame(tick);
-  }
-
-  function setPlaying(on) {
-    playing = on;
-    $('play').textContent = on ? '❚❚' : '▶';
-    $('play').setAttribute('aria-label', on ? 'Pause' : 'Play');
-    cancelAnimationFrame(raf);
-    if (on) { started = performance.now(); raf = requestAnimationFrame(tick); }
-    else { var b = document.querySelector('#track button.cur i'); if (b) b.style.setProperty('--fill', '0%'); }
   }
 
   // ── Events from QuPath ────────────────────────────────────────────────────
@@ -255,7 +231,7 @@
 
   function gotoId(id) {
     if (!content) return;
-    for (var i = 0; i < content.slides.length; i++) if (content.slides[i].id === id) { setPlaying(false); go(i); return; }
+    for (var i = 0; i < content.slides.length; i++) if (content.slides[i].id === id) { go(i); return; }
   }
 
   // ── Browser preview: pretend to be QuPath ─────────────────────────────────
@@ -298,12 +274,11 @@
   });
   $('track').addEventListener('click', function (e) {
     var b = e.target.closest('[data-go]');
-    if (b) { go(+b.dataset.go); if (playing) setPlaying(true); }
+    if (b) go(+b.dataset.go);
   });
-  $('prev').onclick = function () { step(-1); if (playing) setPlaying(true); };
-  $('next').onclick = function () { step(1); if (playing) setPlaying(true); };
-  $('play').onclick = function () { setPlaying(!playing); };
-  $('skip').onclick = function () { setPlaying(false); var v = visible(); go(v[v.length - 1]); };
+  $('prev').onclick = function () { step(-1); };
+  $('next').onclick = function () { step(1); };
+  $('skip').onclick = function () { var v = visible(); go(v[v.length - 1]); };
   $('skip').onkeydown = function (e) { if (e.key === 'Enter') $('skip').click(); };
   document.addEventListener('keydown', function (e) {
     if (e.target.closest && e.target.closest('input, textarea')) return;
