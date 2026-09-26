@@ -41,6 +41,6 @@ class OnboardingStateTest {
         Files.writeString(home.resolve("onboarding.json"), "{\"welcomeSeen\":true}");
         OnboardingState.load(home).markTrunkDone();
         String json = Files.readString(home.resolve("onboarding.json"));
-        assertTrue(json.contains("welcomeSeen"), "the welcome module stores its own flag in the same file");
+        assertTrue(json.contains("welcomeSeen"), "keys written by a newer version survive");
     }
 }

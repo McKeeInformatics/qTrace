@@ -27,8 +27,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * State of the onboarding tree, in ~/.qTrace/onboarding.json (loader.md § 17). Shared with the
- * welcome module, which stores its own keys in the same file: unknown keys are kept.
+ * State of the onboarding trunk, in ~/.qTrace/onboarding.json (loader.md § 17). Unknown keys are
+ * kept, so a newer version's keys survive a downgrade. (The welcome module keeps its own file.)
  */
 public final class OnboardingState {
 

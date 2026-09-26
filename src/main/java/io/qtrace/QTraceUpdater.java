@@ -294,8 +294,8 @@ public final class QTraceUpdater {
         });
     }
 
-    /** Reads the .qtlicense JWT from config (bare JWT or {"jwt":...} envelope). */
-    static String licenseJwt() {
+    /** Reads the .qtlicense JWT from config (bare JWT or {"jwt":...} envelope). Public: the welcome module authenticates with it. */
+    public static String licenseJwt() {
         try {
             String path = QTraceConfig.get().getLicensePath();
             if (path == null || path.isBlank()) return null;
