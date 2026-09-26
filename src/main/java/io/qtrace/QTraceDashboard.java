@@ -1506,11 +1506,11 @@ public class QTraceDashboard {
                         status.setTextFill(Color.web(RED));
                     }
                     case CERTIFICATE_INVALID -> {
-                        status.setText("⛔ Certificate missing or altered — chain of custody broken");
+                        status.setText("⛔ Signed record missing or altered — chain of custody broken");
                         status.setTextFill(Color.web(RED));
                     }
                     case TRACE_EDITED -> {
-                        status.setText("⛔ .qtrace no longer matches its certificate");
+                        status.setText("⛔ .qtrace no longer matches its signed record");
                         status.setTextFill(Color.web(RED));
                     }
                     case DATA_CHANGED -> {

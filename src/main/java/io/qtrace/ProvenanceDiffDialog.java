@@ -87,8 +87,8 @@ public final class ProvenanceDiffDialog {
                 JsonObject stamped = qtraceFile != null
                     ? StampIntegrity.findCertPayload(root, qtraceFile.toPath().getParent()) : null;
                 reference = stamped != null
-                    ? "Reference: the signed certificate (.qtcert) of this stamp"
-                    : "Reference: the stamped session in the .qtrace (no certificate found)";
+                    ? "Reference: the signed record (.qtcert) of this stamp"
+                    : "Reference: the stamped session in the .qtrace (no signed record found)";
                 sections = analyse(root, session, stamped, qtraceFile, entry);
             } catch (Exception e) {
                 reference = "Analysis failed: " + e.getMessage();
@@ -119,15 +119,15 @@ public final class ProvenanceDiffDialog {
         if (stamped != null) {
             fields = ProvenanceDiff.diffSession(stamped, session, str(root, "status"));
         } else if (Boolean.FALSE.equals(sigValid)) {
-            sigText += " (no certificate to compare with: the edited field cannot be pinpointed)";
+            sigText += " (no signed record to compare with: the edited field cannot be pinpointed)";
         }
         out.add(new Section(".qtrace file", sigText, sigColor, fields));
 
         // 1b ── certificate & chain
         Path certExportDir = qtraceFile != null ? qtraceFile.toPath().getParent() : null;
         List<Finding> certFindings = io.qtrace.chain.CertificateCheck.check(root, certExportDir);
-        out.add(new Section("Certificate & chain (.qtcert, chain.jsonl)",
-            certFindings.isEmpty() ? "Present, unchanged, validly signed and in the chain (or no certificate for this stamp)" : null,
+        out.add(new Section("Signed record & chain (.qtcert, chain.jsonl)",
+            certFindings.isEmpty() ? "Present, unchanged, validly signed and in the chain (or no signed record for this stamp)" : null,
             GREEN, certFindings));
 
         // 2 ── satellite files

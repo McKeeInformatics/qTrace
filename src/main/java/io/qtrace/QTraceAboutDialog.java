@@ -195,7 +195,7 @@ public class QTraceAboutDialog {
         box.getChildren().addAll(nameRow, version, tagline);
 
         if (inactive) {
-            Label warn = new Label("⚠ Your qTrace Compliance license is no longer active — running in Core mode.");
+            Label warn = new Label("⚠ Your qTrace identity certificate is no longer active — running in Core mode.");
             warn.setTextFill(Color.web(inactiveColor()));
             warn.setFont(Font.font("System", FontWeight.BOLD, 11));
             warn.setWrapText(true);
@@ -221,7 +221,7 @@ public class QTraceAboutDialog {
           + "-fx-border-radius: 8; -fx-background-radius: 8;"
         );
 
-        Label titleLbl = new Label("✓  Licensed validator");
+        Label titleLbl = new Label("✓  Certified validator");
         titleLbl.setTextFill(Color.web(GREEN));
         titleLbl.setFont(Font.font("System", FontWeight.BOLD, 11));
 
@@ -291,7 +291,7 @@ public class QTraceAboutDialog {
             "Batch export for full cohorts",
             "Validation Stamp (expert sign-off)",
             "ED25519 cryptographic signing",
-            "Chain-of-custody certificates (.qtcert)",
+            "Chain-of-custody signed records (.qtcert)",
             "Bitcoin-anchored timestamps (OTS)",
             "Identity-certified validator stamps",
             "Validator name locked in stamp",
@@ -374,7 +374,7 @@ public class QTraceAboutDialog {
         if (inactive) {
             boolean error = QTraceController.entitlementIsError();
             String c = inactiveColor();
-            Button renew = new Button(error ? "Regenerate key →" : "Renew license →");
+            Button renew = new Button(error ? "Regenerate key →" : "Renew certificate →");
             renew.setStyle(
                 "-fx-background-color: " + c + "22;"
               + "-fx-border-color: " + c + "66;"
@@ -398,7 +398,7 @@ public class QTraceAboutDialog {
             upgrade.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
             footer.getChildren().add(upgrade);
         } else if (mode == Mode.COMPLIANCE) {
-            Button cert = new Button("Load license →");
+            Button cert = new Button("Load certificate →");
             cert.setStyle(
                 "-fx-background-color: " + GREEN + "22;"
               + "-fx-border-color: " + GREEN + "66;"

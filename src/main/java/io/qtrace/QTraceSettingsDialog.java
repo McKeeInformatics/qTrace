@@ -223,7 +223,7 @@ public class QTraceSettingsDialog {
 
         // ── Compliance License section ─────────────────────────────────────────
         TextField tfLicense = new TextField(cfg.getLicensePath());
-        tfLicense.setPromptText("(no license loaded)");
+        tfLicense.setPromptText("(no certificate loaded)");
         tfLicense.setPrefHeight(30);
         tfLicense.setEditable(false);
         tfLicense.setStyle(
@@ -247,8 +247,8 @@ public class QTraceSettingsDialog {
         Button btnBrowseLicense = flatButton("Browse…", TEXT_MUTED);
         btnBrowseLicense.setOnAction(e -> {
             FileChooser fc = new FileChooser();
-            fc.setTitle("Select .qtlicense file");
-            fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("qTrace License", "*.qtlicense"));
+            fc.setTitle("Select your certificate file (.qtlicense)");
+            fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("qTrace identity certificate", "*.qtlicense"));
             String current = tfLicense.getText().strip();
             if (!current.isEmpty()) {
                 File f = new File(current);
@@ -262,7 +262,7 @@ public class QTraceSettingsDialog {
             }
         });
 
-        Button btnGetLicense = flatButton("🔗 Get license", BLUE);
+        Button btnGetLicense = flatButton("🔗 Get a certificate", BLUE);
         btnGetLicense.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
 
         GridPane licenseGrid = new GridPane();
@@ -281,7 +281,7 @@ public class QTraceSettingsDialog {
         lcBtn2Col.setMinWidth(90);
         licenseGrid.getColumnConstraints().addAll(lcLabelCol, lcFieldCol, lcBtn1Col, lcBtn2Col);
 
-        Label licenseLbl = new Label(".qtlicense file");
+        Label licenseLbl = new Label("Certificate file (.qtlicense)");
         licenseLbl.setTextFill(Color.web(TEXT_SUB));
         licenseLbl.setFont(Font.font("System", FontWeight.NORMAL, 12));
         licenseGrid.add(licenseLbl,      0, 0);
@@ -560,7 +560,7 @@ public class QTraceSettingsDialog {
 
         Object[][] sections = {
             {"Identity",       pageIdentity},
-            {"Licence",        pageLicense},
+            {"Certificate",    pageLicense},
             {"Paths",          pagePaths},
             {"Preferences",    pagePreferences},
             {"Autosave",       pageAutosave},
@@ -706,18 +706,18 @@ public class QTraceSettingsDialog {
 
         QTracePlugin plugin = QTracePluginManager.get();
         if (plugin == null) {
-            status.setText("Available with a qTrace Compliance license.");
+            status.setText("Available with a qTrace identity certificate.");
             return section;
         }
         if (cfg.getLicensePath().isBlank()) {
-            status.setText("No license loaded — set your .qtlicense file in the Licence section.");
+            status.setText("No certificate loaded — sign in from Extensions > QTrace > Getting started, or load your .qtlicense file in the Certificate section.");
             return section;
         }
 
         plugin.fetchIdentity().thenAccept(info -> javafx.application.Platform.runLater(() -> {
             card.getChildren().clear();
             if (info == null) {
-                status.setText("Could not fetch digital identity — check your license and network connection.");
+                status.setText("Could not fetch digital identity — check your certificate and network connection.");
                 card.getChildren().add(status);
                 return;
             }
@@ -841,7 +841,7 @@ public class QTraceSettingsDialog {
         tfEmail.setText("");
 
         if (path == null || path.isBlank()) {
-            statusLbl.setText("No license loaded.");
+            statusLbl.setText("No certificate loaded.");
             statusLbl.setTextFill(Color.web(TEXT_MUTED));
             return;
         }
@@ -855,12 +855,12 @@ public class QTraceSettingsDialog {
             String token = java.nio.file.Files.readString(java.nio.file.Path.of(path)).strip();
             io.qtrace.LicenseInfo info = plugin.validateLicense(token);
             if (info == null) {
-                statusLbl.setText("Invalid or corrupted license file.");
+                statusLbl.setText("Invalid or corrupted certificate file.");
                 statusLbl.setTextFill(Color.web(RED));
                 return;
             }
             if (info.expired()) {
-                statusLbl.setText("License expired — download a new one from " + PORTAL_URL);
+                statusLbl.setText("Certificate expired — renew it from " + PORTAL_URL);
                 statusLbl.setTextFill(Color.web(ORANGE));
                 return;
             }
@@ -872,11 +872,11 @@ public class QTraceSettingsDialog {
             tfValidator.setEditable(false);
             tfValidator.setDisable(true);
             tfValidator.setTooltip(new javafx.scene.control.Tooltip(
-                "Locked — identity certified by your qTrace license."));
+                "Locked — identity certified by your qTrace identity certificate."));
             tfEmail.setText(info.email() != null && !info.email().isBlank()
-                ? info.email() : "(older license, regenerate to include your email)");
+                ? info.email() : "(older certificate, regenerate it to include your email)");
         } catch (Exception ex) {
-            statusLbl.setText("Could not read license file.");
+            statusLbl.setText("Could not read the certificate file.");
             statusLbl.setTextFill(Color.web(RED));
         }
     }

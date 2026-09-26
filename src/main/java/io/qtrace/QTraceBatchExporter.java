@@ -220,7 +220,7 @@ public class QTraceBatchExporter {
           + "-fx-border-width: 1;"
         );
         Tooltip.install(badge, new Tooltip(
-            "Locked — identity certified by your qTrace license.\n"
+            "Locked — identity certified by your qTrace identity certificate.\n"
           + "Institution: " + license.institution() + "\n"
           + "Valid until: " + license.expiresAtFormatted()
         ));
