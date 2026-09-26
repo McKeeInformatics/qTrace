@@ -2011,8 +2011,8 @@ public class ActionLogger implements WorkflowListener {
                     .resolve("classifiers").resolve(name + ".json");
                 Files.createDirectories(dest.getParent());
                 Files.writeString(dest, json);
-                record.gitHash = new GitBridge(QTraceConfig.get().outputClassifierDir())
-                    .commit(dest, "QTrace classifier loaded: " + name
+                record.gitHash = ProjectHistory.commitFile(dest, QTraceConfig.get().outputClassifierDir(),
+                    "QTrace classifier loaded: " + name
                         + " (user=" + user + ", sha=" + sha256.substring(0, 8) + ")", user);
                 ActivityLog.add("  git    : " + record.gitHash);
             } catch (Exception e) {
@@ -2510,7 +2510,7 @@ public class ActionLogger implements WorkflowListener {
             Path dest = classifierDir.resolve("classifiers").resolve(name + ".json");
             Files.createDirectories(dest.getParent());
             Files.writeString(dest, record.jsonContent);
-            record.gitHash = new GitBridge(classifierDir).commit(dest,
+            record.gitHash = ProjectHistory.commitFile(dest, classifierDir,
                 "QTrace classifier: " + name
                 + " (user=" + user + ", img=" + record.sha256.substring(0,8) + ")", user);
             ActivityLog.add("  git       : " + record.gitHash);

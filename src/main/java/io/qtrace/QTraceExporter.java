@@ -62,14 +62,13 @@ public class QTraceExporter {
         DateTimeFormatter.ISO_INSTANT.withZone(ZoneOffset.UTC);
 
     private final ActionLogger    logger;
-    private final String          gitHash;
     private final ValidationStamp stamp;
+    private       String           gitParent  = null;   // last commit of this .qtrace, set by export()
     private       JsonArray        extensions = null;
     private       String           sessionId  = null;
 
-    public QTraceExporter(ActionLogger logger, String gitHash, ValidationStamp stamp) {
+    public QTraceExporter(ActionLogger logger, ValidationStamp stamp) {
         this.logger  = logger;
-        this.gitHash = gitHash;
         this.stamp   = stamp;
     }
 
@@ -96,6 +95,11 @@ public class QTraceExporter {
         Files.createDirectories(outputDir);
         String base    = imageName.replaceAll("[^a-zA-Z0-9._-]", "_");
         Path   outFile = outputDir.resolve(base + ".qtrace");
+
+        // The commit this .qtrace was last recorded in: each session points back at the history
+        // it extends (a commit can't carry its own hash).
+        Path project = QTraceConfig.currentProjectDir();
+        gitParent = project != null ? new ProjectHistory(project).lastCommitTouching(outFile) : null;
 
         JsonObject session = buildSession(imageData, outputDir, imageName);
 
@@ -226,7 +230,7 @@ public class QTraceExporter {
         sb.append(csv(imageName)).append(",")
           .append(Instant.now()).append(",")
           .append(QTraceController.VERSION).append(",")
-          .append(csv(gitHash != null ? gitHash : "")).append(",")
+          .append(csv(gitParent != null ? gitParent : "")).append(",")
           .append(csv(System.getProperty("user.name", "unknown"))).append(",")
           .append(csv(getHostname())).append(",")
           .append(stamp != null ? csv(stamp.validator())  : "").append(",")
@@ -327,8 +331,8 @@ public class QTraceExporter {
         // single author. Pre-tracking steps (prior contributor's inherited state) excluded.
         session.add("contributions", buildContributions(stepsArr));
 
-        // Git — only when this session actually has a commit (never a null placeholder)
-        JsonObject git = gitBlock(gitHash, outputDir);
+        // Git — only when this .qtrace already has history (never a null placeholder)
+        JsonObject git = gitBlock(gitParent);
         if (git != null) session.add("git", git);
 
         // Project context
@@ -857,12 +861,11 @@ public class QTraceExporter {
         return null;
     }
 
-    /** Session {@code git} block, or null when there is no commit to point at. */
-    static JsonObject gitBlock(String gitHash, Path repoDir) {
-        if (gitHash == null || gitHash.isBlank()) return null;
+    /** Session {@code git} block — the commit this session extends — or null when there is none. */
+    static JsonObject gitBlock(String parentCommit) {
+        if (parentCommit == null || parentCommit.isBlank()) return null;
         JsonObject git = new JsonObject();
-        git.addProperty("commit",   gitHash);
-        git.addProperty("repo_dir", repoDir.toString());
+        git.addProperty("parent_commit", parentCommit);
         return git;
     }
 }

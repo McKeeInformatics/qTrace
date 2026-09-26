@@ -126,6 +126,23 @@ public class QTraceController {
      * The OS login + machine are always kept separately for forensics; this is the
      * human-readable contributor shown on commit-graph nodes and in attributions.
      */
+    /**
+     * Records the open project's tracked files (.qtrace and satellites, scripts, classifiers) in
+     * its local Git history. Never blocks an export: a failure is logged and the export stands.
+     */
+    static String recordProjectHistory(String message) {
+        Path project = QTraceConfig.currentProjectDir();
+        if (project == null) return null;
+        try {
+            String hash = new ProjectHistory(project).commitTracked(message, currentContributor());
+            if (hash != null) ActivityLog.add("  git: " + hash);
+            return hash;
+        } catch (Exception e) {
+            ActivityLog.add("  WARNING: project history not recorded — " + e.getMessage());
+            return null;
+        }
+    }
+
     public static String currentContributor() {
         QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep != null) {
@@ -246,12 +263,13 @@ public class QTraceController {
             return true;
         }
         try {
-            var exporter = new QTraceExporter(logger, null, null);
+            var exporter = new QTraceExporter(logger, null);
             exporter.setExtensions(collectLoadedExtensions());
             exporter.setSessionId(drafts.sessionId());
             Path out = exporter.export(QTraceConfig.get().outputExportDir());
             drafts.markCommitted();
             ActivityLog.add(QTraceI18n.f("autosave.committed", out.getFileName()));
+            recordProjectHistory("qTrace: unstamped session · " + out.getFileName());
             return true;
         } catch (Exception e) {
             System.err.println("[qTrace] unstamped session not written: " + e.getMessage());
@@ -1123,7 +1141,7 @@ public class QTraceController {
         }
         try {
             Path outDir  = QTraceConfig.get().outputExportDir();
-            var exporter = new QTraceExporter(logger, null, lastStamp);
+            var exporter = new QTraceExporter(logger, lastStamp);
             exporter.setExtensions(collectLoadedExtensions());
             exporter.setSessionId(drafts.sessionId());
             Path outFile = exporter.export(outDir);
@@ -1189,6 +1207,8 @@ public class QTraceController {
                     ActivityLog.add("  .qtcert: " + e.getMessage());
                 }
             }
+            recordProjectHistory("qTrace: stamped session · " + outFile.getFileName()
+                + (lastStamp != null ? " · validated by " + lastStamp.validator() : ""));
         } catch (Exception e) {
             ActivityLog.add("Export error: " + e.getMessage());
         }
@@ -1479,13 +1499,15 @@ public class QTraceController {
             null, null);  // signature + validatorKeyPub: unsigned (batch path, no dialog)
 
         Path exportDir = QTraceConfig.get().outputExportDir();
-        var  exporter  = new QTraceExporter(logger, null, lastStamp);
+        var  exporter  = new QTraceExporter(logger, lastStamp);
         exporter.setExtensions(collectLoadedExtensions());
         exporter.setSessionId(drafts.sessionId());
         Path out       = exporter.export(exportDir);
         drafts.markCommitted();
         Path csvFile   = exporter.appendToMasterCsv(exportDir);
         QTraceExporter.appendExternalFile(out, "csv", csvFile);
+        recordProjectHistory("qTrace: stamped session (batch) · " + out.getFileName()
+            + " · validated by " + validator);
         return out.getFileName().toString();
     }
 
@@ -1497,13 +1519,14 @@ public class QTraceController {
      */
     public static Path exportUnstamped(QuPathGUI qupath, ActionLogger logger) throws IOException {
         // No master_validation_log.csv row: that log lists validations, and this isn't one.
-        var exporter = new QTraceExporter(logger, null, null);
+        var exporter = new QTraceExporter(logger, null);
         exporter.setExtensions(collectLoadedExtensions(qupath));
         QTraceController c = active;
         boolean ours = c != null && c.logger == logger && c.drafts != null;
         if (ours) exporter.setSessionId(c.drafts.sessionId());
         Path out = exporter.export(QTraceConfig.get().outputExportDir());
         if (ours) c.drafts.markCommitted();   // not committed a second time on image switch
+        recordProjectHistory("qTrace: replayed session · " + out.getFileName());
         return out;
     }
 
