@@ -29,7 +29,6 @@ import javafx.scene.web.WebView;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
-import netscape.javascript.JSObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -127,7 +126,15 @@ public final class PlayerWindow {
 
     private void onLoaded() {
         if (!PlayerBridge.trustedLocation(playerUrl, engine.getLocation())) return;
-        ((JSObject) engine.executeScript("window")).setMember("qtrace", api);
+        // window.qtrace = api. Reflective: JSObject lives in jdk.jsobject up to JDK 23 and in
+        // javafx.web from JavaFX 24 (QuPath 0.7): no compile-time dependency on either.
+        try {
+            Object window = engine.executeScript("window");
+            window.getClass().getMethod("setMember", String.class, Object.class).invoke(window, "qtrace", api);
+        } catch (ReflectiveOperationException e) {
+            log.warn("[qtrace-player] could not expose the bridge", e);
+            return;
+        }
         engine.executeScript("qtracePlayer.load(" + GSON.toJson(contentJson) + ")");
         ready = true;
         pending.forEach(engine::executeScript);
