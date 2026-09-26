@@ -81,6 +81,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .door .lbl { color: var(--accent); text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
 .door .hint { color: var(--tx-muted); font-size: 13px; }
 .door .hint.err { color: var(--amber); }
+.door.opened { border-color: var(--accent); background: var(--accent-dim); }
+.door.opened strong { font-size: 17px; }
 .codein {
   font-family: var(--mono); font-size: 22px; letter-spacing: .12em; text-transform: uppercase;
   background: var(--navy-dark); color: var(--tx); border: 1px solid var(--navy-b); border-radius: 8px; padding: 10px 12px; width: 100%;

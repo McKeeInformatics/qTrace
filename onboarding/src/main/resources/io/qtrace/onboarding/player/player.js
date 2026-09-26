@@ -74,17 +74,22 @@
   }
 
   function entryHTML() {
-    var hint = state.invite === 'opened'
-      ? 'Finish creating your account in your browser, then click Sign in below.'
-      : 'The code the qTrace team sent you.';
+    var signIn = '<div class="door"><span class="lbl">Already have an account?</span>' +
+      '<button type="button" class="btn" data-act="sign-in">Sign in to qtrace.ca</button></div>';
+    if (state.invite === 'opened') {
+      // Code sent: the next step is in the browser, then Sign in here.
+      return '<div class="entry">' +
+        '<div class="door opened"><span class="lbl">Invitation code sent</span>' +
+        '<strong>Your browser opened qtrace.ca</strong>' +
+        '<span class="hint">Create your account there. When the portal says “Open QuPath and sign in”, come back here and click Sign in.</span>' +
+        '<button type="button" class="btn primary" data-act="sign-in">Sign in to qtrace.ca</button></div></div>';
+    }
     return '<div class="entry">' +
       '<form class="door" data-form="invite">' +
       '<label for="invite" class="lbl">Invitation code</label>' +
       '<input id="invite" name="invite" class="codein" placeholder="XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" maxlength="14">' +
       '<button type="submit" class="btn primary">Use this code</button>' +
-      '<span class="hint" id="invite-hint">' + esc(hint) + '</span></form>' +
-      '<div class="door"><span class="lbl">Already have an account?</span>' +
-      '<button type="button" class="btn" data-act="sign-in">Sign in to qtrace.ca</button></div></div>';
+      '<span class="hint" id="invite-hint">The code the qTrace team sent you.</span></form>' + signIn + '</div>';
   }
 
   function deviceHTML() {
