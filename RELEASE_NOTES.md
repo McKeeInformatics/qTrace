@@ -1,3 +1,16 @@
+## What's new in v1.2.2
+
+### Added — Getting started: from nothing to your certified identity, one restart
+After **Install**, a wide **Getting started** window walks you through setup step by step (‹ › or the step track at the bottom). It checks that qtrace.ca and GitHub are reachable (and says to ask your IT team if a proxy or firewall blocks them), then asks **Do you have an invitation code?** Enter the code from your email and click **Continue with this code**: your browser opens qtrace.ca to create your account with that address, then the identity verification and your passphrase; at the end, **Authorize QuPath**. QuPath waits for you (up to an hour), receives your identity certificate on its own — no file to handle — installs Compliance and restarts once. **I already have a qtrace.ca account** takes the same path without a code; **Not now** keeps qTrace Core and ends on **qTrace is on board**. Reopen it any time from `Extensions › QTrace › Getting started…`.
+
+### Added — A Welcome after the restart
+The first start with your identity certificate opens a **Welcome**: your first steps (record an analysis, stamp a result, replay a workflow, report what is missing), personalised for your organisation when you belong to one, ending on **qTrace is on board**. `Extensions › QTrace › Welcome…` reopens it.
+
+### Changed — Identity certificate and signed record
+What used to be called your "license" is your **identity certificate** (Settings page **Certificate**); the `.qtcert` produced by each stamp is a **signed record**. Error messages about a missing or expired certificate now point to **Getting started** instead of the certificate file, which stays available in Settings for a QuPath that cannot reach qtrace.ca.
+
+---
+
 ## What's new in v1.2.1
 
 ### Added — Your capture is saved continuously, and survives a crash
