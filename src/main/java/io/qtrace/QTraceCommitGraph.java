@@ -20,7 +20,6 @@
 package io.qtrace;
 
 import com.google.gson.*;
-import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -28,6 +27,8 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tooltip;
@@ -109,11 +110,11 @@ public class QTraceCommitGraph {
     private static final String ROW_IDLE = "-fx-border-color: transparent; -fx-border-width: 0 0 0 3;";
     private static final String ROW_SELECTED = "-fx-background-color: rgba(250,179,135,0.12);"
         + "-fx-border-color: " + PEACH + "; -fx-border-width: 0 0 0 3;";
-    private final VBox       timelineBox;
-    private final ScrollPane timelineScroll;
+    // Virtualized: real traces carry ~900 steps; one node tree per row made every click relayout
+    // them all (~1 s per click). A ListView only builds the rows on screen.
+    private final ListView<VersionTimeline.Entry> timelineList;
     private final Label      timelineFooter;
-    private final Map<Integer, HBox> milestoneRows = new HashMap<>();
-    private HBox selectedRow;
+    private final Map<Integer, Integer> milestoneIndex = new HashMap<>();   // session → list index
 
     public QTraceCommitGraph(QuPathGUI qupath) {
         this.qupath = qupath;
@@ -168,14 +169,21 @@ public class QTraceCommitGraph {
         timelineTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
         timelineTitle.setPadding(new Insets(8, 14, 6, 14));
 
-        timelineBox = new VBox(0);
-        timelineBox.setPadding(new Insets(4, 0, 4, 0));
-        timelineBox.setStyle("-fx-background-color: " + BG_BASE + ";");
-        timelineScroll = new ScrollPane(timelineBox);
-        timelineScroll.setId("graph-timeline"); // looked up by the screenshot harness — see ScreenshotHarness
-        timelineScroll.setFitToWidth(true);
-        timelineScroll.setStyle("-fx-background: " + BG_BASE + "; -fx-background-color: " + BG_BASE + ";");
-        VBox.setVgrow(timelineScroll, Priority.ALWAYS);
+        timelineList = new ListView<>();
+        timelineList.setId("graph-timeline"); // looked up by the screenshot harness — see ScreenshotHarness
+        timelineList.setStyle("-fx-background-color: " + BG_BASE + "; -fx-control-inner-background: " + BG_BASE + ";"
+            + "-fx-background-insets: 0; -fx-padding: 0;");
+        timelineList.setCellFactory(lv -> new TimelineCell());
+        Label placeholder = muted(QTraceI18n.t("graph.timeline.empty"));
+        fill(placeholder, Color.web(TEXT_MUTED));
+        timelineList.setPlaceholder(placeholder);
+        timelineList.getSelectionModel().selectedItemProperty().addListener((o, was, e) -> {
+            if (e == null || e.sessionIndex() >= nodes.size()) return;
+            Node n = nodes.get(e.sessionIndex());
+            if (e.kind() == VersionTimeline.Kind.STEP) showStepDetail(e, n); else showDetail(n);
+            redraw(n);
+        });
+        VBox.setVgrow(timelineList, Priority.ALWAYS);
 
         timelineFooter = new Label("");
         timelineFooter.setFont(Font.font(MONO, 10));
@@ -185,7 +193,7 @@ public class QTraceCommitGraph {
         timelineFooter.setStyle("-fx-background-color: " + BG_SURFACE + ";"
             + "-fx-border-color: " + BORDER + "; -fx-border-width: 1 0 0 0;");
 
-        VBox timelinePane = new VBox(timelineTitle, timelineScroll, timelineFooter);
+        VBox timelinePane = new VBox(timelineTitle, timelineList, timelineFooter);
         timelinePane.setStyle("-fx-background-color: " + BG_BASE + ";"
             + "-fx-border-color: " + BORDER + "; -fx-border-width: 1 0 0 0;");
 
@@ -232,10 +240,10 @@ public class QTraceCommitGraph {
 
     /** Commit selected from the graph or its timeline milestone: detail panel + both views in sync. */
     private void selectCommit(Node n) {
-        showDetail(n);
-        redraw(n);
-        HBox row = milestoneRows.get(n.index);
-        if (row != null) { selectRow(row); scrollTo(row); }
+        Integer i = milestoneIndex.get(n.index);
+        if (i == null) { showDetail(n); redraw(n); return; }
+        timelineList.getSelectionModel().select(i);   // listener fills the detail panel
+        timelineList.scrollTo(Math.max(0, i - 3));
     }
 
     // ── Loading ──────────────────────────────────────────────────────────────--
@@ -411,30 +419,22 @@ public class QTraceCommitGraph {
     // ── Step timeline ──────────────────────────────────────────────────────────
 
     private void buildTimeline(JsonObject root) {
-        timelineBox.getChildren().clear();
-        milestoneRows.clear();
-        selectedRow = null;
-        List<VersionTimeline.Entry> entries = root == null ? List.of()
-            : VersionTimeline.build(root, ZoneId.systemDefault());
+        milestoneIndex.clear();
+        List<VersionTimeline.Entry> entries = new ArrayList<>();
+        if (root != null)
+            for (VersionTimeline.Entry e : VersionTimeline.build(root, ZoneId.systemDefault()))
+                if (e.sessionIndex() < nodes.size()) entries.add(e);
+        for (int i = 0; i < entries.size(); i++)
+            if (entries.get(i).kind() != VersionTimeline.Kind.STEP) milestoneIndex.put(entries.get(i).sessionIndex(), i);
+        timelineList.getItems().setAll(entries);
         if (entries.isEmpty()) {
-            Label empty = muted(QTraceI18n.t("graph.timeline.empty"));
-            fill(empty, Color.web(TEXT_MUTED));
-            empty.setPadding(new Insets(8, 14, 8, 14));
-            timelineBox.getChildren().add(empty);
             timelineFooter.setText("");
             return;
-        }
-        for (VersionTimeline.Entry e : entries) {
-            if (e.sessionIndex() >= nodes.size()) continue;
-            Node n = nodes.get(e.sessionIndex());
-            HBox row = e.kind() == VersionTimeline.Kind.STEP ? stepRow(e, n) : milestoneRow(e, n);
-            if (e.kind() != VersionTimeline.Kind.STEP) milestoneRows.put(n.index, row);
-            timelineBox.getChildren().add(row);
         }
         String footer = QTraceI18n.f("graph.timeline.footer", VersionTimeline.stepCount(entries), nodes.size());
         String sha = VersionTimeline.shortHash(root);
         timelineFooter.setText(sha.isEmpty() ? footer : footer + "  ·  sha " + sha);
-        Platform.runLater(() -> timelineScroll.setVvalue(1.0)); // latest work first in view
+        timelineList.scrollTo(entries.size() - 1); // latest work first in view
     }
 
     private HBox stepRow(VersionTimeline.Entry e, Node n) {
@@ -463,7 +463,6 @@ public class QTraceCommitGraph {
 
         HBox row = timelineRow(dot, e.time(), text);
         if (flag != null) row.setOpacity(0.55);
-        row.setOnMouseClicked(ev -> { selectRow(row); showStepDetail(e, n); redraw(n); });
         return row;
     }
 
@@ -495,7 +494,6 @@ public class QTraceCommitGraph {
 
         HBox row = timelineRow(dot, e.time(), new VBox(1, head, sub));
         row.setPadding(new Insets(8, 14, 8, 11));
-        row.setOnMouseClicked(ev -> selectCommit(n));
         return row;
     }
 
@@ -525,27 +523,40 @@ public class QTraceCommitGraph {
     }
 
     /**
-     * Inside the timeline ScrollPane, modena's label rule wins over setTextFill() (rows came out
+     * Inside the timeline list, modena's label rule wins over setTextFill() (rows came out
      * grey) — an inline -fx-text-fill outranks every stylesheet.
      */
     private static void fill(Label l, Color c) {
         l.setStyle("-fx-text-fill: " + toHex(c) + ";");
     }
 
-    private void selectRow(HBox row) {
-        if (selectedRow != null) selectedRow.setStyle(ROW_IDLE);
-        selectedRow = row;
-        row.setStyle(ROW_SELECTED);
-    }
+    /**
+     * One recycled timeline row. The row is rebuilt per item (only ~20 are ever on screen); the
+     * cell itself stays transparent and borderless so the rail reads as one continuous line, and
+     * its inline style replaces modena's blue selection with the peach bar.
+     */
+    private final class TimelineCell extends ListCell<VersionTimeline.Entry> {
+        private HBox row;
 
-    private void scrollTo(HBox row) {
-        Platform.runLater(() -> {
-            double content  = timelineBox.getHeight();
-            double viewport = timelineScroll.getViewportBounds().getHeight();
-            if (content <= viewport) return;
-            double y = row.getBoundsInParent().getMinY() - viewport / 2 + row.getHeight() / 2;
-            timelineScroll.setVvalue(Math.max(0, Math.min(1, y / (content - viewport))));
-        });
+        TimelineCell() {
+            setStyle("-fx-padding: 0; -fx-background-color: transparent;");
+            selectedProperty().addListener((o, was, sel) -> applySelection());
+        }
+
+        @Override
+        protected void updateItem(VersionTimeline.Entry e, boolean empty) {
+            super.updateItem(e, empty);
+            setText(null);
+            if (empty || e == null || e.sessionIndex() >= nodes.size()) { row = null; setGraphic(null); return; }
+            Node n = nodes.get(e.sessionIndex());
+            row = e.kind() == VersionTimeline.Kind.STEP ? stepRow(e, n) : milestoneRow(e, n);
+            applySelection();
+            setGraphic(row);
+        }
+
+        private void applySelection() {
+            if (row != null) row.setStyle(isSelected() ? ROW_SELECTED : ROW_IDLE);
+        }
     }
 
     private static String stepFlag(VersionTimeline.Entry e) {
