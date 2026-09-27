@@ -20,6 +20,7 @@
 package io.qtrace;
 
 import com.google.gson.*;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -28,9 +29,11 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.TextAlignment;
@@ -40,8 +43,11 @@ import qupath.lib.gui.QuPathGUI;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Commit-graph window — visualizes a .qtrace as a git-like history (v1: linear "main" branch).
@@ -51,6 +57,10 @@ import java.util.List;
  * Node title = stamp notes (→ scope → "Session #n"). The side panel answers "who did what":
  * the contributor and the categorized actions of that commit (from the {@code contributions}
  * block, which already excludes pre-tracking steps inherited from a prior contributor).
+ *
+ * Below the graph, a vertical step timeline (git-graph style, model in {@link VersionTimeline})
+ * lists every captured action as a grey dot, each session closing on its stamp milestone —
+ * a dot coloured by confidence, or a hollow dashed one when the session was never stamped.
  *
  * Compliance-only feature (opened from the panel), but lives in Core as it only reads JSON.
  */
@@ -94,6 +104,17 @@ public class QTraceCommitGraph {
     private final Label     headerLabel;
     private final List<Node> nodes = new ArrayList<>();
 
+    // Step timeline (below the graph).
+    private static final String MONO = "Monospaced";
+    private static final String ROW_IDLE = "-fx-border-color: transparent; -fx-border-width: 0 0 0 3;";
+    private static final String ROW_SELECTED = "-fx-background-color: rgba(250,179,135,0.12);"
+        + "-fx-border-color: " + PEACH + "; -fx-border-width: 0 0 0 3;";
+    private final VBox       timelineBox;
+    private final ScrollPane timelineScroll;
+    private final Label      timelineFooter;
+    private final Map<Integer, HBox> milestoneRows = new HashMap<>();
+    private HBox selectedRow;
+
     public QTraceCommitGraph(QuPathGUI qupath) {
         this.qupath = qupath;
         this.stage  = new Stage();
@@ -102,7 +123,7 @@ public class QTraceCommitGraph {
         // called (window opened at JavaFX's 200×200 default) — only setMinWidth/setMinHeight
         // reliably applied, so those carry the real target size instead.
         stage.setMinWidth(1180);
-        stage.setMinHeight(460);
+        stage.setMinHeight(760);
 
         headerLabel = new Label("");
         headerLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
@@ -121,7 +142,7 @@ public class QTraceCommitGraph {
         header.setPadding(new Insets(10, 14, 10, 14));
         header.setStyle("-fx-background-color: " + BG_CARD + ";");
 
-        canvas = new Canvas(900, 320);
+        canvas = new Canvas(900, 230);
         Pane canvasPane = new Pane(canvas);
         canvasPane.setStyle("-fx-background-color: " + BG_BASE + ";");
         ScrollPane scroll = new ScrollPane(canvasPane);
@@ -139,16 +160,47 @@ public class QTraceCommitGraph {
 
         canvas.setOnMouseClicked(e -> {
             Node hit = nodeAt(e.getX(), e.getY());
-            if (hit != null) { showDetail(hit); redraw(hit); }
+            if (hit != null) selectCommit(hit);
         });
+
+        Label timelineTitle = new Label(QTraceI18n.t("graph.timeline.title"));
+        timelineTitle.setTextFill(Color.web(BLUE));
+        timelineTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
+        timelineTitle.setPadding(new Insets(8, 14, 6, 14));
+
+        timelineBox = new VBox(0);
+        timelineBox.setPadding(new Insets(4, 0, 4, 0));
+        timelineBox.setStyle("-fx-background-color: " + BG_BASE + ";");
+        timelineScroll = new ScrollPane(timelineBox);
+        timelineScroll.setId("graph-timeline"); // looked up by the screenshot harness — see ScreenshotHarness
+        timelineScroll.setFitToWidth(true);
+        timelineScroll.setStyle("-fx-background: " + BG_BASE + "; -fx-background-color: " + BG_BASE + ";");
+        VBox.setVgrow(timelineScroll, Priority.ALWAYS);
+
+        timelineFooter = new Label("");
+        timelineFooter.setFont(Font.font(MONO, 10));
+        timelineFooter.setTextFill(Color.web(TEXT_MUTED));
+        timelineFooter.setMaxWidth(Double.MAX_VALUE);
+        timelineFooter.setPadding(new Insets(6, 14, 6, 14));
+        timelineFooter.setStyle("-fx-background-color: " + BG_SURFACE + ";"
+            + "-fx-border-color: " + BORDER + "; -fx-border-width: 1 0 0 0;");
+
+        VBox timelinePane = new VBox(timelineTitle, timelineScroll, timelineFooter);
+        timelinePane.setStyle("-fx-background-color: " + BG_BASE + ";"
+            + "-fx-border-color: " + BORDER + "; -fx-border-width: 1 0 0 0;");
+
+        SplitPane split = new SplitPane(scroll, timelinePane);
+        split.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        split.setDividerPositions(0.34);
+        split.setStyle("-fx-background-color: " + BG_BASE + "; -fx-box-border: transparent;");
 
         BorderPane root = new BorderPane();
         root.setTop(header);
-        root.setCenter(scroll);
+        root.setCenter(split);
         root.setRight(detailBox);
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
 
-        stage.setScene(new Scene(root, 1180, 460));
+        stage.setScene(new Scene(root, 1180, 760));
     }
 
     // ── Public API ─────────────────────────────────────────────────────────────
@@ -175,9 +227,15 @@ public class QTraceCommitGraph {
      */
     public void selectNode(int index) {
         if (index < 0 || index >= nodes.size()) return;
-        Node n = nodes.get(index);
+        selectCommit(nodes.get(index));
+    }
+
+    /** Commit selected from the graph or its timeline milestone: detail panel + both views in sync. */
+    private void selectCommit(Node n) {
         showDetail(n);
         redraw(n);
+        HBox row = milestoneRows.get(n.index);
+        if (row != null) { selectRow(row); scrollTo(row); }
     }
 
     // ── Loading ──────────────────────────────────────────────────────────────--
@@ -196,8 +254,10 @@ public class QTraceCommitGraph {
 
     private void load(File file) {
         nodes.clear();
+        JsonObject loaded = null;
         try {
             JsonObject root = JsonParser.parseString(Files.readString(file.toPath())).getAsJsonObject();
+            loaded = root;
             String imgName = root.has("image") && root.getAsJsonObject("image").has("name")
                 ? root.getAsJsonObject("image").get("name").getAsString() : file.getName();
             headerLabel.setText("⑃  " + imgName);
@@ -213,6 +273,7 @@ public class QTraceCommitGraph {
         layout();
         redraw(null);
         showEmptyDetail();
+        buildTimeline(loaded);
     }
 
     private Node parseNode(JsonObject s, int index) {
@@ -347,6 +408,179 @@ public class QTraceCommitGraph {
         g.fillText(dateShort(n.exportedAt), n.cx, n.cy + NODE_R + 48);
     }
 
+    // ── Step timeline ──────────────────────────────────────────────────────────
+
+    private void buildTimeline(JsonObject root) {
+        timelineBox.getChildren().clear();
+        milestoneRows.clear();
+        selectedRow = null;
+        List<VersionTimeline.Entry> entries = root == null ? List.of()
+            : VersionTimeline.build(root, ZoneId.systemDefault());
+        if (entries.isEmpty()) {
+            Label empty = muted(QTraceI18n.t("graph.timeline.empty"));
+            fill(empty, Color.web(TEXT_MUTED));
+            empty.setPadding(new Insets(8, 14, 8, 14));
+            timelineBox.getChildren().add(empty);
+            timelineFooter.setText("");
+            return;
+        }
+        for (VersionTimeline.Entry e : entries) {
+            if (e.sessionIndex() >= nodes.size()) continue;
+            Node n = nodes.get(e.sessionIndex());
+            HBox row = e.kind() == VersionTimeline.Kind.STEP ? stepRow(e, n) : milestoneRow(e, n);
+            if (e.kind() != VersionTimeline.Kind.STEP) milestoneRows.put(n.index, row);
+            timelineBox.getChildren().add(row);
+        }
+        String footer = QTraceI18n.f("graph.timeline.footer", VersionTimeline.stepCount(entries), nodes.size());
+        String sha = VersionTimeline.shortHash(root);
+        timelineFooter.setText(sha.isEmpty() ? footer : footer + "  ·  sha " + sha);
+        Platform.runLater(() -> timelineScroll.setVvalue(1.0)); // latest work first in view
+    }
+
+    private HBox stepRow(VersionTimeline.Entry e, Node n) {
+        Circle dot = new Circle(4, Color.web(TEXT_MUTED));
+
+        Label cmd = new Label(e.command().isBlank() ? "—" : e.command());
+        fill(cmd, Color.web(TEXT_MAIN));
+        cmd.setFont(Font.font("System", 12));
+
+        HBox sub = new HBox(8);
+        sub.setAlignment(Pos.CENTER_LEFT);
+        if (!e.summary().isEmpty()) {
+            Label s = new Label(e.summary());
+            fill(s, Color.web(TEXT_MUTED));
+            s.setFont(Font.font(MONO, 10));
+            sub.getChildren().add(s);
+        }
+        String flag = stepFlag(e);
+        if (flag != null) {
+            Label f = new Label(flag);
+            fill(f, Color.web(PEACH));
+            f.setFont(Font.font("System", FontWeight.BOLD, 9));
+            sub.getChildren().add(f);
+        }
+        VBox text = sub.getChildren().isEmpty() ? new VBox(cmd) : new VBox(1, cmd, sub);
+
+        HBox row = timelineRow(dot, e.time(), text);
+        if (flag != null) row.setOpacity(0.55);
+        row.setOnMouseClicked(ev -> { selectRow(row); showStepDetail(e, n); redraw(n); });
+        return row;
+    }
+
+    private HBox milestoneRow(VersionTimeline.Entry e, Node n) {
+        boolean stamped = e.kind() == VersionTimeline.Kind.STAMP;
+        Circle dot = new Circle(7);
+        if (stamped) {
+            dot.setFill(nodeColor(n));
+        } else {
+            dot.setFill(Color.web(BG_BASE));
+            dot.setStroke(Color.web(TEXT_MUTED));
+            dot.setStrokeWidth(2);
+            dot.getStrokeDashArray().setAll(3.0, 3.0);
+        }
+
+        Label head = new Label(QTraceI18n.t(stamped ? "graph.detail.stamped" : "graph.unstamped")
+            + "  ·  #" + (n.index + 1) + " — " + title(n));
+        fill(head, stamped ? nodeColor(n) : Color.web(TEXT_MUTED));
+        head.setFont(Font.font("System", FontWeight.BOLD, 12));
+
+        List<String> parts = new ArrayList<>();
+        if (stamped && n.validator != null) parts.add((n.signed ? "✓ " : "") + n.validator);
+        else parts.add(n.contributor);
+        if (stamped && n.confidence != null) parts.add(n.confidence);
+        parts.add(dateShort(e.timestampIso()));
+        Label sub = new Label(String.join("  ·  ", parts));
+        fill(sub, Color.web(stamped && n.signed ? GREEN : TEXT_SUB));
+        sub.setFont(Font.font(MONO, 10));
+
+        HBox row = timelineRow(dot, e.time(), new VBox(1, head, sub));
+        row.setPadding(new Insets(8, 14, 8, 11));
+        row.setOnMouseClicked(ev -> selectCommit(n));
+        return row;
+    }
+
+    /** Rail cell (continuous vertical line + dot) · time · text. */
+    private HBox timelineRow(Circle dot, String time, VBox text) {
+        Region line = new Region();
+        line.setMinWidth(2);
+        line.setMaxWidth(2);
+        line.setMaxHeight(Double.MAX_VALUE);
+        line.setStyle("-fx-background-color: " + BORDER + ";");
+        StackPane rail = new StackPane(line, dot);
+        rail.setMinWidth(24);
+        rail.setPrefWidth(24);
+
+        Label t = new Label(time);
+        fill(t, Color.web(TEXT_MUTED));
+        t.setFont(Font.font(MONO, 11));
+        t.setMinWidth(66);
+
+        HBox row = new HBox(10, rail, t, text);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(4, 14, 4, 11));
+        row.setFillHeight(true);
+        row.setStyle(ROW_IDLE);
+        row.setCursor(javafx.scene.Cursor.HAND);
+        return row;
+    }
+
+    /**
+     * Inside the timeline ScrollPane, modena's label rule wins over setTextFill() (rows came out
+     * grey) — an inline -fx-text-fill outranks every stylesheet.
+     */
+    private static void fill(Label l, Color c) {
+        l.setStyle("-fx-text-fill: " + toHex(c) + ";");
+    }
+
+    private void selectRow(HBox row) {
+        if (selectedRow != null) selectedRow.setStyle(ROW_IDLE);
+        selectedRow = row;
+        row.setStyle(ROW_SELECTED);
+    }
+
+    private void scrollTo(HBox row) {
+        Platform.runLater(() -> {
+            double content  = timelineBox.getHeight();
+            double viewport = timelineScroll.getViewportBounds().getHeight();
+            if (content <= viewport) return;
+            double y = row.getBoundsInParent().getMinY() - viewport / 2 + row.getHeight() / 2;
+            timelineScroll.setVvalue(Math.max(0, Math.min(1, y / (content - viewport))));
+        });
+    }
+
+    private static String stepFlag(VersionTimeline.Entry e) {
+        if (e.deleted())        return QTraceI18n.t("graph.step.deleted");
+        if (e.replayExcluded()) return QTraceI18n.t("graph.step.excluded");
+        if (e.preTracking())    return QTraceI18n.t("graph.step.inherited");
+        return null;
+    }
+
+    private void showStepDetail(VersionTimeline.Entry e, Node n) {
+        detailBox.getChildren().clear();
+        detailBox.getChildren().add(sectionTitle(e.command().isBlank() ? "—" : e.command()));
+        detailBox.getChildren().add(kv(QTraceI18n.t("graph.step.time"),
+            dateShort(e.timestampIso()) + (e.time().isEmpty() ? "" : "  (" + e.time() + ")")));
+        detailBox.getChildren().add(kv(QTraceI18n.t("graph.step.session"), "#" + (n.index + 1) + " — " + title(n)));
+        if (e.source() == VersionTimeline.Source.WORKFLOW) {
+            detailBox.getChildren().add(kv(QTraceI18n.t("graph.step.scriptable"),
+                QTraceI18n.t(e.scriptable() ? "graph.step.yes" : "graph.step.no")));
+        } else {
+            detailBox.getChildren().add(muted(QTraceI18n.t("graph.rec.captured")));
+            for (var d : e.details().entrySet())
+                detailBox.getChildren().add(kv(QTraceI18n.t(d.getKey()), d.getValue()));
+        }
+        String flag = stepFlag(e);
+        if (flag != null) detailBox.getChildren().add(muted(flag));
+        if (e.script() != null && !e.script().isBlank()) {
+            detailBox.getChildren().add(sectionTitle(QTraceI18n.t("graph.step.script")));
+            Label script = new Label(ellipsis(e.script(), 1200));
+            script.setWrapText(true);
+            script.setTextFill(Color.web(TEXT_SUB));
+            script.setFont(Font.font(MONO, 10));
+            detailBox.getChildren().add(script);
+        }
+    }
+
     // ── Detail panel ───────────────────────────────────────────────────────────
 
     private void showEmptyDetail() {
@@ -461,9 +695,15 @@ public class QTraceCommitGraph {
         return sb.toString();
     }
 
+    /** "yyyy-MM-dd HH:mm" in local time — same clock as the timeline's HH:mm:ss column. */
     private static String dateShort(String iso) {
         if (iso == null || iso.length() < 16) return iso == null ? "" : iso;
-        return iso.substring(0, 10) + " " + iso.substring(11, 16);
+        try {
+            return java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                .format(java.time.Instant.parse(iso).atZone(ZoneId.systemDefault()));
+        } catch (Exception e) {
+            return iso.substring(0, 10) + " " + iso.substring(11, 16);
+        }
     }
 
     private static String ellipsis(String s, int max) {

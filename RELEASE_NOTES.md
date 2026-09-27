@@ -1,5 +1,8 @@
 ## What's new in v1.2.3
 
+### New — Every step in the Version window
+**⑃ Version(s)** now lists, under the commit graph, every action captured on the image, oldest first: one grey dot per step with its time, its command and a line saying what it did — what InstanSeg detected and on which channels, which classifier produced annotations or detections, the stain vectors used. Pixel classifier training and Warpy alignment, which QuPath does not record as steps, appear at their time too. Each session ends on its stamp, a dot in the colour of its confidence, or on a hollow dashed dot when it was never stamped. Click a step to read its full script, click a stamp to open the commit: the graph follows. Dates in the graph are now shown in your local time.
+
 ### Changed — No more waiting for the identity check
 Signing in from **Getting started** no longer waits for your identity verification: as soon as your account is ready (terms accepted, passphrase chosen), **Authorize QuPath** installs a **provisional identity certificate** and you can work and stamp right away. The panel says **Identity verification pending · provisional until …** in orange until your identity is verified on qtrace.ca; qTrace then swaps in your verified certificate by itself (at startup, then every hour) and tells you **Your identity is verified**. The stamps you made meanwhile are signed with the same key and become certified under your verified name.
 
