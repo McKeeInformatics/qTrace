@@ -502,7 +502,11 @@ public final class QTraceUpdater {
             .followRedirects(HttpClient.Redirect.NORMAL).build();
         HttpRequest.Builder b = HttpRequest.newBuilder()
             .uri(URI.create(url)).timeout(Duration.ofSeconds(120)).GET();
-        if (bearer != null) b.header("Authorization", "Bearer " + bearer);
+        if (bearer != null) {
+            b.header("Authorization", "Bearer " + bearer);
+            // Authenticated calls go to qtrace.ca: say which qTrace is asking (BackOffice › user).
+            b.header("X-QTrace-Version", QTraceController.VERSION);
+        }
         HttpResponse<byte[]> resp = client.send(b.build(), HttpResponse.BodyHandlers.ofByteArray());
         if (resp.statusCode() != 200) throw new Exception("HTTP " + resp.statusCode());
         return resp.body();
