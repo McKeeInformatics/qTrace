@@ -25,6 +25,7 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.StatusCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
@@ -91,11 +92,28 @@ public final class ProjectHistory {
             changed.forEach(add::addFilepattern);
             add.call();
 
+            // Status compares timestamps: a file rewritten in the same second as the index reads as
+            // modified even when its content is identical. Commit only what differs from HEAD by
+            // content, or an "only" commit with nothing to record fails.
+            Set<String> real = contentChanges(git, changed);
+            if (real.isEmpty()) return null;
+
             PersonIdent who = identity.person();
             CommitCommand commit = git.commit().setMessage(identity.message(message)).setAuthor(who).setCommitter(who);
-            changed.forEach(commit::setOnly);   // leave whatever else is staged alone
+            real.forEach(commit::setOnly);   // leave whatever else is staged alone
             return commit.call().abbreviate(7).name();
         }
+    }
+
+    /** Paths among {@code candidates} whose staged content differs from HEAD (all of them before a first commit). */
+    private static Set<String> contentChanges(Git git, Set<String> candidates) throws IOException, GitAPIException {
+        if (git.getRepository().resolve("HEAD") == null) return candidates;
+        Set<String> real = new TreeSet<>();
+        for (DiffEntry d : git.diff().setCached(true).call()) {
+            String p = d.getChangeType() == DiffEntry.ChangeType.DELETE ? d.getOldPath() : d.getNewPath();
+            if (candidates.contains(p)) real.add(p);
+        }
+        return real;
     }
 
     /** Last commit that touched {@code file}, or null when it has no history yet. */
