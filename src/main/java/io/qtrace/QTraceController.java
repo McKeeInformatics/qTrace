@@ -227,7 +227,10 @@ public class QTraceController {
         // re-check once it's ready instead of leaving the button stuck disabled.
         logger.setOnHashReady(this::refreshPushAvailability);
         drafts = new DraftManager(qupath, logger, e -> { if (panel != null) panel.setAutosaveStatus(e); });
-        logger.setOnChanged(drafts::markDirty);
+        logger.setOnChanged(() -> {
+            drafts.markDirty();
+            refreshCommitGraph();
+        });
         active = this;
         ImageData<BufferedImage> current = qupath.getImageData();
         if (current != null) attachImage(current);
@@ -239,9 +242,10 @@ public class QTraceController {
 
     /** Attaches the logger to an image, then either resumes its orphaned draft or starts a new one. */
     private void attachImage(ImageData<BufferedImage> data) {
-        logger.attach(data);
+        attachLogger(data);
         fireRecordingState(data != null);
         if (data == null) { drafts.end(); return; }
+        if (commitGraph != null) commitGraph.showImage(currentQtraceFile());
         Optional<io.qtrace.draft.DraftStore.Draft> orphan = drafts.findOrphan(data);
         if (orphan.isPresent()) {
             // Not tracked until the user chooses — a fresh draft would overwrite the orphan.
@@ -249,6 +253,21 @@ public class QTraceController {
             Platform.runLater(() -> offerRecovery(data, orphan.get()));
         } else {
             drafts.begin(data);
+        }
+    }
+
+    /**
+     * Attaches the logger, then marks again the instructions this image's .qtrace already
+     * records as taken out of the replay — QuPath's workflow history comes back without them.
+     */
+    private void attachLogger(ImageData<BufferedImage> data) {
+        logger.attach(data);
+        File qtrace = data != null ? currentQtraceFile() : null;
+        if (qtrace == null) return;
+        try {
+            logger.inheritReplaySkip(JsonParser.parseString(Files.readString(qtrace.toPath())).getAsJsonObject());
+        } catch (Exception e) {
+            System.err.println("[qTrace] replay choices not carried over: " + e.getMessage());
         }
     }
 
@@ -275,6 +294,7 @@ public class QTraceController {
             exporter.setSessionId(drafts.sessionId());
             Path out = exporter.export(QTraceConfig.get().outputExportDir());
             drafts.markCommitted();
+            refreshCommitGraph();
             ActivityLog.add(QTraceI18n.f("autosave.committed", out.getFileName()));
             recordProjectHistory("qTrace: unstamped session · " + out.getFileName());
             return true;
@@ -402,7 +422,7 @@ public class QTraceController {
         } catch (Exception e) {
             System.err.println("[qTrace] revert to saved image failed: " + e.getMessage());
         } finally {
-            logger.attach(data);
+            attachLogger(data);
             drafts.begin(data);
         }
     }
@@ -605,17 +625,78 @@ public class QTraceController {
             return;
         }
         File preselected = currentQtraceFile();
-        if (preselected == null) {
+        if (preselected == null && !logger.hasSteps()) {
             showGraphInfo(QTraceI18n.t("graph.info.nostamp"));
             return;
         }
         if (commitGraph == null || !commitGraph.isShowing()) {
             commitGraph = new QTraceCommitGraph(qupath);
+            commitGraph.setHost(graphHost);
             commitGraph.show(preselected);
         } else if (commitGraph.isIconified()) {
             commitGraph.front();
         } else {
             commitGraph.minimize();
+        }
+    }
+
+    /** What the Version window needs from the open image: its capture in progress, and the −/+ of a step. */
+    private final QTraceCommitGraph.Host graphHost = new QTraceCommitGraph.Host() {
+        @Override public JsonObject liveSession(File qtrace) {
+            if (logger == null || !logger.isAttached() || !logger.hasSteps()) return null;
+            if (qtrace != null && !isCurrentQtrace(qtrace)) return null;
+            JsonObject s = new JsonObject();
+            String id = drafts != null ? drafts.sessionId() : null;
+            if (id != null) s.addProperty("session_id", id);
+            s.addProperty("user", currentContributor());
+            s.addProperty("branch", "main");
+            s.addProperty("exported_at", java.time.Instant.now().toString());
+            s.addProperty("image_name", logger.getCurrentImageData().getServer().getMetadata().getName());
+            s.add("validation", com.google.gson.JsonNull.INSTANCE);
+            s.addProperty("validation_state", "unstamped");
+            s.addProperty("live", true);
+            JsonArray steps = new JsonArray();
+            for (JsonObject st : QTraceExporter.selectSessionSteps(logger.getCapturedSteps())) steps.add(st.deepCopy());
+            s.addProperty("steps_captured", steps.size());
+            s.add("steps", steps);
+            return s;
+        }
+
+        @Override public void setReplaySkip(File qtrace, String fragment, boolean skip) throws IOException {
+            boolean current = qtrace == null || isCurrentQtrace(qtrace);
+            if (current && logger != null && logger.isAttached()) logger.setReplaySkip(fragment, skip);
+            if (qtrace == null) return;
+            // Not recorded in the project history on its own (a commit per click): the file is
+            // picked up by the next session commit.
+            ReplaySkip.setInFile(qtrace.toPath(), fragment, skip, currentContributor(), java.time.Instant.now());
+        }
+    };
+
+    /** Replayed / taken out, over everything a stamp now would answer for: all the work since the last one. */
+    private ReplaySkip.Summary replaySinceLastStamp() {
+        JsonObject root = null;
+        File qtrace = currentQtraceFile();
+        if (qtrace != null) {
+            try { root = JsonParser.parseString(Files.readString(qtrace.toPath())).getAsJsonObject(); }
+            catch (Exception ignored) {}
+        }
+        return ReplaySkip.summary(ReplaySkip.sinceLastStamp(root,
+            QTraceExporter.selectSessionSteps(logger.getCapturedSteps())));
+    }
+
+    /** The Version window, when open, follows the capture and the .qtrace as they change. */
+    private void refreshCommitGraph() {
+        if (commitGraph == null) return;
+        if (Platform.isFxApplicationThread()) commitGraph.refresh(currentQtraceFile());
+        else Platform.runLater(() -> commitGraph.refresh(currentQtraceFile()));
+    }
+
+    private boolean isCurrentQtrace(File qtrace) {
+        File current = currentQtraceFile();
+        try {
+            return current != null && Files.isSameFile(current.toPath(), qtrace.toPath());
+        } catch (IOException e) {
+            return false;
         }
     }
 
@@ -1048,7 +1129,8 @@ public class QTraceController {
         String qpdataHash = resolveQpdataHash();
         String defaultCaseId = resolveDefaultCaseId();
         ValidationStamper.show(qupath.getStage(), null, logger.getImageHash(), qpdataHash,
-                               logger.computeClassifierFidelity(), currentStatus, defaultCaseId)
+                               logger.computeClassifierFidelity(), currentStatus, defaultCaseId,
+                               replaySinceLastStamp())
             .ifPresentOrElse(
                 stamp -> {
                     lastStamp = stamp;
@@ -1153,6 +1235,7 @@ public class QTraceController {
             exporter.setSessionId(drafts.sessionId());
             Path outFile = exporter.export(outDir);
             drafts.markCommitted();
+            refreshCommitGraph();
             Path csvFile = exporter.appendToMasterCsv(outDir);
             QTraceExporter.appendExternalFile(outFile, "csv", csvFile);
 
@@ -1511,6 +1594,7 @@ public class QTraceController {
         exporter.setSessionId(drafts.sessionId());
         Path out       = exporter.export(exportDir);
         drafts.markCommitted();
+        refreshCommitGraph();
         Path csvFile   = exporter.appendToMasterCsv(exportDir);
         QTraceExporter.appendExternalFile(out, "csv", csvFile);
         recordProjectHistory("qTrace: stamped session (batch) · " + out.getFileName()

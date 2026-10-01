@@ -772,7 +772,10 @@ public class ActionLogger implements WorkflowListener {
         java.util.regex.Matcher m = OBJ_VAR_SUFFIX.matcher(json.get("script_fragment").getAsString());
         if (!m.find()) return;
         Integer prevIdx = manualAnnotationLatestIndex.put(m.group(1), newIdx);
-        if (prevIdx != null) retireStep(prevIdx);
+        if (prevIdx == null) return;
+        // Same object, new fragment: it stays out of the replay if its author took it out.
+        ReplaySkip.copy(capturedSteps.get(prevIdx), json);
+        retireStep(prevIdx);
     }
 
     // ── Manual annotation counter ─────────────────────────────────────────────
@@ -811,6 +814,22 @@ public class ActionLogger implements WorkflowListener {
         this.replayedFrom = replayedFrom;
         if (keepHistory) return;
         for (JsonObject step : capturedSteps) step.addProperty("replay_excluded", true);
+    }
+
+    /**
+     * Takes an instruction out of the replay, or puts it back — it stays in the trace either
+     * way ({@link ReplaySkip}). True when the capture changed. FX thread.
+     */
+    public boolean setReplaySkip(String fragment, boolean skip) {
+        int changed = ReplaySkip.set(capturedSteps, fragment, skip,
+            QTraceController.currentContributor(), Instant.now());
+        if (changed > 0) notifyChanged();
+        return changed > 0;
+    }
+
+    /** Carries over the replay choices already recorded in this image's .qtrace (QuPath's history has none). */
+    public void inheritReplaySkip(JsonObject qtraceRoot) {
+        ReplaySkip.inherit(capturedSteps, qtraceRoot);
     }
 
     /**

@@ -309,6 +309,12 @@ public class QTraceSettingsDialog {
             "When disabled, closing or switching away from an image with unstamped modifications "
           + "happens silently — no prompt. With autosave on, the work is still kept as an unstamped session."));
 
+        CheckBox chkHideSkipped = new CheckBox(QTraceI18n.t("settings.replay.hideskipped"));
+        chkHideSkipped.setSelected(cfg.isHideSkippedReplaySteps());
+        chkHideSkipped.setTextFill(Color.web(TEXT_SUB));
+        chkHideSkipped.setWrapText(true);
+        chkHideSkipped.setTooltip(hintTooltip(QTraceI18n.t("settings.replay.hideskipped.hint")));
+
         CheckBox chkAutosave = new CheckBox(QTraceI18n.t("settings.autosave"));
         chkAutosave.setSelected(cfg.isAutosaveEnabled());
         chkAutosave.setTextFill(Color.web(TEXT_SUB));
@@ -346,7 +352,7 @@ public class QTraceSettingsDialog {
 
         VBox captureBox = new VBox(10,
             subTitle("General"),
-            chkDetectionNote, chkUnstampedReminder,
+            chkDetectionNote, chkUnstampedReminder, chkHideSkipped,
             subTitle("Security"),
             chkReportConfirm, langRow, pseudoRow);
         captureBox.setPadding(new Insets(4, 20, 8, 20));
@@ -469,6 +475,7 @@ public class QTraceSettingsDialog {
             updateLicenseStatus(licenseStatusLbl, "", tfValidator, tfEmail);
             chkDetectionNote.setSelected(true);
             chkUnstampedReminder.setSelected(true);
+            chkHideSkipped.setSelected(true);
             chkAutosave.setSelected(true);
             rbAuto.setSelected(true);
             customValues[0] = io.qtrace.draft.SnapshotPolicy.DEFAULT_THRESHOLD_MB;
@@ -495,6 +502,7 @@ public class QTraceSettingsDialog {
             if (langBox.getValue() != null) cfg.setReportLanguage(langBox.getValue());
             cfg.setPromptDetectionNote(chkDetectionNote.isSelected());
             cfg.setPromptUnstampedReminder(chkUnstampedReminder.isSelected());
+            cfg.setHideSkippedReplaySteps(chkHideSkipped.isSelected());
             cfg.setAutosaveEnabled(chkAutosave.isSelected());
             if (rbCustom.isSelected())
                 cfg.setSnapshotSettings(true, spThreshold.getValue(), spInterval.getValue(), chkKeyOnly.isSelected());

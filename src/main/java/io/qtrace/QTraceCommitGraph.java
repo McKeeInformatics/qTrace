@@ -92,13 +92,33 @@ public class QTraceCommitGraph {
         String  contributor, validator, confidence, fidelity, notes, scope, exportedAt, imageHashShort;
         boolean signed;
         boolean stamped = true;     // false: autosaved session, never validated
+        boolean live;               // the open image's capture, not in the .qtrace yet
+        boolean covered;            // unstamped, but a later stamp validated it: frozen like a stamped one
         int     stepsCaptured, preTracking;
         JsonObject contributions;   // { contributor, actions:{cat:count} }
         double  cx, cy;             // canvas centre (for hit-testing)
         int     index;
     }
 
+    /**
+     * The open image, as far as this window is concerned. Without a host (screenshot harness)
+     * the window only reads the file: no "in progress" session, no −/+ on the steps.
+     */
+    public interface Host {
+        /**
+         * The capture in progress of the image {@code qtrace} belongs to ({@code null}: the open
+         * image has no .qtrace yet), as a session flagged {@code "live"} — or null when that
+         * image is not the one open, or nothing was captured.
+         */
+        JsonObject liveSession(File qtrace);
+
+        /** Takes an instruction out of the replay or puts it back, wherever it is still unstamped. */
+        void setReplaySkip(File qtrace, String fragment, boolean skip) throws java.io.IOException;
+    }
+
     private final QuPathGUI qupath;
+    private Host host;
+    private File loadedFile;
     private final Stage     stage;
     private final Canvas    canvas;
     private final VBox      detailBox;
@@ -115,6 +135,9 @@ public class QTraceCommitGraph {
     private final ListView<VersionTimeline.Entry> timelineList;
     private final Label      timelineFooter;
     private final Map<Integer, Integer> milestoneIndex = new HashMap<>();   // session → list index
+    private List<VersionTimeline.Entry> allEntries = List.of();
+    private JsonObject timelineRoot;
+    private Integer shownSession;   // node clicked in the graph: only its steps are listed; null = all
 
     public QTraceCommitGraph(QuPathGUI qupath) {
         this.qupath = qupath;
@@ -159,9 +182,13 @@ public class QTraceCommitGraph {
             + "-fx-border-color: " + BORDER + "; -fx-border-width: 0 0 0 1;");
         showEmptyDetail();
 
+        // A node limits the timeline to its session; a click beside the nodes lists everything again.
         canvas.setOnMouseClicked(e -> {
             Node hit = nodeAt(e.getX(), e.getY());
+            shownSession = hit != null ? Integer.valueOf(hit.index) : null;
+            showTimeline();
             if (hit != null) selectCommit(hit);
+            else { redraw(null); showEmptyDetail(); }
         });
 
         Label timelineTitle = new Label(QTraceI18n.t("graph.timeline.title"));
@@ -213,9 +240,15 @@ public class QTraceCommitGraph {
 
     // ── Public API ─────────────────────────────────────────────────────────────
 
-    /** Opens the graph for the given .qtrace, or prompts a chooser when {@code preselected} is missing. */
+    public void setHost(Host host) { this.host = host; }
+
+    /**
+     * Opens the graph for the given .qtrace. Without one, shows the open image's capture in
+     * progress when the host has one, else prompts a chooser.
+     */
     public void show(File preselected) {
         if (preselected != null && preselected.isFile()) load(preselected);
+        else if (host != null && host.liveSession(null) != null) load(null);
         else chooseFile();
         stage.show();
         stage.toFront();
@@ -260,28 +293,112 @@ public class QTraceCommitGraph {
         if (f != null) load(f);
     }
 
+    /** {@code file} null: no .qtrace yet — only the host's capture in progress. */
     private void load(File file) {
+        loadedFile = file;
         nodes.clear();
         JsonObject loaded = null;
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(file.toPath())).getAsJsonObject();
+            JsonObject root = file != null
+                ? JsonParser.parseString(Files.readString(file.toPath())).getAsJsonObject() : new JsonObject();
             loaded = root;
+            if (!root.has("sessions") || !root.get("sessions").isJsonArray()) root.add("sessions", new JsonArray());
+            JsonArray sessions = root.getAsJsonArray("sessions");
+            JsonObject live = host != null ? host.liveSession(file) : null;
+            if (live != null) sessions.add(live);
+
             String imgName = root.has("image") && root.getAsJsonObject("image").has("name")
-                ? root.getAsJsonObject("image").get("name").getAsString() : file.getName();
+                ? root.getAsJsonObject("image").get("name").getAsString()
+                : file != null ? file.getName() : live != null ? str(live, "image_name", "") : "";
             headerLabel.setText("⑃  " + imgName);
 
-            JsonArray sessions = root.has("sessions") && root.get("sessions").isJsonArray()
-                ? root.getAsJsonArray("sessions") : new JsonArray();
             for (int i = 0; i < sessions.size(); i++) {
                 nodes.add(parseNode(sessions.get(i).getAsJsonObject(), i));
             }
         } catch (Exception e) {
             headerLabel.setText(QTraceI18n.t("graph.load.error") + " — " + e.getMessage());
         }
+        boolean stampAfter = false;
+        for (int i = nodes.size() - 1; i >= 0; i--) {
+            nodes.get(i).covered = !nodes.get(i).stamped && stampAfter;
+            stampAfter |= nodes.get(i).stamped;
+        }
         layout();
         redraw(null);
         showEmptyDetail();
         buildTimeline(loaded);
+    }
+
+    private final javafx.animation.PauseTransition refreshDelay =
+        new javafx.animation.PauseTransition(javafx.util.Duration.millis(400));
+
+    /**
+     * The open image's capture or its .qtrace changed (a step captured, a session committed):
+     * shows it, shortly after — a burst of steps is one refresh. {@code current} is the open
+     * image's .qtrace, adopted when the window was opened before that file existed. FX thread.
+     */
+    public void refresh(File current) {
+        if (!stage.isShowing()) return;
+        if (loadedFile == null && current != null) loadedFile = current;
+        refreshDelay.setOnFinished(e -> {
+            int size = timelineList.getItems().size();
+            int top = firstVisibleRow();
+            boolean atEnd = size == 0 || lastVisibleRow() >= size - 1;   // reading the latest: keep following
+            reload(timelineList.getSelectionModel().getSelectedIndex(), top, atEnd);
+        });
+        refreshDelay.playFromStart();
+    }
+
+    /**
+     * Another image was opened in QuPath: the window switches to its history ({@code current}:
+     * its .qtrace, null when it has none yet — then only its capture in progress, if any). FX thread.
+     */
+    public void showImage(File current) {
+        if (!stage.isShowing()) return;
+        refreshDelay.stop();
+        load(current);
+    }
+
+    /** Reads the file and the capture again; the session shown, the selection and the scroll stay. */
+    private void reload(int selected, int top, boolean followEnd) {
+        Integer session = shownSession;
+        load(loadedFile);
+        if (session != null && session < nodes.size()) {
+            shownSession = session;
+            showTimeline();
+        }
+        int size = timelineList.getItems().size();
+        if (selected >= 0 && selected < size) timelineList.getSelectionModel().select(selected);
+        else if (session != null && session < nodes.size()) redraw(nodes.get(session));
+        if (followEnd) timelineList.scrollTo(size - 1);
+        else if (top >= 0 && top < size) timelineList.scrollTo(top);
+    }
+
+    private int firstVisibleRow() {
+        return timelineList.lookup(".virtual-flow") instanceof javafx.scene.control.skin.VirtualFlow<?> flow
+            && flow.getFirstVisibleCell() != null ? flow.getFirstVisibleCell().getIndex() : -1;
+    }
+
+    private int lastVisibleRow() {
+        return timelineList.lookup(".virtual-flow") instanceof javafx.scene.control.skin.VirtualFlow<?> flow
+            && flow.getLastVisibleCell() != null ? flow.getLastVisibleCell().getIndex() : -1;
+    }
+
+    /**
+     * −/+ on a step row: the choice is saved by the host, then the file is read again. The
+     * list keeps its place and its selection — only the rows on screen are rebuilt.
+     */
+    private void toggleReplaySkip(VersionTimeline.Entry e) {
+        if (host == null) return;
+        int selected = timelineList.getSelectionModel().getSelectedIndex();
+        int top = firstVisibleRow();
+        try {
+            host.setReplaySkip(loadedFile, e.script(), !e.replaySkip());
+        } catch (Exception ex) {
+            headerLabel.setText(QTraceI18n.t("graph.step.skip.error") + " — " + ex.getMessage());
+            return;
+        }
+        reload(selected, top, false);
     }
 
     private Node parseNode(JsonObject s, int index) {
@@ -294,6 +411,7 @@ public class QTraceCommitGraph {
         n.exportedAt    = str(s, "exported_at", "");
         n.stepsCaptured = s.has("steps_captured") ? s.get("steps_captured").getAsInt() : 0;
         n.stamped       = StampIntegrity.isStamped(s);
+        n.live          = s.has("live") && s.get("live").getAsBoolean();
 
         if (s.has("steps") && s.get("steps").isJsonArray()) {
             for (JsonElement el : s.getAsJsonArray("steps")) {
@@ -322,7 +440,7 @@ public class QTraceCommitGraph {
 
     private void layout() {
         for (Node n : nodes) {
-            n.cx = ORIGIN_X + n.index * X_GAP;
+            n.cx = ORIGIN_X + (nodes.size() - 1 - n.index) * X_GAP;   // latest session first, on the left
             n.cy = LANE_Y;   // v1: single "main" lane
         }
         double width = Math.max(900, ORIGIN_X * 2 + Math.max(0, nodes.size() - 1) * X_GAP);
@@ -347,7 +465,7 @@ public class QTraceCommitGraph {
         g.setLineWidth(3);
         for (int i = 1; i < nodes.size(); i++) {
             Node a = nodes.get(i - 1), b = nodes.get(i);
-            g.strokeLine(a.cx + NODE_R, a.cy, b.cx - NODE_R, b.cy);
+            g.strokeLine(b.cx + NODE_R, b.cy, a.cx - NODE_R, a.cy);   // b, the later one, is on the left
         }
 
         for (Node n : nodes) drawNode(g, n, n == selected);
@@ -404,7 +522,7 @@ public class QTraceCommitGraph {
         if (!n.stamped) {
             g.setFill(Color.web(TEXT_MUTED));
             g.setFont(Font.font("System", FontWeight.BOLD, 10));
-            g.fillText(QTraceI18n.t("graph.unstamped"), n.cx, n.cy + NODE_R + 34);
+            g.fillText(QTraceI18n.t(n.live ? "graph.live" : "graph.unstamped"), n.cx, n.cy + NODE_R + 34);
         } else if (n.validator != null) {
             g.setFill(n.signed ? Color.web(GREEN) : Color.web(TEXT_MUTED));
             g.setFont(Font.font("System", 10));
@@ -419,11 +537,21 @@ public class QTraceCommitGraph {
     // ── Step timeline ──────────────────────────────────────────────────────────
 
     private void buildTimeline(JsonObject root) {
-        milestoneIndex.clear();
         List<VersionTimeline.Entry> entries = new ArrayList<>();
         if (root != null)
             for (VersionTimeline.Entry e : VersionTimeline.build(root, ZoneId.systemDefault()))
                 if (e.sessionIndex() < nodes.size()) entries.add(e);
+        allEntries   = entries;
+        timelineRoot = root;
+        shownSession = null;
+        showTimeline();
+    }
+
+    /** Lists {@link #allEntries} without the inherited steps, limited to {@link #shownSession} if any. */
+    private void showTimeline() {
+        JsonObject root = timelineRoot;
+        milestoneIndex.clear();
+        List<VersionTimeline.Entry> entries = VersionTimeline.shown(allEntries, shownSession);
         for (int i = 0; i < entries.size(); i++)
             if (entries.get(i).kind() != VersionTimeline.Kind.STEP) milestoneIndex.put(entries.get(i).sessionIndex(), i);
         timelineList.getItems().setAll(entries);
@@ -431,7 +559,17 @@ public class QTraceCommitGraph {
             timelineFooter.setText("");
             return;
         }
-        String footer = QTraceI18n.f("graph.timeline.footer", VersionTimeline.stepCount(entries), nodes.size());
+        String footer = shownSession != null
+            ? QTraceI18n.f("graph.timeline.footer.session", VersionTimeline.stepCount(entries), shownSession + 1)
+            : QTraceI18n.f("graph.timeline.footer", VersionTimeline.stepCount(entries), nodes.size());
+        // What a replay runs: of the session shown, or by default of everything since the last
+        // stamp (the capture in progress is the last session here) — what the next stamp answers for.
+        ReplaySkip.Summary replay = ReplaySkip.summary(shownSession != null
+            ? ReplaySkip.steps(root.getAsJsonArray("sessions").get(shownSession).getAsJsonObject())
+            : ReplaySkip.sinceLastStamp(root, null));
+        if (replay.total() > 0)
+            footer += "  ·  " + QTraceI18n.f(shownSession != null ? "graph.timeline.replay" : "graph.timeline.replay.since",
+                replay.replayed(), replay.total());
         String sha = VersionTimeline.shortHash(root);
         timelineFooter.setText(sha.isEmpty() ? footer : footer + "  ·  sha " + sha);
         timelineList.scrollTo(entries.size() - 1); // latest work first in view
@@ -462,8 +600,32 @@ public class QTraceCommitGraph {
         VBox text = sub.getChildren().isEmpty() ? new VBox(cmd) : new VBox(1, cmd, sub);
 
         HBox row = timelineRow(dot, e.time(), text);
-        if (flag != null) row.setOpacity(0.55);
+        if (flag != null) { text.setOpacity(0.55); dot.setOpacity(0.55); }
+        if (host != null && e.replayable()) {
+            HBox.setHgrow(text, Priority.ALWAYS);
+            row.getChildren().add(skipButton(e, n));
+        }
         return row;
+    }
+
+    /** − takes the instruction out of the replay, + puts it back; frozen once the session is stamped. */
+    private Region skipButton(VersionTimeline.Entry e, Node n) {
+        Button b = new Button(e.replaySkip() ? "+" : "−");
+        b.setFocusTraversable(false);
+        b.setMinSize(24, 22);
+        b.setPrefSize(24, 22);
+        b.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-text-fill: " + (e.replaySkip() ? GREEN : TEXT_SUB) + ";"
+            + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4;"
+            + "-fx-font-weight: bold; -fx-padding: 0; -fx-cursor: hand;");
+        StackPane box = new StackPane(b);   // a disabled control shows no tooltip: it goes on the wrapper
+        if (n.stamped || n.covered) {
+            b.setDisable(true);
+            Tooltip.install(box, new Tooltip(QTraceI18n.t(n.stamped ? "graph.step.skip.locked" : "graph.step.skip.covered")));
+        } else {
+            b.setTooltip(new Tooltip(QTraceI18n.t(e.replaySkip() ? "graph.step.unskip.tip" : "graph.step.skip.tip")));
+            b.setOnAction(ev -> toggleReplaySkip(e));
+        }
+        return box;
     }
 
     private HBox milestoneRow(VersionTimeline.Entry e, Node n) {
@@ -478,7 +640,7 @@ public class QTraceCommitGraph {
             dot.getStrokeDashArray().setAll(3.0, 3.0);
         }
 
-        Label head = new Label(QTraceI18n.t(stamped ? "graph.detail.stamped" : "graph.unstamped")
+        Label head = new Label(QTraceI18n.t(stamped ? "graph.detail.stamped" : n.live ? "graph.live" : "graph.unstamped")
             + "  ·  #" + (n.index + 1) + " — " + title(n));
         fill(head, stamped ? nodeColor(n) : Color.web(TEXT_MUTED));
         head.setFont(Font.font("System", FontWeight.BOLD, 12));
@@ -562,6 +724,7 @@ public class QTraceCommitGraph {
     private static String stepFlag(VersionTimeline.Entry e) {
         if (e.deleted())        return QTraceI18n.t("graph.step.deleted");
         if (e.replayExcluded()) return QTraceI18n.t("graph.step.excluded");
+        if (e.replaySkip())     return QTraceI18n.t("graph.step.skipped");
         if (e.preTracking())    return QTraceI18n.t("graph.step.inherited");
         return null;
     }
@@ -581,7 +744,10 @@ public class QTraceCommitGraph {
                 detailBox.getChildren().add(kv(QTraceI18n.t(d.getKey()), d.getValue()));
         }
         String flag = stepFlag(e);
-        if (flag != null) detailBox.getChildren().add(muted(flag));
+        if (e.replaySkip() && !e.deleted() && !e.replayExcluded())
+            detailBox.getChildren().add(muted(QTraceI18n.f("graph.step.skipped.by",
+                e.skip().by().isBlank() ? "?" : e.skip().by(), dateShort(e.skip().at()))));
+        else if (flag != null) detailBox.getChildren().add(muted(flag));
         if (e.script() != null && !e.script().isBlank()) {
             detailBox.getChildren().add(sectionTitle(QTraceI18n.t("graph.step.script")));
             Label script = new Label(ellipsis(e.script(), 1200));
@@ -606,7 +772,8 @@ public class QTraceCommitGraph {
 
         addBadgeRow(n);
         detailBox.getChildren().add(kv(QTraceI18n.t("graph.detail.validation"),
-            QTraceI18n.t(n.stamped ? "graph.detail.stamped" : "graph.detail.unstamped")));
+            QTraceI18n.t(n.stamped ? "graph.detail.stamped" : n.live ? "graph.detail.live"
+                : n.covered ? "graph.detail.covered" : "graph.detail.unstamped")));
         if (n.validator != null)
             detailBox.getChildren().add(kv(QTraceI18n.t("graph.detail.validator"),
                 (n.signed ? "✓ " : "") + n.validator));

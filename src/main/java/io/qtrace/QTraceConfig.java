@@ -90,6 +90,7 @@ public class QTraceConfig {
 
     // Live autosave of the capture + unstamped sessions — null = on by default
     private Boolean autosaveEnabled;
+    private Boolean hideSkippedReplaySteps;
 
     // Panel: Activity log folded — null = unfolded
     private Boolean panelLogCollapsed;
@@ -300,6 +301,9 @@ public class QTraceConfig {
 
     public boolean isAutosaveEnabled()                   { return autosaveEnabled == null || autosaveEnabled; }
     public void    setAutosaveEnabled(boolean b)         { this.autosaveEnabled = b; }
+    /** Player: leave the instructions the author took out of the replay off the list (default) instead of greyed. */
+    public boolean isHideSkippedReplaySteps()            { return hideSkippedReplaySteps == null || hideSkippedReplaySteps; }
+    public void    setHideSkippedReplaySteps(boolean b)  { this.hideSkippedReplaySteps = b; }
 
     public boolean isSnapshotCustom()                    { return "custom".equals(snapshotMode); }
     public int     getSnapshotLargeThresholdMb()         { return snapshotPolicy("custom", snapshotLargeThresholdMb, snapshotLargeIntervalSec, snapshotLargeKeyStepsOnly).thresholdMb(); }

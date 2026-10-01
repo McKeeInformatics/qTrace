@@ -150,6 +150,21 @@ class StampIntegrityTest {
     }
 
     @Test
+    void replayChoiceChangedAfterTheStampIsTraceEdited() {
+        JsonObject st = new JsonObject();
+        st.addProperty("command", "Cell detection");
+        st.addProperty("is_scriptable", true);
+        st.addProperty("script_fragment", "detect()");
+        JsonArray steps = new JsonArray();
+        steps.add(st);
+        session().add("steps", steps);
+        JsonObject payload = session().deepCopy();
+        assertEquals(StampIntegrity.State.OK, StampIntegrity.check(root, QPDATA, payload, null, null));
+        ReplaySkip.set(java.util.List.of(st), "detect()", true, "Mallory", java.time.Instant.now());
+        assertEquals(StampIntegrity.State.TRACE_EDITED, StampIntegrity.check(root, QPDATA, payload, null, null));
+    }
+
+    @Test
     void satelliteFileChangedAfterTheStampIsFilesChanged(@TempDir Path dir) throws Exception {
         Path thumb = Files.writeString(dir.resolve("t.jpg"), "pixels");
         JsonObject ref = new JsonObject();

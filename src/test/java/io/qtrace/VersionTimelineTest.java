@@ -170,36 +170,84 @@ class VersionTimelineTest {
         List<VersionTimeline.Entry> entries = VersionTimeline.build(root(), ZoneOffset.UTC);
         assertEquals(6, entries.size());
 
-        assertEquals(VersionTimeline.Kind.STEP, entries.get(0).kind());
-        assertEquals("09:14:02", entries.get(0).time());
-        assertEquals("Set image type", entries.get(0).command());
-        assertEquals("BRIGHTFIELD_H_DAB", entries.get(0).summary());
-        assertEquals(0, entries.get(0).sessionIndex());
+        assertEquals(VersionTimeline.Kind.STEP, entries.get(1).kind());
+        assertEquals("09:14:02", entries.get(1).time());
+        assertEquals("Set image type", entries.get(1).command());
+        assertEquals("BRIGHTFIELD_H_DAB", entries.get(1).summary());
+        assertEquals(0, entries.get(1).sessionIndex());
 
-        VersionTimeline.Entry stamp = entries.get(2);
+        VersionTimeline.Entry stamp = entries.get(0);
         assertEquals(VersionTimeline.Kind.STAMP, stamp.kind());
         assertEquals(0, stamp.sessionIndex());
         assertEquals("09:19:30", stamp.time()); // stamp time, not export time
 
-        assertEquals(VersionTimeline.Kind.UNSTAMPED, entries.get(5).kind());
-        assertEquals(1, entries.get(5).sessionIndex());
-        assertEquals("10:05:00", entries.get(5).time());
+        assertEquals(VersionTimeline.Kind.UNSTAMPED, entries.get(3).kind());
+        assertEquals(1, entries.get(3).sessionIndex());
+        assertEquals("10:05:00", entries.get(3).time());
     }
 
     @Test
     void buildCarriesStepFlags() {
         List<VersionTimeline.Entry> entries = VersionTimeline.build(root(), ZoneOffset.UTC);
-        assertTrue(entries.get(3).preTracking());
-        assertFalse(entries.get(3).replayExcluded());
-        assertTrue(entries.get(4).replayExcluded());
-        assertFalse(entries.get(0).preTracking());
-        assertEquals("removeSelectedObjects()", entries.get(4).script());
+        assertTrue(entries.get(4).preTracking());
+        assertFalse(entries.get(4).replayExcluded());
+        assertTrue(entries.get(5).replayExcluded());
+        assertFalse(entries.get(1).preTracking());
+        assertEquals("removeSelectedObjects()", entries.get(5).script());
+    }
+
+    @Test
+    void buildCarriesTheReplayChoice() {
+        JsonObject root = root();
+        JsonObject st = root.getAsJsonArray("sessions").get(0).getAsJsonObject()
+            .getAsJsonArray("steps").get(1).getAsJsonObject();
+        ReplaySkip.set(List.of(st), "createFullImageAnnotation(true)", true, "Bob",
+            java.time.Instant.parse("2026-09-30T14:02:00Z"));
+        List<VersionTimeline.Entry> entries = VersionTimeline.build(root, ZoneOffset.UTC);
+
+        assertFalse(entries.get(1).replaySkip());
+        assertTrue(entries.get(1).replayable());
+        assertTrue(entries.get(2).replaySkip());
+        assertTrue(entries.get(2).replayable());          // still a replay instruction: it can be put back
+        assertEquals("Bob", entries.get(2).skip().by());
+        assertEquals("2026-09-30T14:02:00Z", entries.get(2).skip().at());
+        assertFalse(entries.get(0).replayable());         // milestone
+        assertFalse(entries.get(5).replayable());         // left out by a replay: not a choice
+    }
+
+    @Test
+    void shownRowsLeaveInheritedStepsOut() {
+        List<VersionTimeline.Entry> shown = VersionTimeline.shown(VersionTimeline.build(root(), ZoneOffset.UTC), null);
+        assertEquals(5, shown.size());
+        assertTrue(shown.stream().noneMatch(VersionTimeline.Entry::preTracking));
+        assertEquals(VersionTimeline.Kind.UNSTAMPED, shown.get(3).kind());   // milestones stay
+    }
+
+    @Test
+    void shownRowsLeaveStepsCarriedIntoAStampOut() {
+        JsonObject root = root();
+        JsonObject carried = step(3, "Create TMA grid", "2026-09-27T09:00:00Z", "createTMAGrid()");
+        carried.addProperty("carried_from", "s0");
+        root.getAsJsonArray("sessions").get(0).getAsJsonObject().getAsJsonArray("steps").add(carried);
+        List<VersionTimeline.Entry> shown = VersionTimeline.shown(VersionTimeline.build(root, ZoneOffset.UTC), 0);
+        assertTrue(shown.stream().noneMatch(e -> "Create TMA grid".equals(e.command())));
+    }
+
+    @Test
+    void shownRowsCanBeLimitedToOneSession() {
+        List<VersionTimeline.Entry> all = VersionTimeline.build(root(), ZoneOffset.UTC);
+        List<VersionTimeline.Entry> first = VersionTimeline.shown(all, 0);
+        assertEquals(3, first.size());
+        assertTrue(first.stream().allMatch(e -> e.sessionIndex() == 0));
+        List<VersionTimeline.Entry> second = VersionTimeline.shown(all, 1);
+        assertEquals(2, second.size());                                      // its own step + its milestone
+        assertEquals("Delete selected objects", second.get(1).command());
     }
 
     @Test
     void timeFollowsTheGivenZone() {
         List<VersionTimeline.Entry> entries = VersionTimeline.build(root(), ZoneOffset.ofHours(-4));
-        assertEquals("05:14:02", entries.get(0).time());
+        assertEquals("05:14:02", entries.get(1).time());
     }
 
     @Test
@@ -236,7 +284,7 @@ class VersionTimelineTest {
 
         List<VersionTimeline.Entry> entries = VersionTimeline.build(r, ZoneOffset.UTC);
         assertEquals(7, entries.size());
-        VersionTimeline.Entry t = entries.get(1);   // between 09:14:02 and 09:16:11
+        VersionTimeline.Entry t = entries.get(2);   // between 09:14:02 and 09:16:11
         assertEquals(VersionTimeline.Kind.STEP, t.kind());
         assertEquals(VersionTimeline.Source.PIXEL_TRAINING, t.source());
         assertEquals("Train pixel classifier", t.command());
@@ -244,7 +292,7 @@ class VersionTimelineTest {
         assertEquals("tumor_stroma · 4 classes · 8 µm/px · ANN_MLP", t.summary());
         assertTrue(t.details().toString().contains("Normal Brain"), t.details().toString());
         assertTrue(t.details().toString().contains("12"), t.details().toString());
-        assertEquals(VersionTimeline.Source.WORKFLOW, entries.get(0).source());
+        assertEquals(VersionTimeline.Source.WORKFLOW, entries.get(1).source());
     }
 
     @Test
@@ -264,7 +312,7 @@ class VersionTimelineTest {
         assertEquals("10:02:00", a.time());
         assertEquals(1, a.sessionIndex());
         assertTrue(a.details().toString().contains("120.4"), a.details().toString());
-        assertEquals(VersionTimeline.Kind.UNSTAMPED, entries.get(entries.size() - 1).kind());
+        assertEquals(VersionTimeline.Kind.STEP, entries.get(entries.size() - 1).kind());   // the milestone heads its session
     }
 
     @Test

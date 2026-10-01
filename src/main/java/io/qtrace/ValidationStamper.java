@@ -55,6 +55,19 @@ public class ValidationStamper {
                                                   ClassifierFidelity fidelity,
                                                   String currentStatusLabel,
                                                   String defaultCaseId) {
+        return show(owner, gitHash, imgHash, qpdataHash, fidelity, currentStatusLabel, defaultCaseId, null);
+    }
+
+    /**
+     * @param replay what a replay of this session runs; shown (read-only) when the author took
+     *               instructions out of it, so the validator signs knowing. Null: not shown.
+     */
+    public static Optional<ValidationStamp> show(Stage owner, String gitHash, String imgHash,
+                                                  String qpdataHash,
+                                                  ClassifierFidelity fidelity,
+                                                  String currentStatusLabel,
+                                                  String defaultCaseId,
+                                                  ReplaySkip.Summary replay) {
         Dialog<ValidationStamp> dialog = new Dialog<>();
         dialog.initOwner(owner);
         dialog.setTitle("QTrace — Expert Validation");
@@ -192,6 +205,12 @@ public class ValidationStamper {
         grid.add(new Label("Git hash"),           0, row); grid.add(gitLabel,       1, row++);
         grid.add(new Label("Image SHA-256"),      0, row); grid.add(imgLabel,       1, row++);
         grid.add(new Label("Classifier Fidelity"),0, row); grid.add(fidelityLabel,  1, row);
+        if (replay != null && replay.skipped() > 0) {
+            Label replayLabel = new Label(QTraceI18n.f("stamp.replay.some",
+                replay.replayed(), replay.total(), replay.skipped()));
+            replayLabel.setStyle("-fx-font-family: monospace; -fx-font-weight: bold; -fx-text-fill: #fab387;");
+            grid.add(new Label(QTraceI18n.t("stamp.replay.label")), 0, ++row); grid.add(replayLabel, 1, row);
+        }
 
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);

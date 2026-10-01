@@ -101,8 +101,6 @@ public class QTraceExporter {
         Path project = QTraceConfig.currentProjectDir();
         gitParent = project != null ? new ProjectHistory(project).lastCommitTouching(outFile) : null;
 
-        JsonObject session = buildSession(imageData, outputDir, imageName);
-
         JsonObject root;
         if (Files.exists(outFile)) {
             try {
@@ -115,6 +113,8 @@ public class QTraceExporter {
         } else {
             root = buildFreshRoot(imageData);
         }
+
+        JsonObject session = buildSession(imageData, outputDir, imageName, root);
 
         // DAG v1: chain this commit to the previous one (last existing session_id).
         JsonArray existingSessions = root.getAsJsonArray("sessions");
@@ -275,7 +275,7 @@ public class QTraceExporter {
     // ── Session builder ───────────────────────────────────────────────────────
 
     private JsonObject buildSession(ImageData<BufferedImage> imageData,
-                                     Path outputDir, String imageName) throws IOException {
+                                     Path outputDir, String imageName, JsonObject existingRoot) throws IOException {
         JsonObject session = new JsonObject();
 
         session.addProperty("session_id",     sessionId != null ? sessionId : UUID.randomUUID().toString());
@@ -319,7 +319,10 @@ public class QTraceExporter {
         // Workflow steps
         List<WorkflowStep> rawSteps = imageData.getHistoryWorkflow().getSteps();
         JsonArray stepsArr = new JsonArray();
-        for (JsonObject captured : selectSessionSteps(logger.getCapturedSteps())) stepsArr.add(captured);
+        List<JsonObject> sessionSteps = selectSessionSteps(logger.getCapturedSteps());
+        // A stamp answers for the image's whole history, not only for this session.
+        if (stamp != null) sessionSteps = withEarlierWork(existingRoot, sessionSteps, logger.getCapturedSteps());
+        for (JsonObject captured : sessionSteps) stepsArr.add(captured);
         session.addProperty("steps_raw",         rawSteps.size());
         session.addProperty("steps_captured",     stepsArr.size());
         session.addProperty("manual_annotations", logger.getManualAnnotationCount());
@@ -424,6 +427,59 @@ public class QTraceExporter {
         return o.has(key) && o.get(key).getAsBoolean();
     }
 
+    /** {@link #withEarlierWork(JsonObject, List, List)} when the session's steps are the whole capture. */
+    public static List<JsonObject> withEarlierWork(JsonObject root, List<JsonObject> live) {
+        return withEarlierWork(root, live, live);
+    }
+
+    /**
+     * The steps of a session about to be stamped, completed with the work of every earlier
+     * session of the image: each stamp is cumulative, so its certificate replays the whole
+     * image on its own, whatever came before it — stamped or not. QuPath's history only brings
+     * earlier work back when the image was saved; whatever it did not is copied in here, marked
+     * {@code carried_from} (the id of the session that did it), after the steps already in the
+     * history and before the ones of this session.
+     *
+     * Only what each session did itself is carried (not what it inherited from QuPath's
+     * history), and nothing the capture already holds ({@code captured}: all of it, deleted
+     * steps included).
+     */
+    public static List<JsonObject> withEarlierWork(JsonObject root, List<JsonObject> live, List<JsonObject> captured) {
+        java.util.Set<String> held = new java.util.HashSet<>();
+        for (JsonObject step : captured) held.add(stepKey(step));
+
+        LinkedHashMap<String, JsonObject> carried = new LinkedHashMap<>();
+        List<JsonObject> sessions = ReplaySkip.sessions(root);
+        for (JsonObject session : sessions) {
+            String sid = session.has("session_id") && !session.get("session_id").isJsonNull()
+                ? session.get("session_id").getAsString() : "";
+            for (JsonObject step : ReplaySkip.steps(session)) {
+                String key = stepKey(step);
+                if (flag(step, "pre_tracking") || held.contains(key)) continue;
+                JsonObject copy = step.deepCopy();
+                if (!copy.has("carried_from")) copy.addProperty("carried_from", sid);   // else: already carried once
+                carried.remove(key);          // done again later: the last occurrence stands
+                carried.put(key, copy);
+            }
+        }
+        if (carried.isEmpty()) return live;
+
+        int inherited = 0;
+        while (inherited < live.size() && flag(live.get(inherited), "pre_tracking")) inherited++;
+        List<JsonObject> out = new ArrayList<>(live.subList(0, inherited));
+        out.addAll(carried.values());
+        out.addAll(live.subList(inherited, live.size()));
+        return out;
+    }
+
+    /** Same instruction, same key: its script, or for a step without one its command and parameters. */
+    private static String stepKey(JsonObject step) {
+        String fragment = ReplaySkip.fragment(step);
+        if (fragment != null) return fragment;
+        return (step.has("command") ? step.get("command").getAsString() : "") + "|"
+             + (step.has("parameters") ? step.get("parameters").toString() : "");
+    }
+
     /**
      * Categorized summary of a commit's actions, attributed to its single author.
      * Pre-tracking steps (inherited from a prior contributor) are excluded so the
@@ -436,6 +492,7 @@ public class QTraceExporter {
         for (JsonElement el : stepsArr) {
             JsonObject step = el.getAsJsonObject();
             if (step.has("pre_tracking") && step.get("pre_tracking").getAsBoolean()) continue;
+            if (step.has("carried_from")) continue;   // counted in the unstamped session that did it
             String cmd = step.has("command") ? step.get("command").getAsString() : "";
             actions.merge(categorizeAction(cmd), 1, Integer::sum);
         }

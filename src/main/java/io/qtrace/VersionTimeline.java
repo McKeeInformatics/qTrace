@@ -40,9 +40,9 @@ import java.util.regex.Pattern;
 /**
  * Model of the Version window's step timeline — pure JSON → rows, no JavaFX.
  *
- * A .qtrace is read session by session: each captured step becomes a {@link Kind#STEP} row,
- * and each session closes with one milestone row — {@link Kind#STAMP} when it was validated,
- * {@link Kind#UNSTAMPED} when it was only autosaved. Work QuPath never logs as a workflow step
+ * A .qtrace is read session by session: each session opens with one milestone row, followed
+ * by a {@link Kind#STEP} row per captured step. The milestone is a {@link Kind#STAMP} when the
+ * session was validated, {@link Kind#UNSTAMPED} when it was only autosaved. Work QuPath never logs as a workflow step
  * but qTrace captures on the side — pixel classifier training, Warpy alignment — is inserted
  * as a step at its own time ({@link Source}), once, in the first session that carries it (those
  * session blocks are cumulative).
@@ -66,7 +66,21 @@ public final class VersionTimeline {
      */
     public record Entry(Kind kind, Source source, int sessionIndex, String time, String timestampIso,
                         String command, String summary, String script, Map<String, String> details,
-                        boolean scriptable, boolean preTracking, boolean replayExcluded, boolean deleted) {}
+                        boolean scriptable, boolean preTracking, boolean replayExcluded, boolean deleted,
+                        Skip skip) {
+
+        /** Taken out of the replay by its author ({@link ReplaySkip}). */
+        public boolean replaySkip() { return skip != null; }
+
+        /** A replay instruction — the rows that carry the −/+ button. */
+        public boolean replayable() {
+            return kind == Kind.STEP && source == Source.WORKFLOW && scriptable
+                && script != null && !script.isBlank() && !deleted && !replayExcluded;
+        }
+    }
+
+    /** Who took a step out of the replay, and when (ISO). */
+    public record Skip(String by, String at) {}
 
     static final int MAX_SUMMARY = 60;
     private static final int MAX_ARG = 40;
@@ -110,12 +124,13 @@ public final class VersionTimeline {
                     String ts      = str(st, "timestamp", "");
                     rows.add(new Entry(Kind.STEP, Source.WORKFLOW, i, time(ts, zone), ts, command,
                         summarize(command, script), script, Map.of(),
-                        bool(st, "is_scriptable"), bool(st, "pre_tracking"),
-                        bool(st, "replay_excluded"), bool(st, "deleted")));
+                        bool(st, "is_scriptable"), bool(st, "pre_tracking") || st.has("carried_from"),
+                        bool(st, "replay_excluded"), bool(st, "deleted"),
+                        ReplaySkip.isSkipped(st)
+                            ? new Skip(str(st, ReplaySkip.BY, ""), str(st, ReplaySkip.AT, "")) : null));
                 }
             }
             for (Entry rec : capturedRecords(s, i, zone, seenRecords)) insertByTime(rows, rec);
-            out.addAll(rows);
 
             boolean stamped = StampIntegrity.isStamped(s);
             String ts = str(s, "exported_at", "");
@@ -123,8 +138,10 @@ public final class VersionTimeline {
                 String vts = str(s.getAsJsonObject("validation"), "timestamp", null);
                 if (vts != null) ts = vts;
             }
+            // The session's milestone heads its steps: what is done next shows up under it.
             out.add(new Entry(stamped ? Kind.STAMP : Kind.UNSTAMPED, null, i, time(ts, zone), ts,
-                "", "", null, Map.of(), false, false, false, false));
+                "", "", null, Map.of(), false, false, false, false, null));
+            out.addAll(rows);
         }
         return out;
     }
@@ -161,7 +178,7 @@ public final class VersionTimeline {
                 putIf(d, "graph.rec.fidelity", str(c, "fidelity", null));
                 out.add(new Entry(Kind.STEP, Source.PIXEL_TRAINING, index, time(ts, zone), ts,
                     "Train pixel classifier", truncate(String.join(" · ", parts), MAX_SUMMARY), null, d,
-                    false, false, false, false));
+                    false, false, false, false, null));
             }
         }
         if (s.has("alignment") && s.get("alignment").isJsonObject()) {
@@ -189,7 +206,7 @@ public final class VersionTimeline {
                 out.add(new Entry(Kind.STEP, Source.ALIGNMENT, index, time(ts, zone), ts,
                     source.startsWith("Warpy") ? "Align image (Warpy)" : "Align image",
                     truncate(String.join(" · ", parts), MAX_SUMMARY), null, d,
-                    false, false, false, false));
+                    false, false, false, false, null));
             }
         }
         return out;
@@ -205,6 +222,27 @@ public final class VersionTimeline {
             }
         }
         rows.add(rec);
+    }
+
+    /**
+     * The rows the window lists: steps inherited from an earlier session (pre-tracking, or
+     * carried into a stamp from the unstamped sessions before it) are
+     * left out — each session shows only what was done in it — and, when {@code session} is
+     * given, only that session's rows are kept.
+     */
+    public static List<Entry> shown(List<Entry> entries, Integer session) {
+        List<Entry> out = new ArrayList<>();
+        // A capture that stays open across a commit lists the same step again in the next
+        // session: it belongs to the first one that recorded it.
+        Set<String> recorded = new HashSet<>();
+        for (Entry e : entries) {
+            if (e.preTracking()) continue;
+            if (e.kind() == Kind.STEP && e.source() == Source.WORKFLOW
+                    && !recorded.add(e.timestampIso() + "|" + e.command() + "|" + e.script())) continue;
+            if (session != null && e.sessionIndex() != session) continue;
+            out.add(e);
+        }
+        return out;
     }
 
     public static int stepCount(List<Entry> entries) {
