@@ -1068,7 +1068,6 @@ public class QTracePanel {
         stage.show();
         stage.toFront();
         refreshStatus();
-        log("Panel opened — image: " + controller.getCurrentImageName());
     }
 
     public boolean isShowing() {
