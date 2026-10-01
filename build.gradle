@@ -36,6 +36,12 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// Layout-only JavaFX tests (ViewerOverlayTest): the javafx plugin puts its modules on
+// compileOnly, with the right platform classifier — tests reuse those jars.
+def javafxJars = sourceSets.main.compileClasspath.filter { it.name.startsWith('javafx-') }
+sourceSets.test.compileClasspath += javafxJars
+sourceSets.test.runtimeClasspath += javafxJars
+
 test {
     useJUnitPlatform()
 }
