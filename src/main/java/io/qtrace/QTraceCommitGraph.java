@@ -343,8 +343,8 @@ public class QTraceCommitGraph {
         refreshDelay.setOnFinished(e -> {
             int size = timelineList.getItems().size();
             int top = firstVisibleRow();
-            boolean atEnd = size == 0 || lastVisibleRow() >= size - 1;   // reading the latest: keep following
-            reload(timelineList.getSelectionModel().getSelectedIndex(), top, atEnd);
+            boolean atLatest = size == 0 || top <= 0;   // reading the latest, at the top: keep following
+            reload(timelineList.getSelectionModel().getSelectedIndex(), top, atLatest);
         });
         refreshDelay.playFromStart();
     }
@@ -360,7 +360,7 @@ public class QTraceCommitGraph {
     }
 
     /** Reads the file and the capture again; the session shown, the selection and the scroll stay. */
-    private void reload(int selected, int top, boolean followEnd) {
+    private void reload(int selected, int top, boolean followLatest) {
         Integer session = shownSession;
         load(loadedFile);
         if (session != null && session < nodes.size()) {
@@ -370,18 +370,13 @@ public class QTraceCommitGraph {
         int size = timelineList.getItems().size();
         if (selected >= 0 && selected < size) timelineList.getSelectionModel().select(selected);
         else if (session != null && session < nodes.size()) redraw(nodes.get(session));
-        if (followEnd) timelineList.scrollTo(size - 1);
+        if (followLatest) timelineList.scrollTo(0);
         else if (top >= 0 && top < size) timelineList.scrollTo(top);
     }
 
     private int firstVisibleRow() {
         return timelineList.lookup(".virtual-flow") instanceof javafx.scene.control.skin.VirtualFlow<?> flow
             && flow.getFirstVisibleCell() != null ? flow.getFirstVisibleCell().getIndex() : -1;
-    }
-
-    private int lastVisibleRow() {
-        return timelineList.lookup(".virtual-flow") instanceof javafx.scene.control.skin.VirtualFlow<?> flow
-            && flow.getLastVisibleCell() != null ? flow.getLastVisibleCell().getIndex() : -1;
     }
 
     /**
@@ -572,7 +567,7 @@ public class QTraceCommitGraph {
                 replay.replayed(), replay.total());
         String sha = VersionTimeline.shortHash(root);
         timelineFooter.setText(sha.isEmpty() ? footer : footer + "  ·  sha " + sha);
-        timelineList.scrollTo(entries.size() - 1); // latest work first in view
+        timelineList.scrollTo(0); // latest work first in view
     }
 
     private HBox stepRow(VersionTimeline.Entry e, Node n) {

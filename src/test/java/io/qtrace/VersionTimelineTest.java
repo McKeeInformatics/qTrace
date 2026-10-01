@@ -220,7 +220,18 @@ class VersionTimelineTest {
         List<VersionTimeline.Entry> shown = VersionTimeline.shown(VersionTimeline.build(root(), ZoneOffset.UTC), null);
         assertEquals(5, shown.size());
         assertTrue(shown.stream().noneMatch(VersionTimeline.Entry::preTracking));
-        assertEquals(VersionTimeline.Kind.UNSTAMPED, shown.get(3).kind());   // milestones stay
+        assertEquals(VersionTimeline.Kind.UNSTAMPED, shown.get(0).kind());   // milestones stay
+    }
+
+    @Test
+    void shownRowsRunFromTheLatestToTheOldest() {
+        List<VersionTimeline.Entry> shown = VersionTimeline.shown(VersionTimeline.build(root(), ZoneOffset.UTC), null);
+        // Latest session first; each milestone heads its steps, the most recent step right under it.
+        assertEquals(VersionTimeline.Kind.UNSTAMPED, shown.get(0).kind());
+        assertEquals("Delete selected objects", shown.get(1).command());
+        assertEquals(VersionTimeline.Kind.STAMP, shown.get(2).kind());
+        assertEquals("Create full image annotation", shown.get(3).command());
+        assertEquals("Set image type", shown.get(4).command());
     }
 
     @Test
@@ -242,6 +253,7 @@ class VersionTimelineTest {
         List<VersionTimeline.Entry> second = VersionTimeline.shown(all, 1);
         assertEquals(2, second.size());                                      // its own step + its milestone
         assertEquals("Delete selected objects", second.get(1).command());
+        assertEquals(VersionTimeline.Kind.UNSTAMPED, second.get(0).kind());
     }
 
     @Test

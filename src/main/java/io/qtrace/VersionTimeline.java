@@ -228,10 +228,11 @@ public final class VersionTimeline {
      * The rows the window lists: steps inherited from an earlier session (pre-tracking, or
      * carried into a stamp from the unstamped sessions before it) are
      * left out — each session shows only what was done in it — and, when {@code session} is
-     * given, only that session's rows are kept.
+     * given, only that session's rows are kept. They run from the latest to the oldest: the
+     * latest session first, each milestone heading its steps, the most recent step right under it.
      */
     public static List<Entry> shown(List<Entry> entries, Integer session) {
-        List<Entry> out = new ArrayList<>();
+        List<Entry> kept = new ArrayList<>();
         // A capture that stays open across a commit lists the same step again in the next
         // session: it belongs to the first one that recorded it.
         Set<String> recorded = new HashSet<>();
@@ -240,7 +241,17 @@ public final class VersionTimeline {
             if (e.kind() == Kind.STEP && e.source() == Source.WORKFLOW
                     && !recorded.add(e.timestampIso() + "|" + e.command() + "|" + e.script())) continue;
             if (session != null && e.sessionIndex() != session) continue;
-            out.add(e);
+            kept.add(e);
+        }
+        // kept is chronological, one block per session (milestone, then its steps): blocks are
+        // taken from the last one back, and inside each the steps are reversed.
+        List<Entry> out = new ArrayList<>(kept.size());
+        int end = kept.size();
+        for (int i = kept.size() - 1; i >= 0; i--) {
+            if (kept.get(i).kind() == Kind.STEP) continue;
+            out.add(kept.get(i));
+            for (int k = end - 1; k > i; k--) out.add(kept.get(k));
+            end = i;
         }
         return out;
     }
