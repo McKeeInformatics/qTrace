@@ -95,7 +95,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         // ── Extensions menu ────────────────────────────────────────────────────
         var menu = qupath.getMenu("Extensions>QTrace", true);
 
-        MenuItem openPanel   = new MenuItem("Open QTrace Panel");
+        MenuItem openPanel   = new MenuItem("Panel");
         openPanel.setOnAction(e -> controller.showPanel());
 
         MenuItem dashboard   = new MenuItem("Dashboard");

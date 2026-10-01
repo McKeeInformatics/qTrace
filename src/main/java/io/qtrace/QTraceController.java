@@ -164,6 +164,7 @@ public class QTraceController {
 
     private final QuPathGUI qupath;
     private QTracePanel     panel;
+    private QTraceMiniPanel miniPanel; // null when the panel fell back to its window
     private QTraceDashboard dashboard;
     private QTraceCommitGraph commitGraph;
     private ActionLogger    logger;
@@ -389,7 +390,7 @@ public class QTraceController {
                 logger.restoreState(draft.state());
                 drafts.adopt(data, draft);
                 if (keepOnly && commitUnstamped() && restored != null) revertToSaved(data);
-                if (panel != null && panel.isShowing()) {
+                if (panelOpen()) {
                     panel.refreshStatus();
                     refreshIntegrity();
                 }
@@ -443,16 +444,32 @@ public class QTraceController {
 
     /** Rebuilds the panel UI to reflect a changed entitlement (license downgrade). */
     public void refreshPanel() {
-        if (panel != null && panel.isShowing()) panel.refresh();
+        if (!panelOpen()) return;
+        panel.refresh();
+        if (miniPanel != null) Platform.runLater(miniPanel::rebuild);
     }
 
+    /** The panel is up — as the mini-panel docked over the viewers, as its full window, or both. */
+    private boolean panelOpen() {
+        return panel != null && (panel.isShowing() || (miniPanel != null && miniPanel.isDocked()));
+    }
+
+    /**
+     * "Panel": docks the mini-panel over the viewers (its ⤢ opens the full window). Falls back
+     * to the window when QuPath's layout isn't one the overlay knows.
+     */
     public void showPanel() {
-        if (panel == null || !panel.isShowing()) {
+        if (!panelOpen()) {
             panel = new QTracePanel(qupath, this);
             logger.setPanel(panel);
             syncPanelState();
+            miniPanel = QTraceMiniPanel.dock(qupath, this, panel);
+            if (miniPanel == null) panel.show();
+        } else if (miniPanel != null) {
+            miniPanel.expand();
+        } else {
+            panel.show();
         }
-        panel.show();
         refreshIntegrity();
         attachScriptEditorHook();
     }
@@ -1032,7 +1049,7 @@ public class QTraceController {
                         leaveImage();
                         attachImage(newData);
                     }
-                    if (panel != null && panel.isShowing()) {
+                    if (panelOpen()) {
                         Platform.runLater(panel::refreshStatus);
                         refreshPushAvailability();
                         refreshIntegrity();

@@ -23,7 +23,7 @@ Outputs:
 
 1. Download `qtrace-core-X.Y.Z.jar` from [Releases](../../releases)
 2. Copy to your QuPath extensions folder: `~/QuPath/v0.7/extensions/`
-3. Restart QuPath → Extensions > QTrace > Open QTrace Panel
+3. Restart QuPath → Extensions > QTrace > Panel
 
 ## Compliance features
 

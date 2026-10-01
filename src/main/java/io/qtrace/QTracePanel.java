@@ -47,27 +47,27 @@ import qupath.lib.gui.QuPathGUI;
 public class QTracePanel {
 
     // Catppuccin Mocha palette — chosen to complement QuPath's dark theme
-    private static final String BG_BASE    = "#1e1e2e";
-    private static final String BG_SURFACE = "#181825";
-    private static final String BORDER     = "#313244";
-    private static final String TEXT_MAIN  = "#cdd6f4";
-    private static final String TEXT_SUB   = "#a6adc8";
-    private static final String TEXT_MUTED = "#6c7086";
-    private static final String BLUE       = "#89b4fa";
-    private static final String GREEN      = "#a6e3a1";
-    private static final String PEACH      = "#fab387";
-    private static final String RED        = "#f38ba8";
+    static final String BG_BASE    = "#1e1e2e";
+    static final String BG_SURFACE = "#181825";
+    static final String BORDER     = "#313244";
+    static final String TEXT_MAIN  = "#cdd6f4";
+    static final String TEXT_SUB   = "#a6adc8";
+    static final String TEXT_MUTED = "#6c7086";
+    static final String BLUE       = "#89b4fa";
+    static final String GREEN      = "#a6e3a1";
+    static final String PEACH      = "#fab387";
+    static final String RED        = "#f38ba8";
 
     // Toolbar redesign — CTA + functional group accents
-    private static final String BG_ELEVATED = "#26263a";
-    private static final String TEXT_FAINT  = "#4a4a5e";
-    private static final String CTA_TEAL       = "#2dd4bf";
-    private static final String CTA_TEAL_SOFT  = "rgba(45,212,191,0.14)";
-    private static final String CTA_TEAL_BORDER = "rgba(45,212,191,0.35)";
-    private static final String GROUP_WORKSPACE = "#8B5CF6";
-    private static final String GROUP_TOOLS     = "#10B981";
-    private static final String GROUP_ADMIN     = "#9CA3AF";
-    private static final String GOLD            = "#d9b34d";
+    static final String BG_ELEVATED = "#26263a";
+    static final String TEXT_FAINT  = "#4a4a5e";
+    static final String CTA_TEAL       = "#2dd4bf";
+    static final String CTA_TEAL_SOFT  = "rgba(45,212,191,0.14)";
+    static final String CTA_TEAL_BORDER = "rgba(45,212,191,0.35)";
+    static final String GROUP_WORKSPACE = "#8B5CF6";
+    static final String GROUP_TOOLS     = "#10B981";
+    static final String GROUP_ADMIN     = "#9CA3AF";
+    static final String GOLD            = "#d9b34d";
 
     private final Stage stage;
     private final QuPathGUI qupath;
@@ -113,6 +113,13 @@ public class QTracePanel {
     private Label    progressLabel;
     private Timeline progressTimeline;
 
+    // What the controller last pushed — read by the mini-panel (QTraceMiniPanel), a view over this panel.
+    private boolean recordingActive, recordReady, pushEnabled;
+    private StampIntegrity.State integrityState = StampIntegrity.State.NO_STAMP;
+    private Runnable integrityOnWhy;
+    private final java.util.List<Runnable> stateListeners = new java.util.ArrayList<>();
+    private boolean keepAliveOnClose; // the mini-panel is docked: closing the window isn't closing the panel
+
     public QTracePanel(QuPathGUI qupath, QTraceController controller) {
         this.controller = controller;
         this.qupath = qupath;
@@ -135,6 +142,7 @@ public class QTracePanel {
         stage.setScene(new Scene(buildRoot(), captionsWidth(), 460));
         if (QTraceConfig.get().isPanelLogCollapsed()) Platform.runLater(() -> applyLogCollapsed(true, false));
         stage.setOnCloseRequest(e -> {
+            if (keepAliveOnClose) return; // the log keeps filling for the next ⤢
             log("Panel closed — recording state preserved until QuPath restarts.");
             ActivityLog.detach(logSink);
         });
@@ -427,7 +435,7 @@ public class QTracePanel {
      * Reset is destructive (clears the whole capture, see ActionLogger#resetCapture) — always
      * confirm before calling it, same as the "Unstamped image" guard elsewhere in this app.
      */
-    private void confirmReset() {
+    void confirmReset() {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.initOwner(controller.getQuPath().getStage());
         alert.setTitle("qTrace — Reset");
@@ -527,27 +535,53 @@ public class QTracePanel {
      */
     public void setIntegrity(StampIntegrity.State state, Runnable onWhy) {
         Platform.runLater(() -> {
+            integrityState = state;
+            integrityOnWhy = onWhy;
             boolean alert = state.isAlert();
             integrityRow.setVisible(alert);
             integrityRow.setManaged(alert);
-            if (!alert) return;
-            boolean corrupted = state == StampIntegrity.State.SIGNATURE_INVALID
-                             || state == StampIntegrity.State.CERTIFICATE_INVALID
-                             || state == StampIntegrity.State.TRACE_EDITED;
-            String color = corrupted ? RED : PEACH;
-            integrityLabel.setText(switch (state) {
-                case SIGNATURE_INVALID -> "⛔ Stamp corrupted — the .qtrace was edited after signing";
-                case CERTIFICATE_INVALID -> "⛔ Signed record missing or altered — chain of custody broken";
-                case TRACE_EDITED      -> "⛔ .qtrace edited — it no longer matches its signed record";
-                case DATA_CHANGED      -> "⚠ Work on this image changed since the last stamp";
-                default                -> "⚠ Satellite files changed since the last stamp";
-            });
-            integrityLabel.setTextFill(Color.web(color));
-            integrityRow.setStyle("-fx-border-color:" + color + ";-fx-border-radius:4;-fx-background-radius:4;"
-                + "-fx-background-color:" + (corrupted ? "rgba(243,139,168,0.10)" : "rgba(250,179,135,0.10)") + ";");
-            btnIntegrityWhy.setOnAction(e -> onWhy.run());
+            if (alert) {
+                boolean corrupted = integrityCorrupted(state);
+                String color = corrupted ? RED : PEACH;
+                integrityLabel.setText(integrityMessage(state));
+                integrityLabel.setTextFill(Color.web(color));
+                integrityRow.setStyle("-fx-border-color:" + color + ";-fx-border-radius:4;-fx-background-radius:4;"
+                    + "-fx-background-color:" + (corrupted ? "rgba(243,139,168,0.10)" : "rgba(250,179,135,0.10)") + ";");
+                btnIntegrityWhy.setOnAction(e -> onWhy.run());
+            }
+            fireState();
         });
     }
+
+    /** The stamp itself no longer holds (⛔), as opposed to work done since it (⚠). */
+    static boolean integrityCorrupted(StampIntegrity.State state) {
+        return state == StampIntegrity.State.SIGNATURE_INVALID
+            || state == StampIntegrity.State.CERTIFICATE_INVALID
+            || state == StampIntegrity.State.TRACE_EDITED;
+    }
+
+    static String integrityMessage(StampIntegrity.State state) {
+        return switch (state) {
+            case SIGNATURE_INVALID -> "⛔ Stamp corrupted — the .qtrace was edited after signing";
+            case CERTIFICATE_INVALID -> "⛔ Signed record missing or altered — chain of custody broken";
+            case TRACE_EDITED      -> "⛔ .qtrace edited — it no longer matches its signed record";
+            case DATA_CHANGED      -> "⚠ Work on this image changed since the last stamp";
+            default                -> "⚠ Satellite files changed since the last stamp";
+        };
+    }
+
+    // ── State read by the mini-panel ─────────────────────────────────────────
+
+    /** {@code l} runs on the FX thread after every state change pushed to this panel. */
+    void addStateListener(Runnable l) { stateListeners.add(l); }
+    private void fireState() { for (Runnable l : stateListeners) l.run(); }
+
+    boolean isRecordingActive() { return recordingActive; }
+    boolean isRecordReady()     { return recordReady; }
+    boolean isPushEnabled()     { return pushEnabled; }
+    StampIntegrity.State integrityState() { return integrityState; }
+    Runnable integrityOnWhy()   { return integrityOnWhy; }
+    void setKeepAliveOnClose(boolean keep) { keepAliveOnClose = keep; }
 
     private VBox buildCounter(String title, String color, Label numberLabel) {
         Label titleLbl = styledLabel(title, TEXT_MUTED, FontWeight.NORMAL, 10);
@@ -730,12 +764,12 @@ public class QTracePanel {
     }
 
     /** Wraps a vector icon factory (Color → Group, 24-unit viewBox) into a Node factory at toolbar icon size. */
-    private Function<Color, Node> iconFactory(Function<Color, Group> vector) {
+    Function<Color, Node> iconFactory(Function<Color, Group> vector) {
         return color -> scaledIcon(vector.apply(color), 18);
     }
 
     /** Adapter for a unicode glyph (Settings ⚙) that doesn't need a redrawn vector icon. */
-    private Function<Color, Node> glyphIcon(String glyph) {
+    Function<Color, Node> glyphIcon(String glyph) {
         return color -> {
             Label l = new Label(glyph);
             l.setFont(Font.font("System", FontWeight.BOLD, 16));
@@ -745,7 +779,7 @@ public class QTracePanel {
     }
 
     /** Icon-only button (no caption) — used for the Settings gear, top-right of the header. */
-    private Button iconOnlyButton(Function<Color, Node> iconFactory, String tooltipText, Color hoverColor) {
+    Button iconOnlyButton(Function<Color, Node> iconFactory, String tooltipText, Color hoverColor) {
         Button btn = new Button();
         btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
         btn.setTooltip(new Tooltip(tooltipText));
@@ -792,7 +826,7 @@ public class QTracePanel {
         return btn;
     }
 
-    private Group scaledIcon(Group inner, double targetSize) {
+    Group scaledIcon(Group inner, double targetSize) {
         inner.getTransforms().add(new Scale(targetSize / 24.0, targetSize / 24.0, 0, 0));
         return new Group(inner);
     }
@@ -851,7 +885,7 @@ public class QTracePanel {
 
     // ── Vector icons (24-unit viewBox, recolorable) ──────────────────────────────
 
-    private Group iconStamp(Color c) {
+    Group iconStamp(Color c) {
         Group g = new Group();
         g.getChildren().addAll(
             rect(3, 3, 13, 16, 4, c, 1.7),
@@ -864,7 +898,7 @@ public class QTracePanel {
         return g;
     }
 
-    private Group iconUpload(Color c) {
+    Group iconUpload(Color c) {
         Group g = new Group();
         Path cloud = new Path(
             new MoveTo(7, 17.3),
@@ -887,7 +921,7 @@ public class QTracePanel {
         return g;
     }
 
-    private Group iconReplay(Color c) {
+    Group iconReplay(Color c) {
         Group g = new Group();
         Path arc = new Path(new MoveTo(6.6, 5.4), new ArcTo(8, 8, 0, 15.3, 18.4, true, false));
         arc.setStroke(c);
@@ -902,7 +936,7 @@ public class QTracePanel {
         return g;
     }
 
-    private Group iconVersions(Color c) {
+    Group iconVersions(Color c) {
         Group g = new Group();
         Path page2 = new Path(
             new MoveTo(7, 8.8), new LineTo(18, 8.8), new LineTo(21, 11.8), new LineTo(21, 21.5), new LineTo(17.5, 21.5)
@@ -933,7 +967,7 @@ public class QTracePanel {
         return g;
     }
 
-    private Group iconReport(Color c) {
+    Group iconReport(Color c) {
         Group g = new Group();
         g.getChildren().addAll(
             rect(4.5, 3.5, 15, 18, 3, c, 1.6),
@@ -948,7 +982,7 @@ public class QTracePanel {
         return g;
     }
 
-    private Group iconImport(Color c) {
+    Group iconImport(Color c) {
         Group g = new Group();
         g.getChildren().addAll(
             circ(12, 12, 9.3, c, 1.7, false),
@@ -960,7 +994,7 @@ public class QTracePanel {
     }
 
     /** Circular "undo/refresh" arrow — reads as Reset at a glance, distinct from Import's downward arrow. */
-    private Group iconReset(Color c) {
+    Group iconReset(Color c) {
         Arc arc = new Arc(12, 12, 7.6, 7.6, 35, 275);
         arc.setType(ArcType.OPEN);
         arc.setFill(Color.TRANSPARENT);
@@ -979,7 +1013,7 @@ public class QTracePanel {
         return g;
     }
 
-    private Group iconDashboard(Color c) {
+    Group iconDashboard(Color c) {
         Group g = new Group();
         g.getChildren().addAll(
             rect(2, 3, 16, 14, 3, c, 1.5),
@@ -1116,8 +1150,10 @@ public class QTracePanel {
     public void setPushEnabled(boolean enabled) {
         if (btnPush == null) return;
         Platform.runLater(() -> {
+            pushEnabled = enabled;
             btnPush.setDisable(!enabled);
             btnPush.setOpacity(enabled ? 1.0 : 0.45);
+            fireState();
         });
     }
 
@@ -1138,6 +1174,7 @@ public class QTracePanel {
     /** Toggle recording indicator dot (status row) and the passive Recording/Paused badge (header). */
     public void setRecordingActive(boolean active) {
         Platform.runLater(() -> {
+            recordingActive = active;
             if (active) {
                 statusDot.setFill(Color.web(GREEN));
                 statusLabel.setText("Recording");
@@ -1155,14 +1192,17 @@ public class QTracePanel {
                 captureLabel.setTextFill(Color.web(TEXT_MUTED));
                 stopCaptureBlink();
             }
+            fireState();
         });
     }
 
     /** Enable the "Stamp" CTA once steps are captured. */
     public void setRecordReady(boolean ready) {
         Platform.runLater(() -> {
+            recordReady = ready;
             btnRecord.setDisable(!ready);
             btnRecord.setOpacity(ready ? 1.0 : 0.45);
+            fireState();
         });
     }
 
@@ -1190,6 +1230,7 @@ public class QTracePanel {
                 btnReset.setDisable(!has);
                 btnReset.setOpacity(has ? 1.0 : 0.45);
             }
+            fireState();
         });
     }
 }
