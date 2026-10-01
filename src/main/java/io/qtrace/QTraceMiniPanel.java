@@ -109,7 +109,7 @@ public final class QTraceMiniPanel {
         handle.setFont(Font.font("System", 16));
         handle.setTextFill(Color.web(QTracePanel.TEXT_MUTED));
         handle.setCursor(Cursor.MOVE);
-        handle.setTooltip(new Tooltip("Drag to move the panel"));
+        handle.setTooltip(tip("Drag to move the panel"));
         handle.setOnMousePressed(this::startDrag);
         handle.setOnMouseDragged(this::drag);
         handle.setOnMouseReleased(e -> endDrag());
@@ -133,8 +133,7 @@ public final class QTraceMiniPanel {
 
         if (!collapsed) {
             Color teal = Color.web(QTracePanel.CTA_TEAL);
-            stampBtn = panel.iconOnlyButton(c -> panel.scaledIcon(panel.iconStamp(teal), 18),
-                QTraceI18n.t("btn.stamp.tooltip"), teal);
+            stampBtn = button(c -> panel.scaledIcon(panel.iconStamp(teal), 18), "btn.stamp.caption", teal);
             stampBtn.setOnAction(e -> controller.recordTrace());
             nodes.add(stampBtn);
 
@@ -142,16 +141,16 @@ public final class QTraceMiniPanel {
             if (QTracePluginManager.isEntitled()) {
                 Color workspace = Color.web(QTracePanel.GROUP_WORKSPACE);
                 nodes.add(separator());
-                uploadBtn = button(panel.iconFactory(panel::iconUpload), "btn.upload.tooltip", workspace);
+                uploadBtn = button(panel.iconFactory(panel::iconUpload), "btn.upload.caption", workspace);
                 uploadBtn.setOnAction(e -> controller.pushToWorkspace());
-                Button replayBtn = button(panel.iconFactory(panel::iconReplay), "btn.replay.tooltip", workspace);
+                Button replayBtn = button(panel.iconFactory(panel::iconReplay), "btn.replay.caption", workspace);
                 replayBtn.setOnAction(e -> controller.openReplayDialog());
                 nodes.add(uploadBtn);
                 nodes.add(replayBtn);
                 nodes.add(separator());
-                Button versionsBtn = button(panel.iconFactory(panel::iconVersions), "btn.versions.tooltip", workspace);
+                Button versionsBtn = button(panel.iconFactory(panel::iconVersions), "btn.versions.caption", workspace);
                 versionsBtn.setOnAction(e -> controller.showCommitGraph());
-                Button reportBtn = button(panel.iconFactory(panel::iconReport), "btn.report.tooltip", workspace);
+                Button reportBtn = button(panel.iconFactory(panel::iconReport), "btn.report.caption", workspace);
                 reportBtn.setOnAction(e -> controller.generateActivityReport());
                 nodes.add(versionsBtn);
                 nodes.add(reportBtn);
@@ -159,11 +158,11 @@ public final class QTraceMiniPanel {
 
             Color tools = Color.web(QTracePanel.GROUP_TOOLS);
             nodes.add(separator());
-            Button dashboardBtn = button(panel.iconFactory(panel::iconDashboard), "btn.dashboard.tooltip", tools);
+            Button dashboardBtn = button(panel.iconFactory(panel::iconDashboard), "btn.dashboard.caption", tools);
             dashboardBtn.setOnAction(e -> controller.showDashboard());
-            Button importBtn = button(panel.iconFactory(panel::iconImport), "btn.import.tooltip", tools);
+            Button importBtn = button(panel.iconFactory(panel::iconImport), "btn.import.caption", tools);
             importBtn.setOnAction(e -> controller.startBatchExport());
-            resetBtn = button(panel.iconFactory(panel::iconReset), "btn.reset.tooltip", Color.web(QTracePanel.RED));
+            resetBtn = button(panel.iconFactory(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
             resetBtn.setOnAction(e -> panel.confirmReset());
             nodes.add(dashboardBtn);
             nodes.add(importBtn);
@@ -171,10 +170,9 @@ public final class QTraceMiniPanel {
 
             Color admin = Color.web(QTracePanel.GROUP_ADMIN);
             nodes.add(separator());
-            Button settingsBtn = button(panel.glyphIcon("⚙"), "btn.settings.tooltip", admin);
+            Button settingsBtn = titled(panel.glyphIcon("⚙"), "Settings", admin);
             settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
-            Button expandBtn = panel.iconOnlyButton(panel.glyphIcon("⤢"),
-                "Open the full panel (counters, activity log)", admin);
+            Button expandBtn = titled(panel.glyphIcon("⤢"), "Full panel", admin);
             expandBtn.setOnAction(e -> panel.show());
             nodes.add(settingsBtn);
             nodes.add(expandBtn);
@@ -183,8 +181,8 @@ public final class QTraceMiniPanel {
             resetBtn = null;
         }
 
-        Button collapseBtn = panel.iconOnlyButton(panel.glyphIcon(collapsed ? "▾" : "▴"),
-            collapsed ? "Show the panel's buttons" : "Fold the panel", Color.web(QTracePanel.GROUP_ADMIN));
+        Button collapseBtn = titled(panel.glyphIcon(collapsed ? "▾" : "▴"),
+            collapsed ? "Unfold" : "Fold", Color.web(QTracePanel.GROUP_ADMIN));
         collapseBtn.setOnAction(e -> setCollapsed(!collapsed));
         nodes.add(collapseBtn);
 
@@ -196,7 +194,7 @@ public final class QTraceMiniPanel {
     private void refresh() {
         boolean recording = panel.isRecordingActive();
         captureDot.setFill(Color.web(recording ? QTracePanel.RED : QTracePanel.TEXT_MUTED));
-        Tooltip.install(captureDot.getParent(), new Tooltip(recording ? "Recording" : "Paused"));
+        Tooltip.install(captureDot.getParent(), tip(recording ? "Recording" : "Paused"));
         if (recording && captureBlink == null) startBlink();
         else if (!recording) stopBlink();
 
@@ -208,7 +206,7 @@ public final class QTraceMiniPanel {
             boolean corrupted = QTracePanel.integrityCorrupted(state);
             integrityBadge.setText(corrupted ? "⛔" : "⚠");
             integrityBadge.setTextFill(Color.web(corrupted ? QTracePanel.RED : QTracePanel.PEACH));
-            integrityBadge.setTooltip(new Tooltip(QTracePanel.integrityMessage(state) + " — click for details"));
+            integrityBadge.setTooltip(tip(QTracePanel.integrityMessage(state) + " — click for details"));
         }
 
         enable(stampBtn, panel.isRecordReady());
@@ -228,8 +226,22 @@ public final class QTraceMiniPanel {
         rebuild();
     }
 
-    private Button button(java.util.function.Function<Color, Node> icon, String tooltipKey, Color hover) {
-        return panel.iconOnlyButton(icon, QTraceI18n.t(tooltipKey), hover);
+    /** A button named by its panel caption (i18n key) — the name shows the moment it is hovered. */
+    private Button button(java.util.function.Function<Color, Node> icon, String captionKey, Color hover) {
+        return titled(icon, QTraceI18n.t(captionKey), hover);
+    }
+
+    private Button titled(java.util.function.Function<Color, Node> icon, String title, Color hover) {
+        Button b = panel.iconOnlyButton(icon, title, hover);
+        b.setTooltip(tip(title));
+        return b;
+    }
+
+    /** Icons carry no caption here, so their name must not wait for the usual tooltip delay. */
+    private static Tooltip tip(String text) {
+        Tooltip t = new Tooltip(text);
+        t.setShowDelay(Duration.ZERO);
+        return t;
     }
 
     private static Region separator() {
