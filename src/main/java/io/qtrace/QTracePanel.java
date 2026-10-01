@@ -114,7 +114,7 @@ public class QTracePanel {
     private Timeline progressTimeline;
 
     // What the controller last pushed — read by the mini-panel (QTraceMiniPanel), a view over this panel.
-    private boolean recordingActive, recordReady, pushEnabled;
+    private boolean recordingActive, recordReady, pushEnabled, pushInProgress;
     private StampIntegrity.State integrityState = StampIntegrity.State.NO_STAMP;
     private Runnable integrityOnWhy;
     private final java.util.List<Runnable> stateListeners = new java.util.ArrayList<>();
@@ -579,6 +579,7 @@ public class QTracePanel {
     boolean isRecordingActive() { return recordingActive; }
     boolean isRecordReady()     { return recordReady; }
     boolean isPushEnabled()     { return pushEnabled; }
+    boolean isPushInProgress()  { return pushInProgress; }
     StampIntegrity.State integrityState() { return integrityState; }
     Runnable integrityOnWhy()   { return integrityOnWhy; }
     void setKeepAliveOnClose(boolean keep) { keepAliveOnClose = keep; }
@@ -1132,6 +1133,8 @@ public class QTracePanel {
             }));
             progressTimeline.setCycleCount(Timeline.INDEFINITE);
             progressTimeline.play();
+            pushInProgress = true;
+            fireState();
         });
     }
 
@@ -1143,6 +1146,8 @@ public class QTracePanel {
                 progressTimeline = null;
             }
             progressLabel.setVisible(false);
+            pushInProgress = false;
+            fireState();
         });
     }
 

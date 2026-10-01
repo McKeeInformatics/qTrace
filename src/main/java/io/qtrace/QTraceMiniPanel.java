@@ -58,6 +58,8 @@ public final class QTraceMiniPanel {
     private Timeline captureBlink;
     private Label integrityBadge;
     private Button stampBtn, uploadBtn, resetBtn;
+    private StackPane uploadSlot; // the Upload button, or a spinner while a push is running
+    private Node uploadSpinner;
 
     /** Docks the column over the viewers; null if QuPath's layout isn't one {@link ViewerOverlay} knows. FX thread. */
     public static QTraceMiniPanel dock(QuPathGUI qupath, QTraceController controller, QTracePanel panel) {
@@ -103,6 +105,7 @@ public final class QTraceMiniPanel {
     public void rebuild() {
         stopBlink();
         uploadBtn = null;
+        uploadSlot = null;
         List<Node> nodes = new ArrayList<>();
 
         Label handle = new Label("⠿");
@@ -145,7 +148,9 @@ public final class QTraceMiniPanel {
                 uploadBtn.setOnAction(e -> controller.pushToWorkspace());
                 Button replayBtn = button(panel.iconFactory(panel::iconReplay), "btn.replay.caption", workspace);
                 replayBtn.setOnAction(e -> controller.openReplayDialog());
-                nodes.add(uploadBtn);
+                uploadSlot = new StackPane(uploadBtn);
+                uploadSpinner = uploadSpinner();
+                nodes.add(uploadSlot);
                 nodes.add(replayBtn);
                 nodes.add(separator());
                 Button versionsBtn = button(panel.iconFactory(panel::iconVersions), "btn.versions.caption", workspace);
@@ -211,6 +216,10 @@ public final class QTraceMiniPanel {
 
         enable(stampBtn, panel.isRecordReady());
         enable(uploadBtn, panel.isPushEnabled());
+        if (uploadSlot != null) {
+            Node shown = panel.isPushInProgress() ? uploadSpinner : uploadBtn;
+            if (uploadSlot.getChildren().get(0) != shown) uploadSlot.getChildren().setAll(shown);
+        }
         enable(resetBtn, controller.hasActiveImage());
     }
 
@@ -242,6 +251,19 @@ public final class QTraceMiniPanel {
         Tooltip t = new Tooltip(text);
         t.setShowDelay(Duration.ZERO);
         return t;
+    }
+
+    /** Stands in for the Upload button while a push runs — nothing to click, just what is going on. */
+    private static Node uploadSpinner() {
+        javafx.scene.control.ProgressIndicator spin = new javafx.scene.control.ProgressIndicator();
+        spin.setPrefSize(18, 18);
+        spin.setMaxSize(18, 18);
+        spin.setMouseTransparent(true); // the box below takes the hover
+        spin.setStyle("-fx-progress-color: " + QTracePanel.GROUP_WORKSPACE + ";");
+        StackPane box = new StackPane(spin);
+        box.setPadding(new Insets(3));
+        Tooltip.install(box, tip("Upload in progress…"));
+        return box;
     }
 
     private static Region separator() {
