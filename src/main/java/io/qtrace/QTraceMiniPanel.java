@@ -174,8 +174,13 @@ public final class QTraceMiniPanel {
         javafx.animation.PauseTransition single = new javafx.animation.PauseTransition(Duration.millis(260));
         // runLater: a dialog can't be shown-and-waited from inside an animation callback.
         single.setOnFinished(e -> javafx.application.Platform.runLater(controller::startWork));
+        // With a project open (recording or paused), a double-click closes the project — the
+        // counterpart of ▶ Start. QuPath asks about unsaved work, as with its own menu.
         dotBox.setOnMouseClicked(e -> {
-            if (!startIcon.isVisible()) return;
+            if (!startIcon.isVisible()) {
+                if (e.getClickCount() == 2) controller.closeProject();
+                return;
+            }
             if (e.getClickCount() >= 2) { single.stop(); controller.resumeLastWork(); }
             else single.playFromStart();
         });
@@ -260,7 +265,8 @@ public final class QTraceMiniPanel {
         captureDot.setVisible(recording);
         pauseIcon.setVisible(!recording && !start);
         statusBox.setCursor(start ? Cursor.HAND : null);
-        Tooltip.install(statusBox, tip(start ? "Start — click: recent projects · double-click: last project and image" : recording ? "Recording" : "Paused"));
+        Tooltip.install(statusBox, tip(start ? "Start — click: recent projects · double-click: last project and image"
+            : (recording ? "Recording" : "Paused") + " — double-click: close the project"));
         if (recording && captureBlink == null) startBlink();
         else if (!recording) stopBlink();
 

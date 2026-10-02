@@ -27,6 +27,7 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.commands.Commands;
 import qupath.lib.gui.commands.InteractiveObjectImporter;
 import qupath.lib.gui.scripting.ScriptEditor;
 import qupath.lib.gui.tools.GuiTools;
@@ -643,6 +644,15 @@ public class QTraceController {
     /** No project is open yet — the state the mini-panel shows as ▶ Start. */
     public boolean needsProject() {
         return qupath.getProject() == null && qupath.getImageData() == null;
+    }
+
+    /**
+     * Mini-panel status icon, double-clicked with a project open: closes the image and the
+     * project, the way QuPath's File › Project › Close project does (it asks about unsaved work).
+     */
+    public void closeProject() {
+        if (qupath.getProject() == null && qupath.getImageData() == null) return;
+        Commands.closeProject(qupath);
     }
 
     /** Mini-panel ▶ Start: pick a recent project (or any other) to begin working. A toggle. */
