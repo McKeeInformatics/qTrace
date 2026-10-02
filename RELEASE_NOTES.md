@@ -3,6 +3,9 @@
 ### New — A mini-panel on the image
 qTrace now opens as a compact column docked on the viewer: the capture indicator (a blinking red dot while recording, grey pause bars otherwise) and the panel's buttons, each showing its name as soon as you hover it. **⤢** opens the full panel, **✕** takes the column off the image and **⠿** moves it. While a push to your workspace runs, Upload is replaced by a spinner. The panel now opens when QuPath starts; untick **Settings › Appearance › Show the panel when QuPath starts** to open it on demand only. The **Version(s)** button has a new icon, a small commit graph.
 
+### New — UX design
+A design pass across qTrace: every dialog now shares the look of Settings, panel buttons are toggles (a second click closes what the button opened), **Esc** cancels, **⤢ / ⤡** switch between the mini-panel and the full panel, and **▶ Start** on the mini-panel reopens a recent project. Stamping unsaved work offers **Save now & Continue**.
+
 ### New — Take an instruction out of the replay
 In **⑃ Version(s)**, every replayable instruction has a **−** button that takes it out of the replay, and **+** puts it back. The instruction stays in the trace — dimmed, labelled "taken out of the replay", with who did it and when — but the Player never runs it: not step by step, not in continuous play, not in batch, and it is left out of the replay scripts. If you touch nothing, every instruction is replayed as before. Anything done since the last stamp can be changed; a stamp freezes the choice. By default the Player does not list these instructions; untick **Settings › Preferences › Hide the instructions taken out of the replay in the Player** to see them greyed out.
 
