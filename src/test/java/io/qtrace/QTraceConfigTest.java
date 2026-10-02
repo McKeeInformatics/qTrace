@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -25,6 +27,19 @@ class QTraceConfigTest {
         assertTrue(cfg.isShowPanelAtStartup());
         cfg.setShowPanelAtStartup(false);
         assertEquals(false, gson.fromJson(gson.toJson(cfg), QTraceConfig.class).isShowPanelAtStartup());
+    }
+
+    @Test
+    void installId_isMadeOnce_andSurvivesTheConfigFile() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        QTraceConfig cfg = gson.fromJson("{}", QTraceConfig.class);
+        assertFalse(cfg.hasInstallId());
+        String id = cfg.installId();
+        assertTrue(id.matches("[0-9a-f-]{36}"), id);
+        assertTrue(cfg.hasInstallId());
+        assertEquals(id, cfg.installId());
+        assertEquals(id, gson.fromJson(gson.toJson(cfg), QTraceConfig.class).installId());
+        assertNotEquals(id, gson.fromJson("{}", QTraceConfig.class).installId());   // another machine
     }
 
     @Test

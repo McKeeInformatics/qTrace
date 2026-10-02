@@ -38,7 +38,9 @@ import java.util.concurrent.TimeUnit;
  * and attached to a bug report, so a problem can be told from its environment: OS, processor, memory, graphics, Java, disk space — as short readable
  * strings, keyed for display.
  *
- * Deliberately never the machine name, the user's login, a network address or a file path:
+ * The workstation is told apart from the account's other ones by a random installation id
+ * ({@link QTraceConfig#installId}). Deliberately never the machine name, the user's login, a
+ * network address or a file path:
  * the report ends up in a GitHub issue. File lists are names only.
  *
  * {@link #collect} may run a system command (processor / graphics card model) — call it off
@@ -105,8 +107,15 @@ final class SystemInfo {
             if (!qtjars.isEmpty()) system.addProperty("qtraceModules", String.join(", ", qtjars));
             extensionFiles = fileNames(modules.getParent(), ".jar");
         }
-        return environment(QTraceController.VERSION, qupathVersion, System.getProperty("os.name"),
+        JsonObject env = environment(QTraceController.VERSION, qupathVersion, System.getProperty("os.name"),
             system, extensions, extensionFiles);
+        // Which of the account's workstations this is: a random id made once per installation,
+        // not derived from the machine.
+        QTraceConfig cfg = QTraceConfig.get();
+        boolean fresh = !cfg.hasInstallId();
+        env.addProperty("installId", cfg.installId());
+        if (fresh) cfg.save();
+        return env;
     }
 
     /** "2 screens: 2560x1440 @1.0x, 1920x1080 @1.5x" — size and scale explain most display bugs. JavaFX thread. */

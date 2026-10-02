@@ -92,6 +92,10 @@ public class QTraceConfig {
     private Boolean autosaveEnabled;
     private Boolean hideSkippedReplaySteps;
 
+    // Random id of this qTrace installation (this user account on this machine), made once.
+    // Lets qtrace.ca tell an account's workstations apart without the machine's name.
+    private String installId;
+
     // Panel: Activity log folded — null = unfolded
     private Boolean panelLogCollapsed;
     // Panel: opened when QuPath starts — null = yes (on by default)
@@ -306,6 +310,12 @@ public class QTraceConfig {
     public boolean isAutosaveEnabled()                   { return autosaveEnabled == null || autosaveEnabled; }
     public void    setAutosaveEnabled(boolean b)         { this.autosaveEnabled = b; }
     /** Player: leave the instructions the author took out of the replay off the list (default) instead of greyed. */
+    public boolean hasInstallId()                        { return installId != null && !installId.isBlank(); }
+    /** This installation's id, made on first use — the caller saves the config when it was new. */
+    public String  installId() {
+        if (!hasInstallId()) installId = java.util.UUID.randomUUID().toString();
+        return installId;
+    }
     public boolean isHideSkippedReplaySteps()            { return hideSkippedReplaySteps == null || hideSkippedReplaySteps; }
     public void    setHideSkippedReplaySteps(boolean b)  { this.hideSkippedReplaySteps = b; }
 
