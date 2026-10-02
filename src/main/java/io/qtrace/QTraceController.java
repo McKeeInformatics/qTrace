@@ -814,15 +814,30 @@ public class QTraceController {
     }
 
     /** Non-blocking info alert shown when the commit graph has nothing to display. */
+    private javafx.scene.control.Alert graphInfo; // the open "this needs an image…" notice, if any
+
+    /**
+     * Notice shown when Version(s) / Report has nothing to work on. One at a time, and not modal:
+     * clicking the button again closes it (a toggle, like the windows these buttons open).
+     */
     private void showGraphInfo(String message) {
         Platform.runLater(() -> {
+            if (graphInfo != null && graphInfo.isShowing()) { graphInfo.close(); return; }
             javafx.scene.control.Alert alert =
                 new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
-            alert.setTitle(QTraceI18n.t("graph.window.title"));
-            alert.setHeaderText(null);
-            alert.setContentText(message);
+            String windowTitle = QTraceI18n.t("graph.window.title");
+            alert.setTitle(windowTitle);
             if (qupath != null && qupath.getStage() != null)
                 alert.initOwner(qupath.getStage());
+            alert.initModality(javafx.stage.Modality.NONE);
+            DialogLook.apply(alert, windowTitle.replace("qTrace — ", ""), null, DialogLook.text(message),
+                ButtonType.OK, DialogLook.BLUE, ButtonType.CANCEL);
+            // No Cancel button here: Esc closes the notice, like OK.
+            alert.getDialogPane().addEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+                if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) { alert.close(); e.consume(); }
+            });
+            graphInfo = alert;
+            alert.setOnHidden(e -> { if (graphInfo == alert) graphInfo = null; });
             alert.show();
         });
     }
