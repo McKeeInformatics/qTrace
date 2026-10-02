@@ -206,15 +206,15 @@ public final class QTraceMiniPanel {
         // Same glyph and look as the mini-player's ⤢.
         Button expandBtn = boxed("⤢", "Full panel");
         expandBtn.setOnAction(e -> panel.show());
-        nodes.add(settingsBtn);
-        nodes.add(expandBtn);
-
         // Smaller than the rest: not part of the daily workflow, but always one click away.
         Button reportBtn = titled(QTraceMiniPanel::reportIcon,
             QTraceI18n.t("report.menu").replace("...", ""), admin);
         reportBtn.setOnAction(e -> IssueReportDialog.show(qupath));
-        VBox.setMargin(reportBtn, new Insets(4, 0, 0, 0));
+        nodes.add(settingsBtn);
         nodes.add(reportBtn);
+        // The reduce / enlarge button is always the last one, at the very bottom.
+        VBox.setMargin(expandBtn, new Insets(4, 0, 0, 0));
+        nodes.add(expandBtn);
 
         column.getChildren().setAll(nodes);
         refresh();
