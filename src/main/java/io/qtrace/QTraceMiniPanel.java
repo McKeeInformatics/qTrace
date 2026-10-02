@@ -31,7 +31,7 @@ import java.util.prefs.Preferences;
  * image by its ⠿ handle — position and folded state are remembered across sessions:
  *
  * <pre>
- *  ⠿  ●  [⚠]  Stamp │ Upload Replay │ Version(s) Report │ Dashboard Import Reset │ ⚙ ⤢ ▴
+ *  ⠿ ✕  ●  [⚠]  Stamp │ Upload Replay │ Version(s) Report │ Dashboard Import Reset │ ⚙ ⤢ ▴
  * </pre>
  *
  * A view over a {@link QTracePanel} built but not shown — same state, same actions: ⤢ shows
@@ -40,6 +40,8 @@ import java.util.prefs.Preferences;
 public final class QTraceMiniPanel {
 
     private static final double MARGIN = 8; // kept between the column and the viewers' edges
+    // The top row (handle + close) sets the column's width; icons are sized to fill it.
+    private static final double ICON = 26, GLYPH = 22;
     private static final Preferences PREFS = Preferences.userNodeForPackage(QTraceMiniPanel.class);
     private static final String PREF_X = "miniPanelX", PREF_Y = "miniPanelY", PREF_COLLAPSED = "miniPanelCollapsed";
 
@@ -93,6 +95,26 @@ public final class QTraceMiniPanel {
 
     public boolean isDocked() { return overlay != null; }
 
+    /** ✕: takes the column off the image; "Panel" brings it back. The full window, if open, stays. */
+    private void close() {
+        if (overlay == null) return;
+        overlay.undock();
+        overlay = null;
+        stopBlink();
+        panel.setKeepAliveOnClose(false);
+        panel.releaseIfHidden();
+    }
+
+    /** Puts a closed column back over the viewers; false if QuPath's layout isn't one the overlay knows. */
+    public boolean redock() {
+        if (overlay != null) return true;
+        overlay = ViewerOverlay.dock(qupath, layer);
+        if (overlay == null) return false;
+        panel.setKeepAliveOnClose(true);
+        refresh();
+        return true;
+    }
+
     /** The column itself — for the screenshot harness. */
     public VBox column() { return column; }
 
@@ -116,17 +138,26 @@ public final class QTraceMiniPanel {
         handle.setOnMousePressed(this::startDrag);
         handle.setOnMouseDragged(this::drag);
         handle.setOnMouseReleased(e -> endDrag());
-        nodes.add(handle);
+
+        Button closeBtn = new Button("✕");
+        closeBtn.setFont(Font.font("System", 10));
+        closeBtn.setTextFill(Color.web(QTracePanel.TEXT_MUTED));
+        closeBtn.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 1 3 1 3;");
+        closeBtn.setTooltip(tip("Close"));
+        closeBtn.setOnAction(e -> close());
+        javafx.scene.layout.HBox top = new javafx.scene.layout.HBox(4, handle, closeBtn);
+        top.setAlignment(Pos.CENTER);
+        nodes.add(top);
 
         // Passive capture status — red (blinking) while recording, grey when paused.
-        captureDot = new Circle(4.5, Color.web(QTracePanel.TEXT_MUTED));
+        captureDot = new Circle(6, Color.web(QTracePanel.TEXT_MUTED));
         StackPane dotBox = new StackPane(captureDot);
         dotBox.setPadding(new Insets(3, 0, 3, 0));
         nodes.add(dotBox);
 
         // Integrity alert for the open image — hidden unless its stamp no longer holds.
         integrityBadge = new Label();
-        integrityBadge.setFont(Font.font("System", 14));
+        integrityBadge.setFont(Font.font("System", 18));
         integrityBadge.setCursor(Cursor.HAND);
         integrityBadge.setOnMouseClicked(e -> {
             Runnable why = panel.integrityOnWhy();
@@ -136,7 +167,7 @@ public final class QTraceMiniPanel {
 
         if (!collapsed) {
             Color teal = Color.web(QTracePanel.CTA_TEAL);
-            stampBtn = button(c -> panel.scaledIcon(panel.iconStamp(teal), 18), "btn.stamp.caption", teal);
+            stampBtn = button(c -> panel.scaledIcon(panel.iconStamp(teal), ICON), "btn.stamp.caption", teal);
             stampBtn.setOnAction(e -> controller.recordTrace());
             nodes.add(stampBtn);
 
@@ -144,18 +175,18 @@ public final class QTraceMiniPanel {
             if (QTracePluginManager.isEntitled()) {
                 Color workspace = Color.web(QTracePanel.GROUP_WORKSPACE);
                 nodes.add(separator());
-                uploadBtn = button(panel.iconFactory(panel::iconUpload), "btn.upload.caption", workspace);
+                uploadBtn = button(icon(panel::iconUpload), "btn.upload.caption", workspace);
                 uploadBtn.setOnAction(e -> controller.pushToWorkspace());
-                Button replayBtn = button(panel.iconFactory(panel::iconReplay), "btn.replay.caption", workspace);
+                Button replayBtn = button(icon(panel::iconReplay), "btn.replay.caption", workspace);
                 replayBtn.setOnAction(e -> controller.openReplayDialog());
                 uploadSlot = new StackPane(uploadBtn);
                 uploadSpinner = uploadSpinner();
                 nodes.add(uploadSlot);
                 nodes.add(replayBtn);
                 nodes.add(separator());
-                Button versionsBtn = button(panel.iconFactory(panel::iconVersions), "btn.versions.caption", workspace);
+                Button versionsBtn = button(icon(panel::iconVersions), "btn.versions.caption", workspace);
                 versionsBtn.setOnAction(e -> controller.showCommitGraph());
-                Button reportBtn = button(panel.iconFactory(panel::iconReport), "btn.report.caption", workspace);
+                Button reportBtn = button(icon(panel::iconReport), "btn.report.caption", workspace);
                 reportBtn.setOnAction(e -> controller.generateActivityReport());
                 nodes.add(versionsBtn);
                 nodes.add(reportBtn);
@@ -163,11 +194,11 @@ public final class QTraceMiniPanel {
 
             Color tools = Color.web(QTracePanel.GROUP_TOOLS);
             nodes.add(separator());
-            Button dashboardBtn = button(panel.iconFactory(panel::iconDashboard), "btn.dashboard.caption", tools);
+            Button dashboardBtn = button(icon(panel::iconDashboard), "btn.dashboard.caption", tools);
             dashboardBtn.setOnAction(e -> controller.showDashboard());
-            Button importBtn = button(panel.iconFactory(panel::iconImport), "btn.import.caption", tools);
+            Button importBtn = button(icon(panel::iconImport), "btn.import.caption", tools);
             importBtn.setOnAction(e -> controller.startBatchExport());
-            resetBtn = button(panel.iconFactory(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
+            resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
             resetBtn.setOnAction(e -> panel.confirmReset());
             nodes.add(dashboardBtn);
             nodes.add(importBtn);
@@ -175,9 +206,9 @@ public final class QTraceMiniPanel {
 
             Color admin = Color.web(QTracePanel.GROUP_ADMIN);
             nodes.add(separator());
-            Button settingsBtn = titled(panel.glyphIcon("⚙"), "Settings", admin);
+            Button settingsBtn = titled(glyph("⚙"), "Settings", admin);
             settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
-            Button expandBtn = titled(panel.glyphIcon("⤢"), "Full panel", admin);
+            Button expandBtn = titled(glyph("⤢"), "Full panel", admin);
             expandBtn.setOnAction(e -> panel.show());
             nodes.add(settingsBtn);
             nodes.add(expandBtn);
@@ -186,7 +217,7 @@ public final class QTraceMiniPanel {
             resetBtn = null;
         }
 
-        Button collapseBtn = titled(panel.glyphIcon(collapsed ? "▾" : "▴"),
+        Button collapseBtn = titled(glyph(collapsed ? "▾" : "▴"),
             collapsed ? "Unfold" : "Fold", Color.web(QTracePanel.GROUP_ADMIN));
         collapseBtn.setOnAction(e -> setCollapsed(!collapsed));
         nodes.add(collapseBtn);
@@ -235,6 +266,19 @@ public final class QTraceMiniPanel {
         rebuild();
     }
 
+    private java.util.function.Function<Color, Node> icon(java.util.function.Function<Color, javafx.scene.Group> vector) {
+        return c -> panel.scaledIcon(vector.apply(c), ICON);
+    }
+
+    private static java.util.function.Function<Color, Node> glyph(String glyph) {
+        return c -> {
+            Label l = new Label(glyph);
+            l.setFont(Font.font("System", javafx.scene.text.FontWeight.BOLD, GLYPH));
+            l.setTextFill(c);
+            return l;
+        };
+    }
+
     /** A button named by its panel caption (i18n key) — the name shows the moment it is hovered. */
     private Button button(java.util.function.Function<Color, Node> icon, String captionKey, Color hover) {
         return titled(icon, QTraceI18n.t(captionKey), hover);
@@ -256,8 +300,8 @@ public final class QTraceMiniPanel {
     /** Stands in for the Upload button while a push runs — nothing to click, just what is going on. */
     private static Node uploadSpinner() {
         javafx.scene.control.ProgressIndicator spin = new javafx.scene.control.ProgressIndicator();
-        spin.setPrefSize(18, 18);
-        spin.setMaxSize(18, 18);
+        spin.setPrefSize(ICON, ICON);
+        spin.setMaxSize(ICON, ICON);
         spin.setMouseTransparent(true); // the box below takes the hover
         spin.setStyle("-fx-progress-color: " + QTracePanel.GROUP_WORKSPACE + ";");
         StackPane box = new StackPane(spin);
@@ -268,9 +312,9 @@ public final class QTraceMiniPanel {
 
     private static Region separator() {
         Region sep = new Region();
-        sep.setPrefSize(18, 1);
+        sep.setPrefSize(ICON, 1);
         sep.setMinHeight(1);
-        sep.setMaxSize(18, 1);
+        sep.setMaxSize(ICON, 1);
         sep.setStyle("-fx-background-color: " + QTracePanel.BORDER + ";");
         VBox.setMargin(sep, new Insets(3, 0, 3, 0));
         return sep;

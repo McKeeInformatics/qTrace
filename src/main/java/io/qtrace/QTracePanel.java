@@ -584,6 +584,11 @@ public class QTracePanel {
     Runnable integrityOnWhy()   { return integrityOnWhy; }
     void setKeepAliveOnClose(boolean keep) { keepAliveOnClose = keep; }
 
+    /** The mini-panel was closed: with no window showing either, the panel is gone — stop feeding its log. */
+    void releaseIfHidden() {
+        if (!stage.isShowing()) ActivityLog.detach(logSink);
+    }
+
     private VBox buildCounter(String title, String color, Label numberLabel) {
         Label titleLbl = styledLabel(title, TEXT_MUTED, FontWeight.NORMAL, 10);
         numberLabel.setFont(Font.font("System", FontWeight.BOLD, 22));
