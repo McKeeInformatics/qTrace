@@ -64,8 +64,14 @@ public final class ProvenanceDiffDialog {
 
     private record Section(String title, String summary, String summaryColor, List<Finding> findings) {}
 
+    private static Stage current; // the open "Why?" window, if any — FX thread only
+
+    /** Opens the window — only one at a time: called while it is open, it closes it (a toggle). */
     public static void show(Window owner, JsonObject root, File qtraceFile, ProjectImageEntry<?> entry) {
+        if (current != null && current.isShowing()) { current.close(); return; }
         Stage stage = new Stage();
+        current = stage;
+        stage.setOnHidden(e -> { if (current == stage) current = null; });
         if (owner != null) stage.initOwner(owner);
         stage.setTitle("qTrace — Why does this image differ from its stamp?");
         VBox content = new VBox(10);
