@@ -71,9 +71,20 @@ public final class IssueReportDialog {
 
     private static final int BUG_INDEX = 1; // position of "Bug" in the type list
 
+    private static Stage current; // the report being written, shown or hidden — FX thread only
+
     private IssueReportDialog() {}
 
+    /**
+     * Opens the dialog — or, when it is already open, hides it: a toggle. What was typed is
+     * kept and comes back at the next call, until the report is sent or cancelled.
+     */
     public static void show(QuPathGUI qupath) {
+        if (current != null) {
+            if (current.isShowing()) current.hide();
+            else { current.show(); current.toFront(); }
+            return;
+        }
         if (!QTracePluginManager.isEntitled() || QTraceUpdater.licenseJwt() == null) {
             Alert a = new Alert(Alert.AlertType.INFORMATION);
             a.setTitle(QTraceI18n.t("report.title"));
@@ -86,8 +97,11 @@ public final class IssueReportDialog {
 
         Stage dlg = new Stage();
         if (qupath != null) dlg.initOwner(qupath.getStage());
-        dlg.initModality(Modality.WINDOW_MODAL);
+        // Not modal: the panel button that opened it must stay clickable to hide it again.
+        dlg.initModality(Modality.NONE);
         dlg.setTitle(QTraceI18n.t("report.title"));
+        Runnable discard = () -> { current = null; dlg.close(); };
+        dlg.setOnCloseRequest(e -> current = null);
 
         TextField tfTitle = new TextField();
         tfTitle.setPromptText(QTraceI18n.t("report.field.title"));
@@ -201,7 +215,7 @@ public final class IssueReportDialog {
         Button btnCancel = new Button(QTraceI18n.t("report.cancel"));
         btnCancel.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;"
             + "-fx-text-fill: " + TEXT_SUB + "; -fx-cursor: hand; -fx-font-size: 12;");
-        btnCancel.setOnAction(e -> dlg.close());
+        btnCancel.setOnAction(e -> discard.run());
         ProgressIndicator spinner = new ProgressIndicator();
         spinner.setPrefSize(18, 18);
         spinner.setStyle("-fx-progress-color: " + BLUE + ";");
@@ -243,8 +257,8 @@ public final class IssueReportDialog {
                         a.setTitle(QTraceI18n.t("report.title"));
                         a.setHeaderText(null);
                         a.setContentText(QTraceI18n.t("report.sent").replace("{0}", String.valueOf(r.issueNumber())));
-                        a.initOwner(dlg);
-                        dlg.close();
+                        if (qupath != null && qupath.getStage() != null) a.initOwner(qupath.getStage());
+                        discard.run();
                         a.show();
                     } else {
                         btnSend.setDisable(false);
@@ -289,6 +303,7 @@ public final class IssueReportDialog {
         dlg.setScene(scene);
         Image logo = QTracePanel.loadLogo();
         if (logo != null) dlg.getIcons().add(logo);
+        current = dlg;
         dlg.show();
     }
 

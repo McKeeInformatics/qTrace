@@ -64,13 +64,18 @@ public class QTraceSettingsDialog {
 
     public static void show(QuPathGUI qupath) { show(qupath.getStage(), qupath.getProject()); }
 
+    private static Stage current; // the open Settings window, if any — FX thread only
+
+    /** Opens Settings — or, when it is already open, closes it without saving (a toggle, like Cancel). */
     public static void show(Stage owner, Project<?> project) {
+        if (current != null && current.isShowing()) { current.close(); return; }
         Path projectBaseDir = (project != null && project.getPath() != null)
             ? project.getPath().getParent() : null;
 
         Stage dlg = new Stage();
         dlg.initOwner(owner);
-        dlg.initModality(Modality.WINDOW_MODAL);
+        // Not modal: the panel button that opened Settings must stay clickable to close it again.
+        dlg.initModality(Modality.NONE);
         dlg.setTitle("QTrace — Settings");
         dlg.setResizable(false);
 
@@ -628,7 +633,11 @@ public class QTraceSettingsDialog {
             if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) { btnCancel.fire(); e.consume(); }
         });
         dlg.setScene(scene);
-        dlg.showAndWait();
+        current = dlg;
+        dlg.setOnHidden(e -> { if (current == dlg) current = null; });
+        // show(), not showAndWait(): a non-modal window must not hold a nested event loop that
+        // would delay whatever another dialog opened meanwhile is waiting to do.
+        dlg.show();
     }
 
     // ── Row builder ───────────────────────────────────────────────────────────

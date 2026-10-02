@@ -71,7 +71,14 @@ public class QTraceBatchExporter {
     // ── Entry point ────────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
+    private static Dialog<BatchConfig> preflight; // the open pre-flight dialog, if any — FX thread only
+    private static Stage progress;                // the running batch's window, if any
+
     public static void start(QuPathGUI qupath, QTraceController controller) {
+        // Import clicked again: the pre-flight dialog goes away (= Cancel). A batch that is
+        // running is never stopped that way — its window just comes back to the front.
+        if (preflight != null && preflight.isShowing()) { preflight.close(); return; }
+        if (progress != null && progress.isShowing()) { progress.toFront(); return; }
         var project = qupath.getProject();
         if (project == null) {
             alert(qupath.getStage(), Alert.AlertType.WARNING,
@@ -106,6 +113,7 @@ public class QTraceBatchExporter {
         Button      cancel = (Button)       progressStage.getScene().getRoot().lookup("#cancel");
         cancel.setOnAction(e -> cancelled.set(true));
 
+        progress = progressStage;
         progressStage.show();
 
         Thread t = new Thread(() ->
@@ -124,6 +132,8 @@ public class QTraceBatchExporter {
     private static Optional<BatchConfig> showPreflight(Stage owner, int count) {
         Dialog<BatchConfig> dlg = new Dialog<>();
         dlg.initOwner(owner);
+        // Not modal: the panel button that opened it must stay clickable to close it again.
+        dlg.initModality(Modality.NONE);
         dlg.setTitle("Batch Project - Generate all .qTrace / image");
         dlg.setHeaderText("Batch export — " + count + " image(s)\nValidation stamp applied to all images.");
 
@@ -189,7 +199,12 @@ public class QTraceBatchExporter {
                 skipCb.isSelected()
             );
         });
-        return dlg.showAndWait();
+        preflight = dlg;
+        try {
+            return dlg.showAndWait();
+        } finally {
+            preflight = null;
+        }
     }
 
     /** Gold badge shown in place of the Validator field when identity is certified. */

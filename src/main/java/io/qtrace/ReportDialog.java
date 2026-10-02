@@ -59,9 +59,20 @@ public class ReportDialog {
      * @param markdown the report text
      * @param log      callback for user-facing status lines (may be null)
      */
+    private static Stage current; // the open report window, if any — FX thread only
+
+    /** Closes the report window if one is open; true when it did (the Report button is a toggle). */
+    static boolean closeIfOpen() {
+        if (current == null || !current.isShowing()) return false;
+        current.close();
+        current = null;
+        return true;
+    }
+
     public static void show(Window owner, Path qtrace, String markdown,
                              QTracePlugin ep, Consumer<String> log) {
         Stage stage = new Stage();
+        current = stage;
         if (owner != null) {
             stage.initOwner(owner);
             stage.initModality(Modality.NONE);
