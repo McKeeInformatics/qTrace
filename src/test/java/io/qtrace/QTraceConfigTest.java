@@ -19,6 +19,15 @@ class QTraceConfigTest {
     private static final Path FALLBACK = Path.of("/fallback/dir");
 
     @Test
+    void showPanelAtStartup_isOffUntilChosen_andSurvivesTheConfigFile() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        QTraceConfig cfg = gson.fromJson("{}", QTraceConfig.class);
+        assertEquals(false, cfg.isShowPanelAtStartup());
+        cfg.setShowPanelAtStartup(true);
+        assertTrue(gson.fromJson(gson.toJson(cfg), QTraceConfig.class).isShowPanelAtStartup());
+    }
+
+    @Test
     void resolveDir_fallsBackToConfigured_whenProjectFolderModeOff() {
         Path resolved = QTraceConfig.resolveDir(false, Path.of("/some/project"), QTraceConfig.TRACE_SUBDIR, FALLBACK);
         assertEquals(FALLBACK, resolved);

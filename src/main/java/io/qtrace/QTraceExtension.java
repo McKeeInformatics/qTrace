@@ -120,6 +120,9 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         // ── Toolbar button (added on FX thread after QuPath finishes layout) ───
         Platform.runLater(() -> addToolbarButton(qupath));
 
+        // ── Panel at startup (Settings > Appearance) ───────────────────────────
+        if (QTraceConfig.get().isShowPanelAtStartup()) showPanelWhenReady(qupath);
+
         // ── License entitlement (offline-certain part runs synchronously) ─────
         // Downgrades Compliance → Core when the license is expired/inactive, before
         // the panel is ever shown; the server confirmation runs async.
@@ -135,6 +138,27 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
             QTraceUpdater.checkCore(qupath);
             QTraceUpdater.checkCompliance(qupath, QTracePluginManager.get());
         }
+    }
+
+    /**
+     * Opens the panel once QuPath's window is up: the mini-panel docks over the viewers, which
+     * aren't in the scene yet while extensions are being installed.
+     */
+    private void showPanelWhenReady(QuPathGUI qupath) {
+        Platform.runLater(() -> {
+            var stage = qupath.getStage();
+            if (stage == null || stage.isShowing()) {
+                Platform.runLater(controller::showPanel);
+                return;
+            }
+            stage.showingProperty().addListener(new javafx.beans.value.ChangeListener<Boolean>() {
+                @Override public void changed(javafx.beans.value.ObservableValue<? extends Boolean> o, Boolean was, Boolean now) {
+                    if (!now) return;
+                    stage.showingProperty().removeListener(this);
+                    Platform.runLater(controller::showPanel);
+                }
+            });
+        });
     }
 
     private static String nz(String s) { return s != null ? s : "0"; }

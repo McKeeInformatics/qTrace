@@ -321,6 +321,13 @@ public class QTraceSettingsDialog {
         chkAutosave.setWrapText(true);
         chkAutosave.setTooltip(hintTooltip(QTraceI18n.t("settings.autosave.hint")));
 
+        CheckBox chkPanelAtStartup = new CheckBox(QTraceI18n.t("settings.panel.startup"));
+        chkPanelAtStartup.setId("panel-startup-checkbox"); // looked up by the screenshot harness
+        chkPanelAtStartup.setSelected(cfg.isShowPanelAtStartup());
+        chkPanelAtStartup.setTextFill(Color.web(TEXT_SUB));
+        chkPanelAtStartup.setWrapText(true);
+        chkPanelAtStartup.setTooltip(hintTooltip(QTraceI18n.t("settings.panel.startup.hint")));
+
         // ── Security (activity report) — folded into Preferences ────────────────
         CheckBox chkReportConfirm = new CheckBox(QTraceI18n.t("settings.security.confirm"));
         chkReportConfirm.setSelected(cfg.isReportConfirmBeforeSend());
@@ -504,6 +511,7 @@ public class QTraceSettingsDialog {
             cfg.setPromptUnstampedReminder(chkUnstampedReminder.isSelected());
             cfg.setHideSkippedReplaySteps(chkHideSkipped.isSelected());
             cfg.setAutosaveEnabled(chkAutosave.isSelected());
+            cfg.setShowPanelAtStartup(chkPanelAtStartup.isSelected());
             if (rbCustom.isSelected())
                 cfg.setSnapshotSettings(true, spThreshold.getValue(), spInterval.getValue(), chkKeyOnly.isSelected());
             else
@@ -532,7 +540,7 @@ public class QTraceSettingsDialog {
         Label appearanceSoon = new Label("Theme customization — coming soon.");
         appearanceSoon.setTextFill(Color.web(TEXT_MUTED));
         appearanceSoon.setFont(Font.font("System", 11));
-        VBox pageAppearance = new VBox(appearanceSoon);
+        VBox pageAppearance = new VBox(12, chkPanelAtStartup, appearanceSoon);
         pageAppearance.setPadding(new Insets(4, 20, 8, 20));
 
         // ── Content area: title bar + scrollable page ────────────────────────────
