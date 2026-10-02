@@ -94,7 +94,7 @@ public class QTraceConfig {
 
     // Panel: Activity log folded — null = unfolded
     private Boolean panelLogCollapsed;
-    // Panel: opened when QuPath starts — null = no
+    // Panel: opened when QuPath starts — null = yes (on by default)
     private Boolean showPanelAtStartup;
 
     // Image copy in the live draft (Settings › Autosave) — null = auto / defaults
@@ -300,7 +300,7 @@ public class QTraceConfig {
 
     public boolean isPanelLogCollapsed()                 { return Boolean.TRUE.equals(panelLogCollapsed); }
     public void    setPanelLogCollapsed(boolean b)       { this.panelLogCollapsed = b; }
-    public boolean isShowPanelAtStartup()                { return Boolean.TRUE.equals(showPanelAtStartup); }
+    public boolean isShowPanelAtStartup()                { return showPanelAtStartup == null || showPanelAtStartup; }
     public void    setShowPanelAtStartup(boolean b)      { this.showPanelAtStartup = b; }
 
     public boolean isAutosaveEnabled()                   { return autosaveEnabled == null || autosaveEnabled; }
