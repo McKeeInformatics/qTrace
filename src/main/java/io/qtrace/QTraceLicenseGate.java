@@ -94,6 +94,10 @@ public final class QTraceLicenseGate {
             return;
         }
 
+        // Read on this (JavaFX) thread, sent with the server check below.
+        String screens = SystemInfo.screens();
+        com.google.gson.JsonArray extensions = QTraceController.collectLoadedExtensions(qupath);
+
         // License present, signed and not expired → confirm with the server (async).
         CompletableFuture.runAsync(() -> {
             try {
@@ -108,6 +112,10 @@ public final class QTraceLicenseGate {
                     notifyInactive(qupath, controller,
                         QTraceI18n.t("license.inactive.subscription"), Alert.AlertType.WARNING);
                 }
+                // The server just learnt which qTrace is running: tell it on which workstation
+                // (BackOffice › user). Best effort — never changes what follows.
+                WorkstationClient.send(jwt, SystemInfo.environment(
+                    IssueReportDialog.qupathVersion(), screens, extensions, null));
             } catch (Exception ignored) {
                 // offline / server error — keep Compliance active (do not downgrade on uncertainty)
             }

@@ -39,6 +39,24 @@ class SystemInfoTest {
     }
 
     @Test
+    void environmentLeavesOutWhatIsMissing() {
+        JsonObject env = SystemInfo.environment("1.2.4", null, "Linux", null, null, List.of());
+        assertEquals("1.2.4", env.get("appVersion").getAsString());
+        assertFalse(env.has("qupathVersion"));
+        assertFalse(env.has("system"));
+        assertFalse(env.has("extensions"));
+        assertFalse(env.has("extensionFiles"));
+    }
+
+    @Test
+    void workstationUpdateIsTheEnvironmentAlone() {
+        JsonObject env = SystemInfo.environment("1.2.4", "0.7.0", "Linux", SystemInfo.collect(null), null, null);
+        JsonObject body = WorkstationClient.body(env);
+        assertEquals(1, body.size());
+        assertTrue(body.getAsJsonObject("env").has("system"));
+    }
+
+    @Test
     void sizesReadInGigabytes() {
         assertEquals("16.0 GB", SystemInfo.gb(16L * 1024 * 1024 * 1024));
         assertEquals("0.5 GB", SystemInfo.gb(512L * 1024 * 1024));

@@ -76,24 +76,11 @@ final class IssueReportClient {
         return body;
     }
 
-    /**
-     * Same, with what a bug needs to be reproduced: the workstation ({@link SystemInfo}), the
-     * QuPath extensions loaded (name, version) and the JAR files of the extensions folder
-     * (names only). Any of the three may be null.
-     */
+    /** Same, with the whole environment block of a bug ({@link SystemInfo#environment}). */
     static JsonObject buildBody(String title, String description, boolean bug,
-                                List<byte[]> pngImages, String appVersion,
-                                String qupathVersion, String os,
-                                JsonObject system, JsonArray extensions, List<String> extensionFiles) {
-        JsonObject body = buildBody(title, description, bug, pngImages, appVersion, qupathVersion, os);
-        JsonObject env = body.getAsJsonObject("env");
-        if (system != null && system.size() > 0)         env.add("system", system);
-        if (extensions != null && extensions.size() > 0) env.add("extensions", extensions);
-        if (extensionFiles != null && !extensionFiles.isEmpty()) {
-            JsonArray files = new JsonArray();
-            for (String f : extensionFiles) files.add(f);
-            env.add("extensionFiles", files);
-        }
+                                List<byte[]> pngImages, JsonObject env) {
+        JsonObject body = buildBody(title, description, bug, pngImages, null, null, null);
+        body.add("env", env);
         return body;
     }
 

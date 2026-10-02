@@ -34,15 +34,15 @@ import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 /**
- * What the workstation is made of, attached to a bug report so a problem can be told from
- * its environment: OS, processor, memory, graphics, Java, disk space — as short readable
+ * What the workstation is made of — sent to qtrace.ca at each QuPath start (BackOffice › user)
+ * and attached to a bug report, so a problem can be told from its environment: OS, processor, memory, graphics, Java, disk space — as short readable
  * strings, keyed for display.
  *
  * Deliberately never the machine name, the user's login, a network address or a file path:
  * the report ends up in a GitHub issue. File lists are names only.
  *
  * {@link #collect} may run a system command (processor / graphics card model) — call it off
- * the JavaFX thread. No JavaFX here: the screens are added by the dialog.
+ * the JavaFX thread; only {@link #screens} touches JavaFX.
  */
 final class SystemInfo {
 
@@ -66,6 +66,60 @@ final class SystemInfo {
         put(s, "timezone", TimeZone.getDefault().getID());
         if (projectDir != null) put(s, "projectDisk", disk(projectDir));
         return s;
+    }
+
+    /**
+     * The {@code env} block qtrace.ca receives — with a bug report, and at each QuPath start:
+     * versions, the workstation ({@link #collect}), the QuPath extensions loaded (name,
+     * version) and the JAR names of the extensions folder. Whatever is null or empty is left out.
+     */
+    static JsonObject environment(String appVersion, String qupathVersion, String os, JsonObject system,
+                                  com.google.gson.JsonArray extensions, List<String> extensionFiles) {
+        JsonObject env = new JsonObject();
+        if (appVersion != null)    env.addProperty("appVersion", appVersion);
+        if (qupathVersion != null) env.addProperty("qupathVersion", qupathVersion);
+        if (os != null)            env.addProperty("os", os);
+        if (system != null && system.size() > 0)         env.add("system", system);
+        if (extensions != null && extensions.size() > 0) env.add("extensions", extensions);
+        if (extensionFiles != null && !extensionFiles.isEmpty()) {
+            com.google.gson.JsonArray files = new com.google.gson.JsonArray();
+            for (String f : extensionFiles) files.add(f);
+            env.add("extensionFiles", files);
+        }
+        return env;
+    }
+
+    /**
+     * {@link #environment} of this QuPath, read now. {@code screens} and {@code extensions}
+     * need the JavaFX thread and are read by the caller; the rest may ask the OS — call this
+     * off the JavaFX thread.
+     */
+    static JsonObject environment(String qupathVersion, String screens,
+                                  com.google.gson.JsonArray extensions, Path projectDir) {
+        JsonObject system = collect(projectDir);
+        if (screens != null) system.addProperty("screens", screens);
+        List<String> extensionFiles = null;
+        Path modules = moduleDir();
+        if (modules != null) {
+            List<String> qtjars = fileNames(modules, ".qtjar");
+            if (!qtjars.isEmpty()) system.addProperty("qtraceModules", String.join(", ", qtjars));
+            extensionFiles = fileNames(modules.getParent(), ".jar");
+        }
+        return environment(QTraceController.VERSION, qupathVersion, System.getProperty("os.name"),
+            system, extensions, extensionFiles);
+    }
+
+    /** "2 screens: 2560x1440 @1.0x, 1920x1080 @1.5x" — size and scale explain most display bugs. JavaFX thread. */
+    static String screens() {
+        try {
+            List<String> out = new ArrayList<>();
+            for (javafx.stage.Screen s : javafx.stage.Screen.getScreens())
+                out.add((int) s.getBounds().getWidth() + "x" + (int) s.getBounds().getHeight()
+                    + " @" + s.getOutputScaleX() + "x");
+            return out.size() + (out.size() == 1 ? " screen: " : " screens: ") + String.join(", ", out);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     /** "8.2 GB free of 31.2 GB", or null when the JVM does not expose it. */
