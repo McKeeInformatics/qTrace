@@ -65,6 +65,14 @@ public class QTraceBatchExporter {
     private static final String GREEN      = "#a6e3a1";
     private static final String PEACH      = "#fab387";
     private static final String BLUE       = "#89b4fa";
+    private static final String GOLD       = "#d9b34d"; // certified identity — same gold as the panel's medal
+    private static final String FIELD =
+        "-fx-background-color: " + BG_SURFACE + "; -fx-control-inner-background: " + BG_SURFACE + ";"
+      + "-fx-text-fill: " + TEXT_MAIN + "; -fx-prompt-text-fill: #6c7086;"
+      + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;";
+    private static final String COMBO =
+        "-fx-background-color: " + BG_SURFACE + "; -fx-border-color: " + BORDER + ";"
+      + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;";
 
     private QTraceBatchExporter() {}
 
@@ -135,7 +143,7 @@ public class QTraceBatchExporter {
         // Not modal: the panel button that opened it must stay clickable to close it again.
         dlg.initModality(Modality.NONE);
         dlg.setTitle("Batch Project - Generate all .qTrace / image");
-        dlg.setHeaderText("Batch export — " + count + " image(s)\nValidation stamp applied to all images.");
+        dlg.setHeaderText(null); // replaced by the qTrace title bar built below
 
         // Certified identity (valid Compliance license) — locked, not editable.
         // Core (no license) — free text, defaults to the configured validator name.
@@ -146,6 +154,8 @@ public class QTraceBatchExporter {
             activeLicense != null ? activeLicense.name() : QTraceConfig.get().getValidatorName());
         validatorFld.setPromptText("Dr. Lastname / Analyst ID");
         validatorFld.setPrefWidth(280);
+        validatorFld.setPrefHeight(30);
+        validatorFld.setStyle(FIELD);
 
         // Certified identity → gold badge with certificate info, non-editable.
         // Core (no license) → plain editable text field.
@@ -157,34 +167,61 @@ public class QTraceBatchExporter {
             "Full Workflow", "Image QC", "Segmentation",
             "Feature Extraction", "Phenotyping", "Spatial Analysis"));
         scopeBox.setValue("Full Workflow");
+        scopeBox.setPrefHeight(30);
+        scopeBox.setStyle(COMBO);
 
         ComboBox<String> confidenceBox = new ComboBox<>(FXCollections.observableArrayList(
             "High", "Medium", "Low"));
         confidenceBox.setValue("High");
+        confidenceBox.setPrefHeight(30);
+        confidenceBox.setStyle(COMBO);
 
         TextArea notesFld = new TextArea();
         notesFld.setPromptText("Optional — applies to all images in this batch");
         notesFld.setPrefRowCount(2);
         notesFld.setWrapText(true);
+        notesFld.setStyle(FIELD);
 
         CheckBox skipCb = new CheckBox("Skip images that already have a .qtrace file");
         skipCb.setSelected(true);
+        skipCb.setTextFill(Color.web(TEXT_SUB));
 
         GridPane grid = new GridPane();
         grid.setHgap(12); grid.setVgap(10);
-        grid.setPadding(new Insets(20, 20, 10, 20));
+        grid.setPadding(new Insets(18, 20, 6, 20));
         int r = 0;
-        grid.add(new Label("Validator *"), 0, r); grid.add(validatorNode,  1, r++);
-        grid.add(new Label("Scope"),       0, r); grid.add(scopeBox,       1, r++);
-        grid.add(new Label("Confidence"),  0, r); grid.add(confidenceBox,  1, r++);
-        grid.add(new Label("Notes"),       0, r); grid.add(notesFld,       1, r++);
+        grid.add(lbl("Validator *", TEXT_SUB, 12, false), 0, r); grid.add(validatorNode,  1, r++);
+        grid.add(lbl("Scope", TEXT_SUB, 12, false),       0, r); grid.add(scopeBox,       1, r++);
+        grid.add(lbl("Confidence", TEXT_SUB, 12, false),  0, r); grid.add(confidenceBox,  1, r++);
+        grid.add(lbl("Notes", TEXT_SUB, 12, false),       0, r); grid.add(notesFld,       1, r++);
         grid.add(skipCb, 1, r);
 
-        dlg.getDialogPane().setContent(grid);
-        dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        // Same shell as Settings: title bar on the darker surface, content, Cancel + solid action.
+        Label title = lbl("Batch import — " + count + " image(s)", TEXT_MAIN, 13, true);
+        Label sub = lbl("One .qtrace per image; the validation stamp below is applied to all of them.",
+            TEXT_SUB, 11, false);
+        VBox header = new VBox(2, title, sub);
+        header.setPadding(new Insets(12, 20, 12, 20));
+        header.setStyle("-fx-background-color: " + BG_SURFACE + ";");
 
-        Button okBtn = (Button) dlg.getDialogPane().lookupButton(ButtonType.OK);
+        DialogPane pane = dlg.getDialogPane();
+        pane.setContent(new VBox(header, grid));
+        pane.setPadding(Insets.EMPTY);
+        // -fx-base makes every control (drop-down lists, check box, scroll bars) dark with light text.
+        pane.setStyle("-fx-background-color: " + BG_BASE + "; -fx-base: " + BG_BASE + ";"
+            + "-fx-control-inner-background: " + BG_SURFACE + "; -fx-accent: " + BLUE + ";"
+            + "-fx-focus-color: " + BLUE + "; -fx-faint-focus-color: transparent;");
+        pane.getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        Button cancelBtn = (Button) pane.lookupButton(ButtonType.CANCEL);
+        cancelBtn.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;"
+            + "-fx-text-fill: " + TEXT_SUB + "; -fx-cursor: hand; -fx-font-size: 12;");
+
+        Button okBtn = (Button) pane.lookupButton(ButtonType.OK);
         okBtn.setText("Start Process");
+        okBtn.setStyle("-fx-background-color: " + BLUE + "; -fx-text-fill: " + BG_BASE + ";"
+            + "-fx-background-radius: 6; -fx-cursor: hand; -fx-font-size: 12; -fx-font-weight: bold;"
+            + "-fx-padding: 6 18 6 18;");
         okBtn.setDisable(validatorFld.getText().trim().isEmpty());
         validatorFld.textProperty().addListener((obs, o, n) ->
             okBtn.setDisable(n == null || n.trim().isEmpty()));
@@ -211,15 +248,15 @@ public class QTraceBatchExporter {
     private static Node buildCertifiedBadge(LicenseInfo license) {
         Label check = new Label("✓");
         check.setFont(Font.font("System", FontWeight.BOLD, 13));
-        check.setStyle("-fx-text-fill: #6b4c00;");
+        check.setStyle("-fx-text-fill: " + GOLD + ";");
 
         Label nameLbl = new Label(license.name());
         nameLbl.setFont(Font.font("System", FontWeight.BOLD, 12));
-        nameLbl.setStyle("-fx-text-fill: #3a2a00;");
+        nameLbl.setStyle("-fx-text-fill: " + TEXT_MAIN + ";");
 
         Label certLbl = new Label(license.institution() + " · valid until " + license.expiresAtFormatted());
         certLbl.setFont(Font.font("System", 10));
-        certLbl.setStyle("-fx-text-fill: #6b4c00;");
+        certLbl.setStyle("-fx-text-fill: " + GOLD + ";");
 
         VBox textBox = new VBox(1, nameLbl, certLbl);
 
@@ -228,9 +265,9 @@ public class QTraceBatchExporter {
         badge.setPadding(new Insets(6, 12, 6, 12));
         badge.setPrefWidth(280);
         badge.setStyle(
-            "-fx-background-color: linear-gradient(to bottom, #ffe9a8, #f0c343);"
+            "-fx-background-color: rgba(217,179,77,0.12);"
           + "-fx-background-radius: 6;"
-          + "-fx-border-color: #b8860b;"
+          + "-fx-border-color: rgba(217,179,77,0.45);"
           + "-fx-border-radius: 6;"
           + "-fx-border-width: 1;"
         );
