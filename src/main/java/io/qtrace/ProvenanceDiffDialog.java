@@ -75,7 +75,23 @@ public final class ProvenanceDiffDialog {
         ScrollPane scroll = new ScrollPane(content);
         scroll.setFitToWidth(true);
         scroll.setStyle("-fx-background:" + BG + ";-fx-background-color:" + BG + ";");
-        stage.setScene(new Scene(scroll, 720, 520));
+        // Same bottom row as Settings: a discreet Cancel at the right; Esc does the same.
+        javafx.scene.control.Button cancel = new javafx.scene.control.Button("Cancel");
+        cancel.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;"
+            + "-fx-text-fill: #a6adc8; -fx-cursor: hand; -fx-font-size: 12;");
+        cancel.setOnAction(e -> stage.close());
+        javafx.scene.layout.HBox buttons = new javafx.scene.layout.HBox(cancel);
+        buttons.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
+        buttons.setPadding(new Insets(8, 20, 14, 20));
+        buttons.setStyle("-fx-background-color:" + BG + ";");
+        javafx.scene.layout.BorderPane shell = new javafx.scene.layout.BorderPane(scroll);
+        shell.setBottom(buttons);
+        shell.setStyle("-fx-background-color:" + BG + ";");
+        Scene scene = new Scene(shell, 720, 520);
+        scene.addEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) { cancel.fire(); e.consume(); }
+        });
+        stage.setScene(scene);
         stage.show();
 
         Thread t = new Thread(() -> {
