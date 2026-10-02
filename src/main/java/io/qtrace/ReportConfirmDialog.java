@@ -62,13 +62,22 @@ public class ReportConfirmDialog {
         public String  lang = null;   // chosen report language code
     }
 
-    /** Modal — blocks until the user chooses. */
+    private static Stage current; // the open review window, if any — FX thread only
+
+    /** Closes the review window if one is open (= Cancel); true when it did. The Report button is a toggle. */
+    static boolean closeIfOpen() {
+        if (current == null || !current.isShowing()) return false;
+        current.close();
+        return true;
+    }
+
+    /** Blocks until the user chooses; not modal, so the Report button can close it again. */
     public static Result show(Window owner, String digestPretty) {
         Result result = new Result();
 
         Stage stage = new Stage();
         if (owner != null) stage.initOwner(owner);
-        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.initModality(Modality.NONE);
         stage.setTitle(QTraceI18n.t("report.confirm.title"));
 
         Label notice = new Label(QTraceI18n.t("report.confirm.notice"));
@@ -131,8 +140,18 @@ public class ReportConfirmDialog {
         root.setPadding(new Insets(12));
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
 
-        stage.setScene(new Scene(root, 720, 600));
-        stage.showAndWait();
+        Scene scene = new Scene(root, 720, 600);
+        // Esc = Cancel. A handler, not a filter: an open drop-down takes its own Esc first.
+        scene.addEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) { cancel.fire(); e.consume(); }
+        });
+        stage.setScene(scene);
+        current = stage;
+        try {
+            stage.showAndWait();
+        } finally {
+            if (current == stage) current = null;
+        }
         return result;
     }
 

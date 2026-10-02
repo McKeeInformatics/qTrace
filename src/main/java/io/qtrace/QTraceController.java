@@ -1480,7 +1480,8 @@ public class QTraceController {
 
     /** Generates an LLM activity report for the current image's .qtrace (Compliance feature). */
     public void generateActivityReport() {
-        if (ReportDialog.closeIfOpen()) return; // Report clicked again: the open report goes away
+        // Report clicked again: the review window (= Cancel) or the open report goes away.
+        if (ReportConfirmDialog.closeIfOpen() || ReportDialog.closeIfOpen()) return;
         QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep == null) return;
         if (qupath.getProject() == null) {
