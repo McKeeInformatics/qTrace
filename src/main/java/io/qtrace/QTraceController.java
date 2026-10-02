@@ -651,6 +651,41 @@ public class QTraceController {
         promptForProject("qTrace — Start", QTraceI18n.t("start.project.content"));
     }
 
+    // Where the user last worked — what a double-click on ▶ Start reopens.
+    private static final java.util.prefs.Preferences LAST =
+        java.util.prefs.Preferences.userNodeForPackage(QTraceController.class);
+    private static final String LAST_PROJECT = "lastProjectUri", LAST_IMAGE = "lastImageEntryId";
+
+    private void rememberLastWork(ImageData<BufferedImage> data) {
+        try {
+            var project = qupath.getProject();
+            var entry = project != null && data != null ? project.getEntry(data) : null;
+            if (entry == null || project.getURI() == null) return; // closing an image keeps the last one
+            LAST.put(LAST_PROJECT, project.getURI().toString());
+            LAST.put(LAST_IMAGE, entry.getID());
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * Mini-panel ▶ Start, double-clicked: reopens the last project and, in it, the image that
+     * was open last. Falls back to the recent-projects list when there is nothing to resume.
+     */
+    public void resumeLastWork() {
+        ProjectPrompt.closeIfOpen();
+        java.net.URI uri = ProjectPrompt.projectToResume(LAST.get(LAST_PROJECT, null), ProjectPrompt.recentUris());
+        if (uri == null) { startWork(); return; }
+        boolean lastProject = uri.toString().equals(LAST.get(LAST_PROJECT, null));
+        openRecentProject(uri);
+        var project = qupath.getProject();
+        if (project == null) return;
+        ActivityLog.add("Resumed project " + ProjectPrompt.recents(List.of(uri), 1).get(0).name() + ".");
+        String imageId = lastProject ? LAST.get(LAST_IMAGE, null) : null;
+        if (imageId == null) return;
+        for (var entry : project.getImageList()) {
+            if (imageId.equals(entry.getID())) { openEntryOn(qupath, entry); return; }
+        }
+    }
+
     /** Recent projects / "Open Project…"; false when the user cancelled. */
     private boolean promptForProject(String windowTitle, String why) {
         ProjectPrompt.Choice choice = ProjectPrompt.show(qupath, windowTitle, why);
@@ -1107,6 +1142,7 @@ public class QTraceController {
                                          ImageData<BufferedImage> oldData,
                                          ImageData<BufferedImage> newData) {
                 Runnable switchImage = () -> {
+                    rememberLastWork(newData);
                     if (logger != null) {
                         leaveImage();
                         attachImage(newData);

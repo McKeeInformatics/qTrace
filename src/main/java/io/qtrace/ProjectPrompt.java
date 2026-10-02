@@ -62,6 +62,30 @@ final class ProjectPrompt {
      * @param windowTitle "qTrace — <feature>"
      * @param why         one paragraph: why a project is needed here
      */
+    /** QuPath's recent projects, most recent first; empty when the preference isn't there. */
+    static List<URI> recentUris() {
+        try {
+            return new ArrayList<>(PathPrefs.getRecentProjectList());
+        } catch (Throwable t) {
+            return List.of();
+        }
+    }
+
+    /**
+     * The project "resume" reopens: the one qTrace last saw open if it still exists, else
+     * QuPath's most recent existing one; null when there is none.
+     */
+    static URI projectToResume(String remembered, List<URI> recent) {
+        if (remembered != null) {
+            try {
+                URI uri = URI.create(remembered);
+                if (!recents(List.of(uri), 1).isEmpty()) return uri;
+            } catch (Exception ignored) {}
+        }
+        List<Recent> existing = recents(recent, 1);
+        return existing.isEmpty() ? null : existing.get(0).uri();
+    }
+
     static Choice show(QuPathGUI qupath, String windowTitle, String why) {
         Alert a = new Alert(Alert.AlertType.NONE);
         a.setTitle(windowTitle);
@@ -80,12 +104,7 @@ final class ProjectPrompt {
         whyLbl.setStyle("-fx-text-fill: " + DialogLook.TEXT_SUB + "; -fx-font-size: 12;");
         body.getChildren().add(whyLbl);
 
-        List<Recent> recents;
-        try {
-            recents = recents(new ArrayList<>(PathPrefs.getRecentProjectList()), MAX_RECENT);
-        } catch (Throwable t) { // the preference isn't there in this QuPath: no list, the button remains
-            recents = List.of();
-        }
+        List<Recent> recents = recents(recentUris(), MAX_RECENT); // none: no list, the button remains
         if (!recents.isEmpty()) {
             Label heading = new Label(QTraceI18n.t("dashboard.project.recent"));
             heading.setStyle("-fx-text-fill: " + DialogLook.TEXT_MAIN + "; -fx-font-size: 12; -fx-font-weight: bold;");

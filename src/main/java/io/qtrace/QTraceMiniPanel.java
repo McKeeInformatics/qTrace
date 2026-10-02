@@ -169,7 +169,16 @@ public final class QTraceMiniPanel {
         startIcon = play;
         StackPane dotBox = new StackPane(pauseIcon, captureDot, startIcon);
         statusBox = dotBox;
-        dotBox.setOnMouseClicked(e -> { if (startIcon.isVisible()) controller.startWork(); });
+        // One click: the recent projects. Double-click: straight back to the last project and
+        // image — so the single click waits a moment to see whether a second one follows.
+        javafx.animation.PauseTransition single = new javafx.animation.PauseTransition(Duration.millis(260));
+        // runLater: a dialog can't be shown-and-waited from inside an animation callback.
+        single.setOnFinished(e -> javafx.application.Platform.runLater(controller::startWork));
+        dotBox.setOnMouseClicked(e -> {
+            if (!startIcon.isVisible()) return;
+            if (e.getClickCount() >= 2) { single.stop(); controller.resumeLastWork(); }
+            else single.playFromStart();
+        });
         dotBox.setPadding(new Insets(3, 0, 12, 0));
         nodes.add(dotBox);
 
@@ -251,7 +260,7 @@ public final class QTraceMiniPanel {
         captureDot.setVisible(recording);
         pauseIcon.setVisible(!recording && !start);
         statusBox.setCursor(start ? Cursor.HAND : null);
-        Tooltip.install(statusBox, tip(start ? "Start — open a project" : recording ? "Recording" : "Paused"));
+        Tooltip.install(statusBox, tip(start ? "Start — click: recent projects · double-click: last project and image" : recording ? "Recording" : "Paused"));
         if (recording && captureBlink == null) startBlink();
         else if (!recording) stopBlink();
 

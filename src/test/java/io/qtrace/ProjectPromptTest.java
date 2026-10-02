@@ -39,4 +39,19 @@ class ProjectPromptTest {
         List<ProjectPrompt.Recent> recents = ProjectPrompt.recents(uris, 3);
         assertEquals(List.of("p0", "p1", "p2"), recents.stream().map(ProjectPrompt.Recent::name).toList());
     }
+
+    @Test
+    void resumesTheRememberedProject_orTheMostRecentOneWhenItIsGone(@TempDir Path tmp) throws Exception {
+        Path last = Files.createDirectories(tmp.resolve("last")).resolve("project.qpproj");
+        Files.writeString(last, "{}");
+        Path other = Files.createDirectories(tmp.resolve("other")).resolve("project.qpproj");
+        Files.writeString(other, "{}");
+        List<URI> recent = List.of(other.toUri(), last.toUri());
+
+        assertEquals(last.toUri(), ProjectPrompt.projectToResume(last.toUri().toString(), recent));
+        // Remembered project deleted, or nothing remembered yet: QuPath's most recent one.
+        assertEquals(other.toUri(), ProjectPrompt.projectToResume(tmp.resolve("gone/project.qpproj").toUri().toString(), recent));
+        assertEquals(other.toUri(), ProjectPrompt.projectToResume(null, recent));
+        assertEquals(null, ProjectPrompt.projectToResume("not a uri", List.of()));
+    }
 }
