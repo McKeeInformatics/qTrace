@@ -38,6 +38,25 @@ import java.util.Optional;
  */
 public class ValidationStamper {
 
+    // Catppuccin Mocha — matches QTraceSettingsDialog / QTracePanel
+    private static final String BG_BASE    = "#1e1e2e";
+    private static final String BG_SURFACE = "#181825";
+    private static final String BORDER     = "#313244";
+    private static final String TEXT_MAIN  = "#cdd6f4";
+    private static final String TEXT_SUB   = "#a6adc8";
+    private static final String TEXT_MUTED = "#6c7086";
+    private static final String BLUE       = "#89b4fa";
+    private static final String GREEN      = "#a6e3a1";
+    private static final String TEAL       = "#2dd4bf"; // the Stamp CTA colour of the panel
+    private static final String FIELD =
+        "-fx-background-color: " + BG_SURFACE + "; -fx-control-inner-background: " + BG_SURFACE + ";"
+      + "-fx-text-fill: " + TEXT_MAIN + "; -fx-prompt-text-fill: " + TEXT_MUTED + ";"
+      + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;";
+    private static final String COMBO =
+        "-fx-background-color: " + BG_SURFACE + "; -fx-border-color: " + BORDER + ";"
+      + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;";
+    private static final String MONO = "-fx-font-family: monospace; -fx-font-size: 11;";
+
     private ValidationStamper() {}
 
     /**
@@ -70,8 +89,8 @@ public class ValidationStamper {
                                                   ReplaySkip.Summary replay) {
         Dialog<ValidationStamp> dialog = new Dialog<>();
         dialog.initOwner(owner);
-        dialog.setTitle("QTrace — Expert Validation");
-        dialog.setHeaderText("Validate this workflow capture");
+        dialog.setTitle("qTrace — Validate & Stamp");
+        dialog.setHeaderText(null); // replaced by the qTrace title bar built below
 
         // ── Passphrase unlock (before any dialog) ────────────────────────────
         // getEntitled() → null when the license is inactive, degrading the stamp
@@ -94,14 +113,16 @@ public class ValidationStamper {
         TextField validatorField = new TextField(configuredValidator);
         validatorField.setPromptText("Dr. Lastname / Analyst ID");
         validatorField.setPrefWidth(280);
+        validatorField.setPrefHeight(30);
+        validatorField.setStyle(FIELD);
 
         if (activeLicense != null) {
-            // Identity certified — field is read-only
+            // Identity certified — field is read-only: no frame, the name in the certified green
             validatorField.setEditable(false);
+            validatorField.setFocusTraversable(false);
             validatorField.setStyle(
-                "-fx-background-color: derive(-fx-control-inner-background, -5%);"
-              + "-fx-text-fill: -fx-text-inner-color;"
-              + "-fx-opacity: 1;"
+                "-fx-background-color: transparent; -fx-border-color: transparent;"
+              + "-fx-text-fill: " + GREEN + "; -fx-font-size: 13; -fx-font-weight: bold; -fx-padding: 0;"
             );
             validatorField.setTooltip(new javafx.scene.control.Tooltip(
                 (activeLicense.verified()
@@ -116,6 +137,8 @@ public class ValidationStamper {
         TextField caseIdField = new TextField(defaultCaseId != null ? defaultCaseId : "");
         caseIdField.setPromptText("Case identifier (e.g. project name)");
         caseIdField.setPrefWidth(280);
+        caseIdField.setPrefHeight(30);
+        caseIdField.setStyle(FIELD);
         caseIdField.setTooltip(new javafx.scene.control.Tooltip(
             "Identifier for this case — pre-filled from project name, editable"));
 
@@ -128,22 +151,28 @@ public class ValidationStamper {
             "Spatial Analysis"
         ));
         scopeBox.setValue("Full Workflow");
+        scopeBox.setPrefHeight(30);
+        scopeBox.setStyle(COMBO);
 
         ComboBox<String> confidenceBox = new ComboBox<>(FXCollections.observableArrayList(
             "High", "Medium", "Low"
         ));
         confidenceBox.setValue("High");
+        confidenceBox.setPrefHeight(30);
+        confidenceBox.setStyle(COMBO);
 
         TextArea notesArea = new TextArea();
         notesArea.setPromptText("Commit title — summary of this stamp; anomalies, caveats, deviations from SOP…");
         notesArea.setPrefRowCount(3);
         notesArea.setWrapText(true);
+        notesArea.setStyle(FIELD);
 
         // Attestation checkbox only shown when Compliance is present (signing has legal meaning)
         CheckBox attestationBox = ep != null ? new CheckBox(ValidationStamp.SIGNING_MEANING) : null;
         if (attestationBox != null) {
             attestationBox.setWrapText(true);
             attestationBox.setMaxWidth(360);
+            attestationBox.setTextFill(javafx.scene.paint.Color.web(TEXT_MAIN));
         }
 
         ComboBox<String> statusBox = new ComboBox<>(
@@ -153,12 +182,14 @@ public class ValidationStamper {
             for (String s : STATUS_LABELS) if (s.equals(currentStatusLabel)) { preselect = s; break; }
         }
         statusBox.setValue(preselect);
+        statusBox.setPrefHeight(30);
+        statusBox.setStyle(COMBO);
 
         // Read-only provenance display
         Label gitLabel = new Label(gitHash != null ? gitHash : "(not committed yet)");
         Label imgLabel = new Label(imgHash != null ? imgHash.substring(0, 16) + "…" : "(pending)");
-        gitLabel.setStyle("-fx-font-family: monospace; -fx-text-fill: #888;");
-        imgLabel.setStyle("-fx-font-family: monospace; -fx-text-fill: #888;");
+        gitLabel.setStyle(MONO + "-fx-text-fill: " + TEXT_SUB + ";");
+        imgLabel.setStyle(MONO + "-fx-text-fill: " + TEXT_SUB + ";");
 
         // Classifier_Fidelity — computed from ActionLogger, shown read-only
         String fidelityColor = switch (fidelity) {
@@ -167,57 +198,90 @@ public class ValidationStamper {
             case COMPROMISED -> "#f38ba8"; // red
         };
         Label fidelityLabel = new Label(fidelity.name());
-        fidelityLabel.setStyle("-fx-font-family: monospace; -fx-font-weight: bold;"
-                              + "-fx-text-fill: " + fidelityColor + ";");
+        fidelityLabel.setStyle(MONO + "-fx-font-weight: bold; -fx-text-fill: " + fidelityColor + ";");
 
         // ── Layout ───────────────────────────────────────────────────────────
         GridPane grid = new GridPane();
-        grid.setHgap(12);
+        grid.setHgap(14);
         grid.setVgap(10);
-        grid.setPadding(new Insets(20, 20, 10, 20));
+        grid.setPadding(new Insets(18, 20, 14, 20));
 
         int row = 0;
         Label validatorLabel = activeLicense != null
-            ? styledLabel("Validator  ✓", "#a6e3a1")
-            : new Label("Validator *");
+            ? styledLabel("Validator  ✓", GREEN)
+            : fieldLabel("Validator *");
         grid.add(validatorLabel, 0, row); grid.add(validatorField, 1, row++);
 
         // Public key row — only when certified
         if (activeLicense != null && !activeLicense.validatorKey().isBlank()) {
-            Label vkLabel = styledLabel("Validator Key", "#6c7086");
+            Label vkLabel = fieldLabel("Validator key");
             Label vkValue = new Label(activeLicense.validatorKeyShort());
-            vkValue.setFont(javafx.scene.text.Font.font("Monospaced", 11));
-            vkValue.setStyle("-fx-text-fill: #6c7086;");
+            vkValue.setStyle(MONO + "-fx-text-fill: " + TEXT_MUTED + ";");
             vkValue.setTooltip(new javafx.scene.control.Tooltip(
                 "ED25519 public key (full):\n" + activeLicense.validatorKey()
               + "\n\nThis key uniquely identifies you as a certified qTrace validator.\n"
               + "It will be used for cryptographic stamp signing and blockchain anchoring."));
             grid.add(vkLabel, 0, row); grid.add(vkValue, 1, row++);
         }
-        grid.add(new Label("Case ID"),            0, row); grid.add(caseIdField,    1, row++);
-        grid.add(new Label("Scope"),              0, row); grid.add(scopeBox,       1, row++);
-        grid.add(new Label("Confidence"),         0, row); grid.add(confidenceBox,  1, row++);
-        grid.add(new Label("Notes / commit title"), 0, row); grid.add(notesArea,    1, row++);
+        grid.add(fieldLabel("Case ID"),              0, row); grid.add(caseIdField,    1, row++);
+        grid.add(fieldLabel("Scope"),                0, row); grid.add(scopeBox,       1, row++);
+        grid.add(fieldLabel("Confidence"),           0, row); grid.add(confidenceBox,  1, row++);
+        grid.add(fieldLabel("Workflow status"),      0, row); grid.add(statusBox,      1, row++);
+        grid.add(fieldLabel("Notes / commit title"), 0, row); grid.add(notesArea,      1, row++);
         if (attestationBox != null) {
-            grid.add(new Label("Attestation *"),  0, row); grid.add(attestationBox, 1, row++);
+            grid.add(fieldLabel("Attestation *"),    0, row); grid.add(attestationBox, 1, row++);
         }
-        grid.add(new Label("Workflow status"),    0, row); grid.add(statusBox,      1, row++);
-        grid.add(new Label("Git hash"),           0, row); grid.add(gitLabel,       1, row++);
-        grid.add(new Label("Image SHA-256"),      0, row); grid.add(imgLabel,       1, row++);
-        grid.add(new Label("Classifier Fidelity"),0, row); grid.add(fidelityLabel,  1, row);
+
+        // What the stamp binds to — read-only, set apart in a card under the form.
+        GridPane facts = new GridPane();
+        facts.setHgap(14);
+        facts.setVgap(6);
+        facts.setPadding(new Insets(10, 14, 10, 14));
+        facts.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-border-color: " + BORDER + ";"
+            + "-fx-border-radius: 8; -fx-background-radius: 8;");
+        int f = 0;
+        facts.add(factLabel("Git hash"),            0, f); facts.add(gitLabel,      1, f++);
+        facts.add(factLabel("Image SHA-256"),       0, f); facts.add(imgLabel,      1, f++);
+        facts.add(factLabel("Classifier fidelity"), 0, f); facts.add(fidelityLabel, 1, f++);
         if (replay != null && replay.skipped() > 0) {
             Label replayLabel = new Label(QTraceI18n.f("stamp.replay.some",
                 replay.replayed(), replay.total(), replay.skipped()));
-            replayLabel.setStyle("-fx-font-family: monospace; -fx-font-weight: bold; -fx-text-fill: #fab387;");
-            grid.add(new Label(QTraceI18n.t("stamp.replay.label")), 0, ++row); grid.add(replayLabel, 1, row);
+            replayLabel.setStyle(MONO + "-fx-font-weight: bold; -fx-text-fill: #fab387;");
+            facts.add(factLabel(QTraceI18n.t("stamp.replay.label")), 0, f); facts.add(replayLabel, 1, f);
         }
+        javafx.scene.layout.VBox factsBox = new javafx.scene.layout.VBox(facts);
+        factsBox.setPadding(new Insets(0, 20, 8, 20));
 
-        dialog.getDialogPane().setContent(grid);
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        // Same shell as Settings: title bar on the darker surface, content, Cancel + solid action.
+        Label title = new Label("Validate & Stamp");
+        title.setStyle("-fx-text-fill: " + TEXT_MAIN + "; -fx-font-size: 13; -fx-font-weight: bold;");
+        Label sub = new Label("Your name, a scope and a signature are attached to exactly what was done on this image.");
+        sub.setStyle("-fx-text-fill: " + TEXT_SUB + "; -fx-font-size: 11;");
+        javafx.scene.layout.VBox header = new javafx.scene.layout.VBox(2, title, sub);
+        header.setPadding(new Insets(12, 20, 12, 20));
+        header.setStyle("-fx-background-color: " + BG_SURFACE + ";");
 
-        // Compliance: OK blocked until validator named AND attestation checked (21 CFR §11.50)
-        // Core: OK blocked only until validator name entered (no cryptographic signing)
-        Node okBtn = dialog.getDialogPane().lookupButton(ButtonType.OK);
+        DialogPane pane = dialog.getDialogPane();
+        pane.setContent(new javafx.scene.layout.VBox(header, grid, factsBox));
+        pane.setPadding(Insets.EMPTY);
+        // -fx-base makes every control (drop-down lists, check box, scroll bars) dark with light text.
+        pane.setStyle("-fx-background-color: " + BG_BASE + "; -fx-base: " + BG_BASE + ";"
+            + "-fx-control-inner-background: " + BG_SURFACE + "; -fx-accent: " + BLUE + ";"
+            + "-fx-focus-color: " + BLUE + "; -fx-faint-focus-color: transparent;");
+        pane.getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        Button cancelBtn = (Button) pane.lookupButton(ButtonType.CANCEL);
+        cancelBtn.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;"
+            + "-fx-text-fill: " + TEXT_SUB + "; -fx-cursor: hand; -fx-font-size: 12;");
+        Button stampBtn = (Button) pane.lookupButton(ButtonType.OK);
+        stampBtn.setText("Stamp");
+        stampBtn.setStyle("-fx-background-color: " + TEAL + "; -fx-text-fill: " + BG_BASE + ";"
+            + "-fx-background-radius: 6; -fx-cursor: hand; -fx-font-size: 12; -fx-font-weight: bold;"
+            + "-fx-padding: 6 22 6 22;");
+
+        // Compliance: Stamp blocked until validator named AND attestation checked (21 CFR §11.50)
+        // Core: Stamp blocked only until validator name entered (no cryptographic signing)
+        Node okBtn = stampBtn;
         Runnable updateOk = () -> okBtn.setDisable(
             validatorField.getText().trim().isEmpty()
             || (attestationBox != null && !attestationBox.isSelected())
@@ -278,6 +342,19 @@ public class ValidationStamper {
         });
 
         return dialog.showAndWait();
+    }
+
+    private static Label fieldLabel(String text) {
+        Label lbl = new Label(text);
+        lbl.setStyle("-fx-text-fill: " + TEXT_SUB + "; -fx-font-size: 12;");
+        return lbl;
+    }
+
+    private static Label factLabel(String text) {
+        Label lbl = new Label(text);
+        lbl.setStyle("-fx-text-fill: " + TEXT_MUTED + "; -fx-font-size: 11;");
+        lbl.setMinWidth(120);
+        return lbl;
     }
 
     private static javafx.scene.control.Label styledLabel(String text, String hexColor) {
