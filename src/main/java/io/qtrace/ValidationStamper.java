@@ -273,8 +273,12 @@ public class ValidationStamper {
         header.setPadding(new Insets(12, 20, 12, 20));
         header.setStyle("-fx-background-color: " + BG_SURFACE + ";");
 
+        // Blocks added by modules (StampSections), just above the Stamp button.
+        java.util.List<StampSection> sections = StampSections.create();
+
         DialogPane pane = dialog.getDialogPane();
-        pane.setContent(new javafx.scene.layout.VBox(header, grid, factsBox));
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(header, grid, factsBox);
+        pane.setContent(content);
         pane.setPadding(Insets.EMPTY);
         // -fx-base makes every control (drop-down lists, check box, scroll bars) dark with light text.
         pane.setStyle("-fx-background-color: " + BG_BASE + "; -fx-base: " + BG_BASE + ";"
@@ -297,7 +301,9 @@ public class ValidationStamper {
         Runnable updateOk = () -> okBtn.setDisable(
             validatorField.getText().trim().isEmpty()
             || (attestationBox != null && !attestationBox.isSelected())
+            || !StampSections.allReady(sections)
         );
+        for (StampSection s : sections) s.ready().addListener((obs, o, n) -> updateOk.run());
         if (activeLicense == null) {
             validatorField.textProperty().addListener((obs, o, n) -> updateOk.run());
         }
@@ -305,6 +311,8 @@ public class ValidationStamper {
             attestationBox.selectedProperty().addListener((obs, o, n) -> updateOk.run());
         }
         updateOk.run();
+
+        if (!sections.isEmpty()) centerActions(pane, content, sections, stampBtn, cancelBtn);
 
         // ── Result converter ─────────────────────────────────────────────────
         // Capture license info for signing (evaluated once, used in converter)
@@ -359,6 +367,45 @@ public class ValidationStamper {
         } finally {
             if (current == dialog) current = null;
         }
+    }
+
+    /**
+     * With a module block: the block, then Stamp centred under it and Cancel as a link below.
+     * The dialog's own buttons stay the ones that act (result converter, close) — hidden, and
+     * fired by the centred ones.
+     */
+    private static void centerActions(DialogPane pane, javafx.scene.layout.VBox content,
+                                      java.util.List<StampSection> sections, Button stampBtn, Button cancelBtn) {
+        Node bar = pane.lookup(".button-bar");
+        if (bar == null) {
+            // Unknown dialog layout: keep the standard buttons, the blocks above them.
+            for (StampSection s : sections) content.getChildren().add(s.node());
+            return;
+        }
+        bar.setVisible(false);
+        bar.setManaged(false);
+        if (bar instanceof javafx.scene.layout.Region r) { // DialogPane still counts its height
+            r.setMinHeight(0); r.setPrefHeight(0); r.setMaxHeight(0);
+        }
+
+        Button stamp = new Button("Stamp");
+        stamp.setStyle(stampBtn.getStyle() + "-fx-padding: 8 44 8 44;");
+        stamp.disableProperty().bind(stampBtn.disableProperty());
+        stamp.setOnAction(e -> stampBtn.fire());
+        stampBtn.setDefaultButton(false);
+        stamp.setDefaultButton(true);
+
+        Hyperlink cancel = new Hyperlink("Cancel");
+        cancel.setStyle("-fx-text-fill: " + TEXT_SUB + "; -fx-font-size: 12; -fx-border-color: transparent;");
+        cancel.setOnAction(e -> cancelBtn.fire());
+
+        javafx.scene.layout.VBox actions = new javafx.scene.layout.VBox(10);
+        actions.setAlignment(javafx.geometry.Pos.CENTER);
+        actions.setPadding(new Insets(8, 20, 16, 20));
+        for (StampSection s : sections) actions.getChildren().add(s.node());
+        actions.getChildren().addAll(stamp, cancel);
+        javafx.scene.layout.VBox.setMargin(stamp, new Insets(6, 0, 0, 0));
+        content.getChildren().add(actions);
     }
 
     private static Label fieldLabel(String text) {
