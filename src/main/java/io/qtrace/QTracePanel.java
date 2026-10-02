@@ -578,6 +578,13 @@ public class QTracePanel {
 
     boolean isRecordingActive() { return recordingActive; }
     boolean isRecordReady()     { return recordReady; }
+    /** Stamp needs captured steps and an image to stamp — never offered with no image open. */
+    boolean isStampEnabled()    { return recordReady && controller.hasActiveImage(); }
+    private void applyStampEnabled() {
+        boolean on = isStampEnabled();
+        btnRecord.setDisable(!on);
+        btnRecord.setOpacity(on ? 1.0 : 0.45);
+    }
     boolean isPushEnabled()     { return pushEnabled; }
     boolean isPushInProgress()  { return pushInProgress; }
     StampIntegrity.State integrityState() { return integrityState; }
@@ -1200,8 +1207,7 @@ public class QTracePanel {
     public void setRecordReady(boolean ready) {
         Platform.runLater(() -> {
             recordReady = ready;
-            btnRecord.setDisable(!ready);
-            btnRecord.setOpacity(ready ? 1.0 : 0.45);
+            applyStampEnabled();
             fireState();
         });
     }
@@ -1230,6 +1236,7 @@ public class QTracePanel {
                 btnReset.setDisable(!has);
                 btnReset.setOpacity(has ? 1.0 : 0.45);
             }
+            applyStampEnabled();
             fireState();
         });
     }

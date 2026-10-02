@@ -240,7 +240,12 @@ public final class QTraceMiniPanel {
             integrityBadge.setTooltip(tip(QTracePanel.integrityMessage(state) + " — click for details"));
         }
 
-        enable(stampBtn, panel.isRecordReady());
+        // Teal only when it can be clicked; greyed like Upload otherwise (no image, nothing captured).
+        boolean canStamp = panel.isStampEnabled();
+        if (stampBtn != null && stampBtn.isDisable() == canStamp)
+            stampBtn.setGraphic(panel.scaledIcon(panel.iconStamp(
+                Color.web(canStamp ? QTracePanel.CTA_TEAL : QTracePanel.TEXT_MUTED)), ICON));
+        enable(stampBtn, canStamp);
         enable(uploadBtn, panel.isPushEnabled());
         if (uploadSlot != null) {
             Node shown = panel.isPushInProgress() ? uploadSpinner : uploadBtn;
