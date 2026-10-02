@@ -95,7 +95,19 @@ public final class QTraceMiniPanel {
 
     public boolean isDocked() { return overlay != null; }
 
-    /** ✕: takes the column off the image; "Panel" brings it back. The full window, if open, stays. */
+    /**
+     * ⤢: the column leaves the image while the full panel is shown — one or the other, never
+     * both. The panel itself lives on; {@link #redock()} (the full panel's ⤡) brings the column back.
+     */
+    public void hideForFullPanel() {
+        if (overlay == null) return;
+        overlay.undock();
+        overlay = null;
+        stopBlink();
+        panel.setKeepAliveOnClose(false); // closing the full window now closes the panel
+    }
+
+    /** ✕: takes the column off the image and closes the panel; "Panel" brings it back. */
     private void close() {
         if (overlay == null) return;
         overlay.undock();
@@ -205,7 +217,7 @@ public final class QTraceMiniPanel {
         settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
         // Same glyph and look as the mini-player's ⤢.
         Button expandBtn = boxed("⤢", "Full panel");
-        expandBtn.setOnAction(e -> panel.show());
+        expandBtn.setOnAction(e -> controller.switchToFullPanel());
         // Smaller than the rest: not part of the daily workflow, but always one click away.
         Button reportBtn = titled(QTraceMiniPanel::reportIcon,
             QTraceI18n.t("report.menu").replace("...", ""), admin);

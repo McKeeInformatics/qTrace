@@ -465,13 +465,28 @@ public class QTraceController {
             syncPanelState();
             miniPanel = QTraceMiniPanel.dock(qupath, this, panel);
             if (miniPanel == null) panel.show();
-        } else if (miniPanel != null && (miniPanel.isDocked() || miniPanel.redock())) {
-            // already on the image — or put back there after its ✕, the full window having stayed open
+        } else if (miniPanel != null && miniPanel.isDocked()) {
+            // already on the image
         } else {
-            panel.show();
+            panel.show(); // the full panel is the one in use — back to the front
         }
         refreshIntegrity();
         attachScriptEditorHook();
+    }
+
+    /** Mini-panel ⤢: the full panel window replaces the column — one or the other, never both. */
+    public void switchToFullPanel() {
+        if (panel == null) return;
+        if (miniPanel != null) miniPanel.hideForFullPanel();
+        panel.show();
+    }
+
+    /** Full panel ⤡: back to the column on the image; the window stays if the column can't be docked. */
+    public void switchToMiniPanel() {
+        if (panel == null) return;
+        if (miniPanel == null) miniPanel = QTraceMiniPanel.dock(qupath, this, panel);
+        else miniPanel.redock();
+        if (miniPanel != null && miniPanel.isDocked()) panel.hideWindow();
     }
 
     private void syncPanelState() {

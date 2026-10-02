@@ -745,7 +745,17 @@ public class QTracePanel {
             }
         });
 
-        footer.getChildren().add(grip);
+        // ⤡ at the bottom right: back to the mini-panel (same framed look as its ⤢).
+        Button toMini = new Button("⤡");
+        toMini.setId("to-mini-panel-button"); // looked up by the screenshot harness — see ScreenshotHarness
+        toMini.setTooltip(new Tooltip("Mini panel"));
+        toMini.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-text-fill: " + TEXT_MAIN + ";"
+            + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4;"
+            + "-fx-cursor: hand; -fx-padding: 2 7 2 7;");
+        toMini.setOnAction(e -> controller.switchToMiniPanel());
+        Region footerSpacer = new Region();
+        HBox.setHgrow(footerSpacer, Priority.ALWAYS);
+        footer.getChildren().addAll(grip, footerSpacer, toMini);
         return footer;
     }
 
@@ -1072,6 +1082,9 @@ public class QTracePanel {
         stage.toFront();
         refreshStatus();
     }
+
+    /** Hides the window without closing the panel — the mini-panel takes over. */
+    void hideWindow() { stage.hide(); }
 
     public boolean isShowing() {
         return stage.isShowing();
