@@ -942,33 +942,24 @@ public class QTracePanel {
         return g;
     }
 
+    /** A small commit graph: a trunk of two commits and a branch leaving it. */
     Group iconVersions(Color c) {
         Group g = new Group();
-        Path page2 = new Path(
-            new MoveTo(7, 8.8), new LineTo(18, 8.8), new LineTo(21, 11.8), new LineTo(21, 21.5), new LineTo(17.5, 21.5)
+        Path branch = new Path(
+            new MoveTo(17, 10.4),
+            new javafx.scene.shape.CubicCurveTo(17, 14.6, 7, 12.2, 7, 16.6)
         );
-        page2.setStroke(c);
-        page2.setStrokeWidth(1.5);
-        page2.setFill(Color.TRANSPARENT);
-        page2.setOpacity(0.5);
-        page2.setStrokeLineCap(StrokeLineCap.ROUND);
-        page2.setStrokeLineJoin(StrokeLineJoin.ROUND);
-
-        Path page1 = new Path(
-            new MoveTo(4.5, 6.8), new LineTo(13.5, 6.8), new LineTo(16.5, 9.8),
-            new LineTo(16.5, 19.5), new LineTo(4.5, 19.5), new ClosePath()
-        );
-        page1.setStroke(c);
-        page1.setStrokeWidth(1.5);
-        page1.setFill(Color.TRANSPARENT);
-        page1.setStrokeLineCap(StrokeLineCap.ROUND);
-        page1.setStrokeLineJoin(StrokeLineJoin.ROUND);
+        branch.setStroke(c);
+        branch.setStrokeWidth(1.7);
+        branch.setFill(Color.TRANSPARENT);
+        branch.setStrokeLineCap(StrokeLineCap.ROUND);
 
         g.getChildren().addAll(
-            page2, page1,
-            ln(6.8, 12.3, 13.0, 12.3, c, 1.5),
-            ln(6.8, 15.2, 13.0, 15.2, c, 1.5),
-            ln(6.8, 18.1, 11.2, 18.1, c, 1.5)
+            ln(7, 7.6, 7, 16.6, c, 1.7),
+            branch,
+            circ(7, 5.2, 2.4, c, 1.7, false),
+            circ(7, 19, 2.4, c, 1.7, false),
+            circ(17, 8, 2.4, c, 1.7, false)
         );
         return g;
     }
