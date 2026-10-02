@@ -56,6 +56,7 @@ public final class QTraceMiniPanel {
     private double dragDx, dragDy;
 
     private Circle captureDot;
+    private Node pauseIcon;
     private Timeline captureBlink;
     private Label integrityBadge;
     private Button stampBtn, uploadBtn, resetBtn;
@@ -139,9 +140,14 @@ public final class QTraceMiniPanel {
         top.setAlignment(Pos.CENTER);
         nodes.add(top);
 
-        // Passive capture status — red (blinking) while recording, grey when paused.
-        captureDot = new Circle(6, Color.web(QTracePanel.TEXT_MUTED));
-        StackPane dotBox = new StackPane(captureDot);
+        // Passive capture status — a red dot (blinking) while recording, grey pause bars when paused.
+        captureDot = new Circle(6, Color.web(QTracePanel.RED));
+        javafx.scene.shape.Rectangle bar1 = new javafx.scene.shape.Rectangle(3.5, 12, Color.web(QTracePanel.TEXT_MUTED));
+        javafx.scene.shape.Rectangle bar2 = new javafx.scene.shape.Rectangle(3.5, 12, Color.web(QTracePanel.TEXT_MUTED));
+        javafx.scene.layout.HBox bars = new javafx.scene.layout.HBox(3.5, bar1, bar2);
+        bars.setAlignment(Pos.CENTER);
+        pauseIcon = bars;
+        StackPane dotBox = new StackPane(pauseIcon, captureDot);
         dotBox.setPadding(new Insets(3, 0, 12, 0));
         nodes.add(dotBox);
 
@@ -210,7 +216,8 @@ public final class QTraceMiniPanel {
     /** Re-renders from the panel's state — on every state change. FX thread. */
     private void refresh() {
         boolean recording = panel.isRecordingActive();
-        captureDot.setFill(Color.web(recording ? QTracePanel.RED : QTracePanel.TEXT_MUTED));
+        captureDot.setVisible(recording); // red dot while recording, grey pause bars otherwise
+        pauseIcon.setVisible(!recording);
         Tooltip.install(captureDot.getParent(), tip(recording ? "Recording" : "Paused"));
         if (recording && captureBlink == null) startBlink();
         else if (!recording) stopBlink();
