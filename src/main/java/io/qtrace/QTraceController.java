@@ -40,6 +40,7 @@ import qupath.lib.plugins.workflow.DefaultScriptableWorkflowStep;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import qupath.lib.projects.ProjectIO;
 import qupath.lib.projects.ProjectImageEntry;
 
 import java.awt.image.BufferedImage;
@@ -619,15 +620,11 @@ public class QTraceController {
         // Use Project Folder on + no project open: ask for a project rather than showing
         // whatever sits in the configured fallback folder.
         if (QTraceConfig.get().readExportDir().isEmpty()) {
-            Alert a = new Alert(Alert.AlertType.INFORMATION);
-            a.setTitle("qTrace — Dashboard");
-            a.setHeaderText(QTraceI18n.t("dashboard.project.header"));
-            a.setContentText(QTraceI18n.t("dashboard.project.content"));
-            if (qupath.getStage() != null) a.initOwner(qupath.getStage());
-            ButtonType open = new ButtonType(QTraceI18n.t("dashboard.project.open"), ButtonBar.ButtonData.OK_DONE);
-            a.getButtonTypes().setAll(open, ButtonType.CANCEL);
-            if (a.showAndWait().orElse(ButtonType.CANCEL) != open) return;
-            qupath.getCommonActions().PROJECT_OPEN.handle(new javafx.event.ActionEvent());
+            if (DashboardProjectPrompt.closeIfOpen()) return; // Dashboard clicked again: the prompt goes away
+            DashboardProjectPrompt.Choice choice = DashboardProjectPrompt.show(qupath);
+            if (choice.cancelled()) return;
+            if (choice.recent() != null) openRecentProject(choice.recent());
+            else qupath.getCommonActions().PROJECT_OPEN.handle(new javafx.event.ActionEvent());
             if (QTraceConfig.get().readExportDir().isEmpty()) return; // still no project
         }
         if (dashboard == null || !dashboard.isShowing()) {
@@ -646,6 +643,20 @@ public class QTraceController {
     }
 
     /** Opens the commit-graph window for the current image's .qtrace (Compliance feature). */
+    /** Opens a project picked in the Dashboard's recent list, the way QuPath's own menu does. */
+    private void openRecentProject(java.net.URI uri) {
+        try {
+            qupath.setProject(ProjectIO.loadProject(uri, BufferedImage.class));
+        } catch (Exception e) {
+            Alert err = new Alert(Alert.AlertType.ERROR);
+            if (qupath.getStage() != null) err.initOwner(qupath.getStage());
+            err.setTitle("qTrace — Dashboard");
+            err.setHeaderText("This project could not be opened");
+            err.setContentText(String.valueOf(e.getMessage()));
+            err.showAndWait();
+        }
+    }
+
     public void showCommitGraph() {
         // Nothing to graph until there is a project, an open image, and at least one stamp (.qtrace).
         if (qupath.getProject() == null) {
