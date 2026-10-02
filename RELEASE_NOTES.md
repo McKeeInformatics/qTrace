@@ -1,3 +1,30 @@
+## What's new in v1.2.4
+
+### New — A mini-panel on the image
+qTrace now opens as a compact column docked on the viewer: the capture indicator (a blinking red dot while recording, grey pause bars otherwise) and the panel's buttons, each showing its name as soon as you hover it. **⤢** opens the full panel, **✕** takes the column off the image and **⠿** moves it. While a push to your workspace runs, Upload is replaced by a spinner. The panel now opens when QuPath starts; untick **Settings › Appearance › Show the panel when QuPath starts** to open it on demand only. The **Version(s)** button has a new icon, a small commit graph.
+
+### New — Take an instruction out of the replay
+In **⑃ Version(s)**, every replayable instruction has a **−** button that takes it out of the replay, and **+** puts it back. The instruction stays in the trace — dimmed, labelled "taken out of the replay", with who did it and when — but the Player never runs it: not step by step, not in continuous play, not in batch, and it is left out of the replay scripts. If you touch nothing, every instruction is replayed as before. Anything done since the last stamp can be changed; a stamp freezes the choice. By default the Player does not list these instructions; untick **Settings › Preferences › Hide the instructions taken out of the replay in the Player** to see them greyed out.
+
+### Changed — A stamp covers everything since the last one
+A stamp now validates all the work recorded since the previous stamp, not only the session in progress: the stamped session carries the instructions of the earlier sessions, unstamped ones included, even when QuPath had not kept them in its own history. Each certificate therefore replays the whole image on its own. When instructions were taken out of the replay, the stamp dialog says so on a **Replay (since last stamp)** line before you sign.
+
+### Changed — The Version window follows your work
+**⑃ Version(s)** now shows the capture **In progress** as a last session, so it opens before the very first stamp, and it updates by itself as you work and when you open another image. Click a session in the graph to list only its steps; click beside the nodes to list them all again. Steps inherited from an earlier session are no longer repeated in the next ones. The graph and the list both run from the latest to the oldest, each session headed by its milestone.
+
+### New — A local Git history of your QuPath project
+Each recorded session — autosave, stamp or replay — adds a commit to a local Git history in the project folder, covering the `.qtrace` files and their satellites, scripts and classifiers. Commits are authored with your certified name and your account email.
+
+### Changed — Bug reports describe your workstation
+A report of type **Bug** now also carries your workstation's configuration — OS, processor, memory, graphics card, screens, Java, free disk space — and the list of QuPath extensions with their versions; a line in the dialog says so. The same configuration is sent at each QuPath start, along with the qTrace version. Never the machine name, your login or a file path.
+
+### Fixed
+- The Player replays the certified session of a `qtc_…` certificate rather than the image's whole history; **Full image history** replays everything.
+- A manual annotation taken out of the replay stays out when qTrace captures it again.
+- Opening the panel no longer adds a "Panel opened" line to the activity log.
+
+---
+
 ## What's new in v1.2.3
 
 ### New — Every step in the Version window
