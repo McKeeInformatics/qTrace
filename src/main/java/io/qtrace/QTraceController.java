@@ -620,11 +620,8 @@ public class QTraceController {
         // Use Project Folder on + no project open: ask for a project rather than showing
         // whatever sits in the configured fallback folder.
         if (QTraceConfig.get().readExportDir().isEmpty()) {
-            if (DashboardProjectPrompt.closeIfOpen()) return; // Dashboard clicked again: the prompt goes away
-            DashboardProjectPrompt.Choice choice = DashboardProjectPrompt.show(qupath);
-            if (choice.cancelled()) return;
-            if (choice.recent() != null) openRecentProject(choice.recent());
-            else qupath.getCommonActions().PROJECT_OPEN.handle(new javafx.event.ActionEvent());
+            if (ProjectPrompt.closeIfOpen()) return; // Dashboard clicked again: the prompt goes away
+            if (!promptForProject("qTrace — Dashboard", QTraceI18n.t("dashboard.project.content"))) return;
             if (QTraceConfig.get().readExportDir().isEmpty()) return; // still no project
         }
         if (dashboard == null || !dashboard.isShowing()) {
@@ -643,7 +640,27 @@ public class QTraceController {
     }
 
     /** Opens the commit-graph window for the current image's .qtrace (Compliance feature). */
-    /** Opens a project picked in the Dashboard's recent list, the way QuPath's own menu does. */
+    /** No project is open yet — the state the mini-panel shows as ▶ Start. */
+    public boolean needsProject() {
+        return qupath.getProject() == null && qupath.getImageData() == null;
+    }
+
+    /** Mini-panel ▶ Start: pick a recent project (or any other) to begin working. A toggle. */
+    public void startWork() {
+        if (ProjectPrompt.closeIfOpen()) return;
+        promptForProject("qTrace — Start", QTraceI18n.t("start.project.content"));
+    }
+
+    /** Recent projects / "Open Project…"; false when the user cancelled. */
+    private boolean promptForProject(String windowTitle, String why) {
+        ProjectPrompt.Choice choice = ProjectPrompt.show(qupath, windowTitle, why);
+        if (choice.cancelled()) return false;
+        if (choice.recent() != null) openRecentProject(choice.recent());
+        else qupath.getCommonActions().PROJECT_OPEN.handle(new javafx.event.ActionEvent());
+        return true;
+    }
+
+    /** Opens a project picked in the recent list, the way QuPath's own menu does. */
     private void openRecentProject(java.net.URI uri) {
         try {
             qupath.setProject(ProjectIO.loadProject(uri, BufferedImage.class));

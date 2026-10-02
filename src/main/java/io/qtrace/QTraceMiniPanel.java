@@ -56,7 +56,8 @@ public final class QTraceMiniPanel {
     private double dragDx, dragDy;
 
     private Circle captureDot;
-    private Node pauseIcon;
+    private Node pauseIcon, startIcon;
+    private StackPane statusBox;
     private Timeline captureBlink;
     private Label integrityBadge;
     private Button stampBtn, uploadBtn, resetBtn;
@@ -91,6 +92,9 @@ public final class QTraceMiniPanel {
         column.heightProperty().addListener((o, a, b) -> place());
         rebuild();
         panel.addStateListener(this::refresh);
+        // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
+        var project = qupath.projectProperty();
+        if (project != null) project.addListener((o, a, b) -> refresh());
     }
 
     public boolean isDocked() { return overlay != null; }
@@ -159,7 +163,13 @@ public final class QTraceMiniPanel {
         javafx.scene.layout.HBox bars = new javafx.scene.layout.HBox(3.5, bar1, bar2);
         bars.setAlignment(Pos.CENTER);
         pauseIcon = bars;
-        StackPane dotBox = new StackPane(pauseIcon, captureDot);
+        // ▶ Start — shown instead while no project is open: one click lists the recent projects.
+        javafx.scene.shape.Polygon play = new javafx.scene.shape.Polygon(0, 0, 13, 7.5, 0, 15);
+        play.setFill(Color.web(QTracePanel.GREEN));
+        startIcon = play;
+        StackPane dotBox = new StackPane(pauseIcon, captureDot, startIcon);
+        statusBox = dotBox;
+        dotBox.setOnMouseClicked(e -> { if (startIcon.isVisible()) controller.startWork(); });
         dotBox.setPadding(new Insets(3, 0, 12, 0));
         nodes.add(dotBox);
 
@@ -235,9 +245,13 @@ public final class QTraceMiniPanel {
     /** Re-renders from the panel's state — on every state change. FX thread. */
     private void refresh() {
         boolean recording = panel.isRecordingActive();
-        captureDot.setVisible(recording); // red dot while recording, grey pause bars otherwise
-        pauseIcon.setVisible(!recording);
-        Tooltip.install(captureDot.getParent(), tip(recording ? "Recording" : "Paused"));
+        // ▶ Start with no project open; then a red dot while recording, grey pause bars otherwise.
+        boolean start = !recording && controller.needsProject();
+        startIcon.setVisible(start);
+        captureDot.setVisible(recording);
+        pauseIcon.setVisible(!recording && !start);
+        statusBox.setCursor(start ? Cursor.HAND : null);
+        Tooltip.install(statusBox, tip(start ? "Start — open a project" : recording ? "Recording" : "Paused"));
         if (recording && captureBlink == null) startBlink();
         else if (!recording) stopBlink();
 

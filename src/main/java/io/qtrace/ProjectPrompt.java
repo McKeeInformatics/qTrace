@@ -17,11 +17,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Dashboard with "Use Project Folder" on and no project open: asks for a project — one click on
- * a recent one, or QuPath's own "Open Project…" — rather than showing whatever sits in the
- * configured fallback folder. Not modal, one at a time: the Dashboard button closes it again.
+ * Asks for a QuPath project when a feature needs one and none is open — one click on a recent
+ * project, or QuPath's own "Open Project…". Used by the mini-panel's Start and by the Dashboard
+ * ("Use Project Folder" on). Not modal, one at a time: the button that raised it closes it again.
  */
-final class DashboardProjectPrompt {
+final class ProjectPrompt {
 
     private static final int MAX_RECENT = 6;
 
@@ -33,7 +33,7 @@ final class DashboardProjectPrompt {
 
     private static Alert current; // FX thread only
 
-    private DashboardProjectPrompt() {}
+    private ProjectPrompt() {}
 
     /** Closes the prompt if it is open (= Cancel); true when it did. */
     static boolean closeIfOpen() {
@@ -58,9 +58,13 @@ final class DashboardProjectPrompt {
         return out;
     }
 
-    static Choice show(QuPathGUI qupath) {
+    /**
+     * @param windowTitle "qTrace — <feature>"
+     * @param why         one paragraph: why a project is needed here
+     */
+    static Choice show(QuPathGUI qupath, String windowTitle, String why) {
         Alert a = new Alert(Alert.AlertType.NONE);
-        a.setTitle("qTrace — Dashboard");
+        a.setTitle(windowTitle);
         if (qupath.getStage() != null) a.initOwner(qupath.getStage());
         a.initModality(Modality.NONE);
         ButtonType open = new ButtonType(QTraceI18n.t("dashboard.project.open"), ButtonBar.ButtonData.OK_DONE);
@@ -70,11 +74,11 @@ final class DashboardProjectPrompt {
         URI[] picked = new URI[1];
         VBox body = new VBox(10);
         body.setPadding(new Insets(16, 20, 6, 20));
-        Label why = new Label(QTraceI18n.t("dashboard.project.content"));
-        why.setWrapText(true);
-        why.setMaxWidth(420);
-        why.setStyle("-fx-text-fill: " + DialogLook.TEXT_SUB + "; -fx-font-size: 12;");
-        body.getChildren().add(why);
+        Label whyLbl = new Label(why);
+        whyLbl.setWrapText(true);
+        whyLbl.setMaxWidth(420);
+        whyLbl.setStyle("-fx-text-fill: " + DialogLook.TEXT_SUB + "; -fx-font-size: 12;");
+        body.getChildren().add(whyLbl);
 
         List<Recent> recents;
         try {

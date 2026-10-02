@@ -11,7 +11,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Recent QuPath projects offered by the Dashboard's "open a project" prompt. */
-class DashboardProjectPromptTest {
+class ProjectPromptTest {
 
     @Test
     void namesAProjectAfterItsFolder_andDropsWhatNoLongerExists(@TempDir Path tmp) throws Exception {
@@ -19,8 +19,8 @@ class DashboardProjectPromptTest {
         Files.writeString(kept, "{}");
         URI gone = tmp.resolve("deleted").resolve("project.qpproj").toUri();
 
-        List<DashboardProjectPrompt.Recent> recents =
-            DashboardProjectPrompt.recents(List.of(gone, kept.toUri(), URI.create("https://example.org/p.qpproj")), 6);
+        List<ProjectPrompt.Recent> recents =
+            ProjectPrompt.recents(List.of(gone, kept.toUri(), URI.create("https://example.org/p.qpproj")), 6);
 
         assertEquals(1, recents.size());
         assertEquals("TMA_study", recents.get(0).name());
@@ -36,7 +36,7 @@ class DashboardProjectPromptTest {
             Files.writeString(p, "{}");
             uris.add(p.toUri());
         }
-        List<DashboardProjectPrompt.Recent> recents = DashboardProjectPrompt.recents(uris, 3);
-        assertEquals(List.of("p0", "p1", "p2"), recents.stream().map(DashboardProjectPrompt.Recent::name).toList());
+        List<ProjectPrompt.Recent> recents = ProjectPrompt.recents(uris, 3);
+        assertEquals(List.of("p0", "p1", "p2"), recents.stream().map(ProjectPrompt.Recent::name).toList());
     }
 }
