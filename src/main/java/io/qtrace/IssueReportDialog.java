@@ -69,6 +69,8 @@ public final class IssueReportDialog {
       + "-fx-text-fill: " + TEXT_MAIN + "; -fx-prompt-text-fill: " + TEXT_MUTED + ";"
       + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;";
 
+    private static final int BUG_INDEX = 1; // position of "Bug" in the type list
+
     private IssueReportDialog() {}
 
     public static void show(QuPathGUI qupath) {
@@ -94,7 +96,8 @@ public final class IssueReportDialog {
         HBox.setHgrow(tfTitle, Priority.ALWAYS);
 
         ComboBox<String> cbType = new ComboBox<>();
-        cbType.getItems().addAll(QTraceI18n.t("report.type.bug"), QTraceI18n.t("report.type.feature"));
+        // Feature request first, and the default; Bug second (BUG_INDEX).
+        cbType.getItems().addAll(QTraceI18n.t("report.type.feature"), QTraceI18n.t("report.type.bug"));
         cbType.getSelectionModel().selectFirst();
         cbType.setPrefHeight(30);
         cbType.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-border-color: " + BORDER + ";"
@@ -214,7 +217,7 @@ public final class IssueReportDialog {
             String jwt = QTraceUpdater.licenseJwt();
             if (jwt == null) { lblStatus.setText(QTraceI18n.t("report.err.license")); return; }
 
-            boolean bug = cbType.getSelectionModel().getSelectedIndex() == 0;
+            boolean bug = cbType.getSelectionModel().getSelectedIndex() == BUG_INDEX;
             List<byte[]> sent = new ArrayList<>(images);
             // A bug is read against the workstation it happened on. What needs the JavaFX
             // thread is read here; the rest (it may ask the OS) on the sending thread.
@@ -260,7 +263,7 @@ public final class IssueReportDialog {
         Label lblEnv = new Label(QTraceI18n.t("report.env.notice"));
         lblEnv.setWrapText(true);
         lblEnv.setStyle("-fx-text-fill: " + TEXT_MUTED + "; -fx-font-size: 11;");
-        lblEnv.visibleProperty().bind(cbType.getSelectionModel().selectedIndexProperty().isEqualTo(0));
+        lblEnv.visibleProperty().bind(cbType.getSelectionModel().selectedIndexProperty().isEqualTo(BUG_INDEX));
 
         // Same shell as Settings: title bar on the darker surface, content, buttons at the bottom right.
         Label header = new Label(QTraceI18n.t("report.title").replace("qTrace — ", ""));
