@@ -107,8 +107,11 @@ public class QTracePanel {
     private Label    logTitle;
     private VBox     logSection;
     private String   lastLogLine = "";
-    private double   expandedHeight = 460;
-    private static final double MIN_HEIGHT           = 340;
+    // Tall enough for the footer (resize grip, ⤡ back to the mini-panel) to show without resizing,
+    // window decorations and the integrity alert included.
+    private static final double DEFAULT_HEIGHT       = 560;
+    private double   expandedHeight = DEFAULT_HEIGHT;
+    private static final double MIN_HEIGHT           = 440;
     private static final double MIN_HEIGHT_COLLAPSED = 200;
     private Label    progressLabel;
     private Timeline progressTimeline;
@@ -128,8 +131,8 @@ public class QTracePanel {
         stage.initModality(Modality.NONE);
         stage.setTitle(QTraceController.getEditionLabel());
         stage.setResizable(true);
-        stage.setMinHeight(340);
-        stage.setHeight(460);
+        stage.setMinHeight(MIN_HEIGHT);
+        stage.setHeight(DEFAULT_HEIGHT);
         // Narrow on demand: below captionsWidth() the toolbar drops its captions (icons +
         // tooltips), and wraps onto a second line if even that doesn't fit — see applyCompactToolbar.
         stage.setMinWidth(MIN_WIDTH);
@@ -139,7 +142,7 @@ public class QTracePanel {
         if (logo != null) stage.getIcons().add(logo);
         // Sized on the Scene too: the stage width alone was once dropped on first show (the window
         // opening at the root's preferred width — icons only, since the 360 px minimum).
-        stage.setScene(new Scene(buildRoot(), captionsWidth(), 460));
+        stage.setScene(new Scene(buildRoot(), captionsWidth(), DEFAULT_HEIGHT));
         if (QTraceConfig.get().isPanelLogCollapsed()) Platform.runLater(() -> applyLogCollapsed(true, false));
         stage.setOnCloseRequest(e -> {
             if (keepAliveOnClose) return; // the log keeps filling for the next ⤢
@@ -632,6 +635,7 @@ public class QTracePanel {
         logArea.setId("activity-log"); // looked up by the screenshot harness — see ScreenshotHarness
         logArea.setEditable(false);
         logArea.setPrefHeight(90);
+        logArea.setMinHeight(40); // gives way first, so the footer stays in view in a short window
         VBox.setVgrow(logArea, Priority.ALWAYS);
         logArea.setStyle(
             "-fx-background-color: " + BG_SURFACE + ";"
