@@ -788,7 +788,7 @@ public class QTraceController {
     public void openCurrentQtraceFile() {
         File file = currentQtraceFile();
         if (file == null) {
-            showGraphInfo(QTraceI18n.t("report.info.noqtrace"));
+            showGraphInfo("qTrace — Open .qtrace", QTraceI18n.t("report.info.noqtrace"));
             return;
         }
         openWithOs(file);
@@ -817,15 +817,19 @@ public class QTraceController {
     private javafx.scene.control.Alert graphInfo; // the open "this needs an image…" notice, if any
 
     /**
-     * Notice shown when Version(s) / Report has nothing to work on. One at a time, and not modal:
+     * Notice shown when Version(s) / Report / Open .qtrace has nothing to work on. One at a time, and not modal:
      * clicking the button again closes it (a toggle, like the windows these buttons open).
      */
     private void showGraphInfo(String message) {
+        showGraphInfo(QTraceI18n.t("graph.window.title"), message);
+    }
+
+    /** @param windowTitle "qTrace — <feature>": the feature's name also heads the notice. */
+    private void showGraphInfo(String windowTitle, String message) {
         Platform.runLater(() -> {
             if (graphInfo != null && graphInfo.isShowing()) { graphInfo.close(); return; }
             javafx.scene.control.Alert alert =
                 new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
-            String windowTitle = QTraceI18n.t("graph.window.title");
             alert.setTitle(windowTitle);
             if (qupath != null && qupath.getStage() != null)
                 alert.initOwner(qupath.getStage());
@@ -1530,16 +1534,16 @@ public class QTraceController {
         QTracePlugin ep = QTracePluginManager.getEntitled();
         if (ep == null) return;
         if (qupath.getProject() == null) {
-            showGraphInfo(QTraceI18n.t("graph.info.noproject"));
+            showGraphInfo(QTraceI18n.t("report.window.title"), QTraceI18n.t("graph.info.noproject"));
             return;
         }
         if (qupath.getImageData() == null) {
-            showGraphInfo(QTraceI18n.t("graph.info.noimage"));
+            showGraphInfo(QTraceI18n.t("report.window.title"), QTraceI18n.t("graph.info.noimage"));
             return;
         }
         File qtrace = currentQtraceFile();
         if (qtrace == null) {
-            showGraphInfo(QTraceI18n.t("report.info.noqtrace"));
+            showGraphInfo(QTraceI18n.t("report.window.title"), QTraceI18n.t("report.info.noqtrace"));
             return;
         }
         ActivityLog.add("▤ " + QTraceI18n.t("report.generating"));
