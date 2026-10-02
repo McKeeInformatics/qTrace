@@ -81,11 +81,13 @@ public class QTraceBatchExporter {
     @SuppressWarnings("unchecked")
     private static Dialog<BatchConfig> preflight; // the open pre-flight dialog, if any — FX thread only
     private static Stage progress;                // the running batch's window, if any
+    private static Alert notice;                  // the open "no project…" notice, if any
 
     public static void start(QuPathGUI qupath, QTraceController controller) {
         // Import clicked again: the pre-flight dialog goes away (= Cancel). A batch that is
         // running is never stopped that way — its window just comes back to the front.
         if (preflight != null && preflight.isShowing()) { preflight.close(); return; }
+        if (notice != null && notice.isShowing()) { notice.close(); return; }
         if (progress != null && progress.isShowing()) { progress.toFront(); return; }
         var project = qupath.getProject();
         if (project == null) {
@@ -512,13 +514,25 @@ public class QTraceBatchExporter {
         return l;
     }
 
+    /**
+     * A notice in the qTrace look (title bar = the header, then the explanation). Not modal and
+     * one at a time: Import clicked again closes it (see {@link #start}); Esc and OK too.
+     */
     private static void alert(Stage owner, Alert.AlertType type,
                               String title, String header, String content) {
-        Alert a = new Alert(type);
+        Alert a = new Alert(Alert.AlertType.NONE);
         a.initOwner(owner);
-        a.setTitle(title);
-        a.setHeaderText(header);
-        if (content != null) a.setContentText(content);
-        a.showAndWait();
+        a.initModality(Modality.NONE);
+        a.setTitle("qTrace — " + title);
+        a.getButtonTypes().setAll(ButtonType.OK);
+        DialogLook.apply(a, header, null, content != null ? DialogLook.text(content) : null,
+            ButtonType.OK, type == Alert.AlertType.ERROR ? DialogLook.RED : DialogLook.BLUE, ButtonType.CANCEL);
+        // No Cancel button here: Esc closes the notice, like OK.
+        a.getDialogPane().addEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) { a.close(); e.consume(); }
+        });
+        notice = a;
+        a.setOnHidden(e -> { if (notice == a) notice = null; });
+        a.show();
     }
 }
