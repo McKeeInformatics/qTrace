@@ -209,6 +209,13 @@ public final class QTraceMiniPanel {
         nodes.add(settingsBtn);
         nodes.add(expandBtn);
 
+        // Smaller than the rest: not part of the daily workflow, but always one click away.
+        Button reportBtn = titled(QTraceMiniPanel::reportIcon,
+            QTraceI18n.t("report.menu").replace("...", ""), admin);
+        reportBtn.setOnAction(e -> IssueReportDialog.show(qupath));
+        VBox.setMargin(reportBtn, new Insets(4, 0, 0, 0));
+        nodes.add(reportBtn);
+
         column.getChildren().setAll(nodes);
         refresh();
     }
@@ -300,6 +307,33 @@ public final class QTraceMiniPanel {
         box.setPadding(new Insets(3));
         Tooltip.install(box, tip("Upload in progress…"));
         return box;
+    }
+
+    /** A speech bubble with an exclamation mark — "tell us": bug or feature request. */
+    private static Node reportIcon(Color c) {
+        javafx.scene.shape.Path bubble = new javafx.scene.shape.Path(
+            new javafx.scene.shape.MoveTo(3, 2),
+            new javafx.scene.shape.LineTo(13, 2),
+            new javafx.scene.shape.QuadCurveTo(15, 2, 15, 4),
+            new javafx.scene.shape.LineTo(15, 9),
+            new javafx.scene.shape.QuadCurveTo(15, 11, 13, 11),
+            new javafx.scene.shape.LineTo(7.5, 11),
+            new javafx.scene.shape.LineTo(4.5, 14),
+            new javafx.scene.shape.LineTo(4.5, 11),
+            new javafx.scene.shape.LineTo(3, 11),
+            new javafx.scene.shape.QuadCurveTo(1, 11, 1, 9),
+            new javafx.scene.shape.LineTo(1, 4),
+            new javafx.scene.shape.QuadCurveTo(1, 2, 3, 2),
+            new javafx.scene.shape.ClosePath());
+        bubble.setStroke(c);
+        bubble.setStrokeWidth(1.3);
+        bubble.setFill(Color.TRANSPARENT);
+        bubble.setStrokeLineJoin(javafx.scene.shape.StrokeLineJoin.ROUND);
+        javafx.scene.shape.Line bar = new javafx.scene.shape.Line(8, 4.3, 8, 7);
+        bar.setStroke(c);
+        bar.setStrokeWidth(1.4);
+        bar.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        return new javafx.scene.Group(bubble, bar, new Circle(8, 9, 0.8, c));
     }
 
     private static Region separator() {
