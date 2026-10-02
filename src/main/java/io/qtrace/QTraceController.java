@@ -1136,9 +1136,12 @@ public class QTraceController {
         // certify a stale .qpdata that doesn't contain what the validator is attesting.
         var imageData = logger.getCurrentImageData();
         if (imageData != null && imageData.isChanged()) {
-            showSaveBeforeStampInfo();
-            ActivityLog.add("Stamp cancelled — save your work on this image first (File › Save, Ctrl+S).");
-            return;
+            if (!confirmSaveBeforeStamp()) {
+                ActivityLog.add("Stamp cancelled — your work on this image isn't saved.");
+                return;
+            }
+            if (!saveImageWork(imageData)) return;
+            ActivityLog.add("Work on this image saved — stamping.");
         }
         logger.refreshAllAnnotationCaptures();
         ensureProjectFolderDirs();
@@ -1166,8 +1169,9 @@ public class QTraceController {
             );
     }
 
-    private void showSaveBeforeStampInfo() {
-        Alert a = new Alert(Alert.AlertType.INFORMATION);
+    /** "Save now & Continue" (true) or Cancel — Esc cancels. */
+    private boolean confirmSaveBeforeStamp() {
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION);
         a.initOwner(qupath.getStage());
         a.setTitle("qTrace — Save before stamping");
         a.setHeaderText("Your work on this image isn't saved yet");
@@ -1176,7 +1180,48 @@ public class QTraceController {
         a.setContentText(
             "The stamp certifies your work on this image — annotations, detections, measurements "
           + "and history — as saved in its QuPath data file (.qpdata); the image pixels are never "
-          + "modified. Save your work first (File › Save, or Ctrl+S), then click Stamp again.");
+          + "modified. Save your work now to continue with the stamp.");
+        ButtonType save = new ButtonType("Save now & Continue", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE); // Esc
+        a.getButtonTypes().setAll(save, cancel);
+        return a.showAndWait().orElse(cancel) == save;
+    }
+
+    /**
+     * Saves the work on the open image the way File › Save does: into its project entry, or
+     * over the .qpdata it was last saved to. False (and an explanation) when it can't be done
+     * from here — an image outside any project that was never saved needs File › Save As.
+     */
+    private boolean saveImageWork(ImageData<BufferedImage> imageData) {
+        try {
+            var project = qupath.getProject();
+            var entry = project != null ? project.getEntry(imageData) : null;
+            if (entry != null) {
+                entry.saveImageData(imageData);
+                project.syncChanges();
+            } else if (imageData.getLastSavedPath() != null) {
+                PathIO.writeImageData(Path.of(imageData.getLastSavedPath()), imageData);
+            } else {
+                saveFailed("This image isn't part of a project and has never been saved. "
+                    + "Save it once with File › Save As, then click Stamp again.");
+                return false;
+            }
+            if (imageData.isChanged()) imageData.setChanged(false);
+            return true;
+        } catch (Exception e) {
+            saveFailed("QuPath could not save your work: " + e.getMessage()
+                + "\nSave it with File › Save (Ctrl+S), then click Stamp again.");
+            return false;
+        }
+    }
+
+    private void saveFailed(String message) {
+        ActivityLog.add("Stamp cancelled — the work on this image could not be saved.");
+        Alert a = new Alert(Alert.AlertType.ERROR);
+        a.initOwner(qupath.getStage());
+        a.setTitle("qTrace — Save before stamping");
+        a.setHeaderText("Your work on this image could not be saved");
+        a.setContentText(message);
         a.showAndWait();
     }
 
