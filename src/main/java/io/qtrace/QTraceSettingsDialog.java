@@ -622,7 +622,12 @@ public class QTraceSettingsDialog {
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
         root.setPrefSize(780, 500);
 
-        dlg.setScene(new Scene(root));
+        Scene scene = new Scene(root);
+        // Esc = Cancel. A handler, not a filter: an open drop-down takes its own Esc first.
+        scene.addEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) { btnCancel.fire(); e.consume(); }
+        });
+        dlg.setScene(scene);
         dlg.showAndWait();
     }
 
