@@ -31,10 +31,10 @@ import java.util.prefs.Preferences;
  * image by its ⠿ handle — position and folded state are remembered across sessions:
  *
  * <pre>
- *  ⠿ ✕  ●  [⚠]  Stamp │ Upload Replay │ Version(s) Report │ Dashboard Import Reset │ ⚙ ⤢ ▴
+ *  ⠿ ✕  ●  [⚠]  Stamp │ Upload Replay │ Version(s) Report │ Dashboard Import Reset │ ⚙ ☰ ⤡
  * </pre>
  *
- * A view over a {@link QTracePanel} built but not shown — same state, same actions: ⤢ shows
+ * A view over a {@link QTracePanel} built but not shown — same state, same actions: ☰ shows
  * that panel's window (counters, integrity alert, activity log).
  */
 public final class QTraceMiniPanel {
@@ -139,11 +139,7 @@ public final class QTraceMiniPanel {
         handle.setOnMouseDragged(this::drag);
         handle.setOnMouseReleased(e -> endDrag());
 
-        Button closeBtn = new Button("✕");
-        closeBtn.setFont(Font.font("System", 10));
-        closeBtn.setTextFill(Color.web(QTracePanel.TEXT_MUTED));
-        closeBtn.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 1 3 1 3;");
-        closeBtn.setTooltip(tip("Close"));
+        Button closeBtn = boxed("✕", "Close");
         closeBtn.setOnAction(e -> close());
         javafx.scene.layout.HBox top = new javafx.scene.layout.HBox(4, handle, closeBtn);
         top.setAlignment(Pos.CENTER);
@@ -152,7 +148,7 @@ public final class QTraceMiniPanel {
         // Passive capture status — red (blinking) while recording, grey when paused.
         captureDot = new Circle(6, Color.web(QTracePanel.TEXT_MUTED));
         StackPane dotBox = new StackPane(captureDot);
-        dotBox.setPadding(new Insets(3, 0, 3, 0));
+        dotBox.setPadding(new Insets(3, 0, 12, 0));
         nodes.add(dotBox);
 
         // Integrity alert for the open image — hidden unless its stamp no longer holds.
@@ -208,7 +204,7 @@ public final class QTraceMiniPanel {
             nodes.add(separator());
             Button settingsBtn = titled(glyph("⚙"), "Settings", admin);
             settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
-            Button expandBtn = titled(glyph("⤢"), "Full panel", admin);
+            Button expandBtn = titled(glyph("☰"), "Full panel", admin);
             expandBtn.setOnAction(e -> panel.show());
             nodes.add(settingsBtn);
             nodes.add(expandBtn);
@@ -217,8 +213,8 @@ public final class QTraceMiniPanel {
             resetBtn = null;
         }
 
-        Button collapseBtn = titled(glyph(collapsed ? "▾" : "▴"),
-            collapsed ? "Unfold" : "Fold", Color.web(QTracePanel.GROUP_ADMIN));
+        // Same glyphs and look as the mini-player's ⤢ / ⤡.
+        Button collapseBtn = boxed(collapsed ? "⤢" : "⤡", collapsed ? "Unfold" : "Fold");
         collapseBtn.setOnAction(e -> setCollapsed(!collapsed));
         nodes.add(collapseBtn);
 
@@ -277,6 +273,16 @@ public final class QTraceMiniPanel {
             l.setTextFill(c);
             return l;
         };
+    }
+
+    /** A small framed text button — the mini-player's button look (QTraceMiniPlayerBar.style). */
+    private static Button boxed(String text, String title) {
+        Button b = new Button(text);
+        b.setTooltip(tip(title));
+        b.setStyle("-fx-background-color: " + QTracePanel.BG_SURFACE + "; -fx-text-fill: " + QTracePanel.TEXT_MAIN + ";"
+            + "-fx-border-color: " + QTracePanel.BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4;"
+            + "-fx-cursor: hand; -fx-padding: 2 7 2 7;");
+        return b;
     }
 
     /** A button named by its panel caption (i18n key) — the name shows the moment it is hovered. */
