@@ -1545,7 +1545,7 @@ public class QTraceController {
         return collectLoadedExtensions(qupath);
     }
 
-    private static JsonArray collectLoadedExtensions(QuPathGUI qupath) {
+    static JsonArray collectLoadedExtensions(QuPathGUI qupath) {
         JsonArray arr = new JsonArray();
 
         // QuPath 0.5.x: getLoadedExtensions() on QuPathGUI

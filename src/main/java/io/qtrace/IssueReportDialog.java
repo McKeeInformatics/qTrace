@@ -183,13 +183,33 @@ public final class IssueReportDialog {
             if (jwt == null) { lblStatus.setText(QTraceI18n.t("report.err.license")); return; }
 
             boolean bug = cbType.getSelectionModel().getSelectedIndex() == 0;
-            JsonObject body = IssueReportClient.buildBody(title, desc, bug, new ArrayList<>(images),
-                QTraceController.VERSION, qupathVersion(), System.getProperty("os.name"));
+            List<byte[]> sent = new ArrayList<>(images);
+            // A bug is read against the workstation it happened on. What needs the JavaFX
+            // thread is read here; the rest (it may ask the OS) on the sending thread.
+            String screens = bug ? screens() : null;
+            com.google.gson.JsonArray extensions = bug && qupath != null
+                ? QTraceController.collectLoadedExtensions(qupath) : null;
+            java.nio.file.Path projectDir = QTraceConfig.currentProjectDir();
 
             btnSend.setDisable(true);
             spinner.setVisible(true);
             lblStatus.setText("");
             Thread t = new Thread(() -> {
+                JsonObject system = null;
+                List<String> extensionFiles = null;
+                if (bug) {
+                    system = SystemInfo.collect(projectDir);
+                    if (screens != null) system.addProperty("screens", screens);
+                    java.nio.file.Path modules = SystemInfo.moduleDir();
+                    if (modules != null) {
+                        List<String> qtjars = SystemInfo.fileNames(modules, ".qtjar");
+                        if (!qtjars.isEmpty()) system.addProperty("qtraceModules", String.join(", ", qtjars));
+                        extensionFiles = SystemInfo.fileNames(modules.getParent(), ".jar");
+                    }
+                }
+                JsonObject body = IssueReportClient.buildBody(title, desc, bug, sent,
+                    QTraceController.VERSION, qupathVersion(), System.getProperty("os.name"),
+                    system, extensions, extensionFiles);
                 IssueReportClient.Result r = IssueReportClient.send(jwt, body);
                 Platform.runLater(() -> {
                     spinner.setVisible(false);
@@ -214,9 +234,14 @@ public final class IssueReportDialog {
         HBox actions = new HBox(8, spinner, btnSend, btnCancel);
         actions.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox root = new VBox(10, top, taDesc, imgBar, thumbs, lblStatus, actions);
+        Label lblEnv = new Label(QTraceI18n.t("report.env.notice"));
+        lblEnv.setWrapText(true);
+        lblEnv.setStyle("-fx-opacity: 0.7; -fx-font-size: 11;");
+        lblEnv.visibleProperty().bind(cbType.getSelectionModel().selectedIndexProperty().isEqualTo(0));
+
+        VBox root = new VBox(10, top, taDesc, imgBar, thumbs, lblEnv, lblStatus, actions);
         root.setPadding(new Insets(16));
-        dlg.setScene(new Scene(root, 640, 460));
+        dlg.setScene(new Scene(root, 640, 500));
         dlg.show();
     }
 
@@ -224,6 +249,19 @@ public final class IssueReportDialog {
         QTracePlugin p = QTracePluginManager.get();
         LicenseInfo li = p != null ? p.getActiveLicenseInfo() : null;
         return li != null && li.name() != null ? li.name() : "—";
+    }
+
+    /** "2 screens: 2560x1440 @1.0x, 1920x1080 @1.5x" — size and scale explain most display bugs. */
+    private static String screens() {
+        try {
+            List<String> out = new ArrayList<>();
+            for (javafx.stage.Screen s : javafx.stage.Screen.getScreens())
+                out.add((int) s.getBounds().getWidth() + "x" + (int) s.getBounds().getHeight()
+                    + " @" + s.getOutputScaleX() + "x");
+            return out.size() + (out.size() == 1 ? " screen: " : " screens: ") + String.join(", ", out);
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static String qupathVersion() {

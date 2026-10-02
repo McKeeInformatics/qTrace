@@ -28,6 +28,23 @@ class IssueReportClientTest {
     }
 
     @Test
+    void bodyCarriesTheWorkstationAndTheExtensions() {
+        JsonObject system = new JsonObject();
+        system.addProperty("os", "Linux 6.8 amd64");
+        com.google.gson.JsonArray exts = new com.google.gson.JsonArray();
+        JsonObject ext = new JsonObject();
+        ext.addProperty("name", "InstanSeg");
+        ext.addProperty("version", "0.1.6");
+        exts.add(ext);
+        JsonObject b = IssueReportClient.buildBody("T", "D", true, List.of(), "1.2.4", "0.7.0", "Linux",
+            system, exts, List.of("qupath-extension-instanseg-0.1.6.jar"));
+        JsonObject env = b.getAsJsonObject("env");
+        assertEquals("Linux 6.8 amd64", env.getAsJsonObject("system").get("os").getAsString());
+        assertEquals("InstanSeg", env.getAsJsonArray("extensions").get(0).getAsJsonObject().get("name").getAsString());
+        assertEquals("qupath-extension-instanseg-0.1.6.jar", env.getAsJsonArray("extensionFiles").get(0).getAsString());
+    }
+
+    @Test
     void statusMapsToUserMessages() {
         assertEquals("report.sent", IssueReportClient.messageKey(200));
         assertEquals("report.err.license", IssueReportClient.messageKey(401));
