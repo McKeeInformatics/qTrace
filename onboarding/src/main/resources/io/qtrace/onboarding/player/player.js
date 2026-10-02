@@ -270,7 +270,12 @@
   });
   $('prev').onclick = function () { step(-1); };
   $('next').onclick = function () { step(1); };
-  $('skip').onclick = function () { var v = visible(); go(v[v.length - 1]); };
+  // Skip leaves the tour. With a closing 'ready' slide (the trunk), that is the same exit as
+  // "Not now": the host marks the tour done and shows it. Otherwise, the last slide of the track.
+  $('skip').onclick = function () {
+    if (content.slides.some(function (s) { return s.id === 'ready'; })) { run('continue'); return; }
+    var v = visible(); go(v[v.length - 1]);
+  };
   $('skip').onkeydown = function (e) { if (e.key === 'Enter') $('skip').click(); };
   document.addEventListener('keydown', function (e) {
     if (e.target.closest && e.target.closest('input, textarea')) return;
