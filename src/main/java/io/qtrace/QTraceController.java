@@ -465,10 +465,8 @@ public class QTraceController {
             syncPanelState();
             miniPanel = QTraceMiniPanel.dock(qupath, this, panel);
             if (miniPanel == null) panel.show();
-        } else if (miniPanel != null && miniPanel.isDocked()) {
-            miniPanel.expand();
-        } else if (miniPanel != null && miniPanel.redock()) {
-            // closed by its ✕ while the full window stayed open — back on the image
+        } else if (miniPanel != null && (miniPanel.isDocked() || miniPanel.redock())) {
+            // already on the image — or put back there after its ✕, the full window having stayed open
         } else {
             panel.show();
         }
