@@ -439,11 +439,16 @@ public class QTracePanel {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.initOwner(controller.getQuPath().getStage());
         alert.setTitle("qTrace — Reset");
-        alert.setHeaderText("Reset will erase all of your traces.");
-        alert.setContentText("Are you sure you want to continue?");
         ButtonType btnReset  = new ButtonType("Reset", ButtonBar.ButtonData.OK_DONE);
-        ButtonType btnCancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType btnCancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE); // Esc
         alert.getButtonTypes().setAll(btnCancel, btnReset);
+        // Destructive: the action button is red, and Cancel is the default (Enter doesn't erase).
+        DialogLook.apply(alert, "Reset the capture",
+            "Everything captured on this image so far is erased.",
+            DialogLook.text("Reset will erase all of your traces. Are you sure you want to continue?"),
+            btnReset, DialogLook.RED, btnCancel);
+        if (alert.getDialogPane().lookupButton(btnReset) instanceof Button b) b.setDefaultButton(false);
+        if (alert.getDialogPane().lookupButton(btnCancel) instanceof Button c) c.setDefaultButton(true);
 
         alert.showAndWait().ifPresent(bt -> {
             if (bt == btnReset) controller.resetCapture();
