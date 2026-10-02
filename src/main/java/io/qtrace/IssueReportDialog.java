@@ -55,6 +55,20 @@ import java.util.List;
  */
 public final class IssueReportDialog {
 
+    // Catppuccin Mocha — matches QTraceSettingsDialog / QTracePanel
+    private static final String BG_BASE    = "#1e1e2e";
+    private static final String BG_SURFACE = "#181825";
+    private static final String BORDER     = "#313244";
+    private static final String TEXT_MAIN  = "#cdd6f4";
+    private static final String TEXT_SUB   = "#a6adc8";
+    private static final String TEXT_MUTED = "#6c7086";
+    private static final String BLUE       = "#89b4fa";
+    private static final String RED        = "#f38ba8";
+    private static final String FIELD =
+        "-fx-background-color: " + BG_SURFACE + "; -fx-control-inner-background: " + BG_SURFACE + ";"
+      + "-fx-text-fill: " + TEXT_MAIN + "; -fx-prompt-text-fill: " + TEXT_MUTED + ";"
+      + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;";
+
     private IssueReportDialog() {}
 
     public static void show(QuPathGUI qupath) {
@@ -75,15 +89,20 @@ public final class IssueReportDialog {
 
         TextField tfTitle = new TextField();
         tfTitle.setPromptText(QTraceI18n.t("report.field.title"));
+        tfTitle.setPrefHeight(30);
+        tfTitle.setStyle(FIELD);
         HBox.setHgrow(tfTitle, Priority.ALWAYS);
 
         ComboBox<String> cbType = new ComboBox<>();
         cbType.getItems().addAll(QTraceI18n.t("report.type.bug"), QTraceI18n.t("report.type.feature"));
         cbType.getSelectionModel().selectFirst();
+        cbType.setPrefHeight(30);
+        cbType.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-border-color: " + BORDER + ";"
+            + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;");
 
         String licensee = licenseeName();
         Label lblBy = new Label(QTraceI18n.t("report.by") + " " + licensee);
-        lblBy.setStyle("-fx-opacity: 0.7;");
+        lblBy.setStyle("-fx-text-fill: " + TEXT_SUB + "; -fx-font-size: 11;");
 
         HBox top = new HBox(8, tfTitle, cbType, lblBy);
         top.setAlignment(Pos.CENTER_LEFT);
@@ -92,15 +111,17 @@ public final class IssueReportDialog {
         taDesc.setPromptText(QTraceI18n.t("report.field.description"));
         taDesc.setWrapText(true);
         taDesc.setPrefRowCount(8);
+        taDesc.setStyle(FIELD);
         VBox.setVgrow(taDesc, Priority.ALWAYS);
 
         // ── Screenshots ────────────────────────────────────────────────────────
         List<byte[]> images = new ArrayList<>();
         FlowPane thumbs = new FlowPane(8, 8);
         Label lblHint = new Label(QTraceI18n.t("report.images.hint"));
-        lblHint.setStyle("-fx-opacity: 0.7;");
+        lblHint.setStyle("-fx-text-fill: " + TEXT_MUTED + "; -fx-font-size: 11;");
         Label lblStatus = new Label();
         lblStatus.setWrapText(true);
+        lblStatus.setStyle("-fx-text-fill: " + RED + "; -fx-font-size: 11;");
 
         Runnable[] refresh = new Runnable[1];
         Runnable addFailed = () -> lblStatus.setText(QTraceI18n.t("report.err.image"));
@@ -112,6 +133,8 @@ public final class IssueReportDialog {
                 iv.setFitHeight(64);
                 iv.setPreserveRatio(true);
                 Button rm = new Button("×");
+                rm.setStyle("-fx-background-color: " + BG_BASE + "; -fx-text-fill: " + TEXT_MAIN + ";"
+                    + "-fx-background-radius: 10; -fx-padding: 0 5 1 5; -fx-cursor: hand;");
                 rm.setOnAction(e -> { images.remove(idx); refresh[0].run(); });
                 StackPane cell = new StackPane(iv, rm);
                 StackPane.setAlignment(rm, Pos.TOP_RIGHT);
@@ -153,6 +176,9 @@ public final class IssueReportDialog {
         });
 
         Button btnAdd = new Button(QTraceI18n.t("report.images.add"));
+        btnAdd.setStyle("-fx-background-color: transparent; -fx-text-fill: " + TEXT_SUB + ";"
+            + "-fx-border-color: " + BORDER + "; -fx-border-radius: 6; -fx-background-radius: 6;"
+            + "-fx-cursor: hand; -fx-font-size: 12;");
         btnAdd.setOnAction(e -> {
             FileChooser fc = new FileChooser();
             fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(
@@ -166,10 +192,16 @@ public final class IssueReportDialog {
         // ── Actions ────────────────────────────────────────────────────────────
         Button btnSend = new Button(QTraceI18n.t("report.send"));
         btnSend.setDefaultButton(false);
+        btnSend.setPadding(new Insets(6, 18, 6, 18));
+        btnSend.setStyle("-fx-background-color: " + BLUE + "; -fx-text-fill: " + BG_BASE + ";"
+            + "-fx-background-radius: 6; -fx-cursor: hand; -fx-font-size: 12; -fx-font-weight: bold;");
         Button btnCancel = new Button(QTraceI18n.t("report.cancel"));
+        btnCancel.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;"
+            + "-fx-text-fill: " + TEXT_SUB + "; -fx-cursor: hand; -fx-font-size: 12;");
         btnCancel.setOnAction(e -> dlg.close());
         ProgressIndicator spinner = new ProgressIndicator();
         spinner.setPrefSize(18, 18);
+        spinner.setStyle("-fx-progress-color: " + BLUE + ";");
         spinner.setVisible(false);
 
         btnSend.setOnAction(e -> {
@@ -221,17 +253,39 @@ public final class IssueReportDialog {
             t.start();
         });
 
-        HBox actions = new HBox(8, spinner, btnSend, btnCancel);
+        HBox actions = new HBox(8, spinner, btnCancel, btnSend);
         actions.setAlignment(Pos.CENTER_RIGHT);
+        actions.setPadding(new Insets(8, 20, 16, 20));
 
         Label lblEnv = new Label(QTraceI18n.t("report.env.notice"));
         lblEnv.setWrapText(true);
-        lblEnv.setStyle("-fx-opacity: 0.7; -fx-font-size: 11;");
+        lblEnv.setStyle("-fx-text-fill: " + TEXT_MUTED + "; -fx-font-size: 11;");
         lblEnv.visibleProperty().bind(cbType.getSelectionModel().selectedIndexProperty().isEqualTo(0));
 
-        VBox root = new VBox(10, top, taDesc, imgBar, thumbs, lblEnv, lblStatus, actions);
-        root.setPadding(new Insets(16));
-        dlg.setScene(new Scene(root, 640, 500));
+        // Same shell as Settings: title bar on the darker surface, content, buttons at the bottom right.
+        Label header = new Label(QTraceI18n.t("report.title").replace("qTrace — ", ""));
+        header.setMaxWidth(Double.MAX_VALUE);
+        header.setPadding(new Insets(12, 20, 12, 20));
+        header.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-text-fill: " + TEXT_MAIN + ";"
+            + "-fx-font-size: 13; -fx-font-weight: bold;");
+
+        VBox content = new VBox(10, top, taDesc, imgBar, thumbs, lblEnv, lblStatus);
+        content.setPadding(new Insets(16, 20, 4, 20));
+        VBox.setVgrow(content, Priority.ALWAYS);
+
+        VBox root = new VBox(header, content, actions);
+        // -fx-base makes every control (drop-down list, scroll bars) dark with light text.
+        root.setStyle("-fx-background-color: " + BG_BASE + "; -fx-base: " + BG_BASE + ";"
+            + "-fx-control-inner-background: " + BG_SURFACE + "; -fx-accent: " + BLUE + ";"
+            + "-fx-focus-color: " + BLUE + "; -fx-faint-focus-color: transparent;");
+        Scene scene = new Scene(root, 640, 520);
+        // Esc = Cancel, as in Settings.
+        scene.addEventHandler(KeyEvent.KEY_PRESSED, ev -> {
+            if (ev.getCode() == KeyCode.ESCAPE) { btnCancel.fire(); ev.consume(); }
+        });
+        dlg.setScene(scene);
+        Image logo = QTracePanel.loadLogo();
+        if (logo != null) dlg.getIcons().add(logo);
         dlg.show();
     }
 
