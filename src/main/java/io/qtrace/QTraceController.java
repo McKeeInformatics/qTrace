@@ -1128,6 +1128,7 @@ public class QTraceController {
     // ── Action stubs ─────────────────────────────────────────────────────────
 
     public void recordTrace() {
+        if (ValidationStamper.closeIfOpen()) return; // Stamp clicked again: the dialog goes away (= Cancel)
         if (logger == null || !logger.hasSteps()) {
             ActivityLog.add("Nothing to record — no steps captured yet.");
             return;
@@ -1153,6 +1154,20 @@ public class QTraceController {
                                replaySinceLastStamp())
             .ifPresentOrElse(
                 stamp -> {
+                    // The dialog doesn't block QuPath: what it certifies was read when it opened,
+                    // so work done (or saved) meanwhile must not be stamped under those hashes.
+                    var now = logger.getCurrentImageData();
+                    if (now != imageData || (now != null && now.isChanged())
+                            || !java.util.Objects.equals(qpdataHash, resolveQpdataHash())) {
+                        ActivityLog.add("Stamp cancelled — the work on this image changed while the Stamp window was open.");
+                        Alert changed = new Alert(Alert.AlertType.WARNING);
+                        changed.initOwner(qupath.getStage());
+                        changed.setTitle("qTrace — Validate & Stamp");
+                        changed.setHeaderText("The work on this image changed while the Stamp window was open");
+                        changed.setContentText("Nothing was stamped. Click Stamp again to certify the image as it is now.");
+                        changed.showAndWait();
+                        return;
+                    }
                     lastStamp = stamp;
                     lastStampStepCount = logger.getCapturedSteps().size();
                     ActivityLog.add("Validation stamp recorded:");

@@ -59,6 +59,15 @@ public class ValidationStamper {
 
     private ValidationStamper() {}
 
+    private static Dialog<ValidationStamp> current; // the open stamp dialog, if any — FX thread only
+
+    /** Closes the stamp dialog if one is open (= Cancel); true when it did. The Stamp button is a toggle. */
+    static boolean closeIfOpen() {
+        if (current == null || !current.isShowing()) return false;
+        current.close();
+        return true;
+    }
+
     /**
      * Show the validation dialog and return the stamp if the user confirmed.
      *
@@ -89,6 +98,9 @@ public class ValidationStamper {
                                                   ReplaySkip.Summary replay) {
         Dialog<ValidationStamp> dialog = new Dialog<>();
         dialog.initOwner(owner);
+        // Not modal: the panel button that opened it must stay clickable to close it again.
+        // The caller checks that the work didn't change while the dialog was open.
+        dialog.initModality(javafx.stage.Modality.NONE);
         dialog.setTitle("qTrace — Validate & Stamp");
         dialog.setHeaderText(null); // replaced by the qTrace title bar built below
 
@@ -341,7 +353,12 @@ public class ValidationStamper {
             );
         });
 
-        return dialog.showAndWait();
+        current = dialog;
+        try {
+            return dialog.showAndWait();
+        } finally {
+            if (current == dialog) current = null;
+        }
     }
 
     private static Label fieldLabel(String text) {
