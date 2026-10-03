@@ -1,19 +1,3 @@
-## What's new in v1.2.5
-
-### New — Modules for your organization or your team
-qTrace can now receive modules built for your organization, or for one team in it. There is nothing to download: when QuPath starts, qTrace installs the modules your certificate includes and asks you to restart once. **Settings › About qTrace** has a new **Installed modules** list, with each module's version. A module your certificate no longer includes — you left the organization, or it was withdrawn — is switched off at the next start: what it added disappears and the list shows it greyed out, "no longer included in your licence". Offline, the last known state is kept.
-
-### New — A module can add its own step to Validate & Stamp
-A module can place a block just above the **Stamp** button; **Stamp** then sits centred under it, with **Cancel** below, and stays disabled until the block is complete. **Esc** still cancels. Without such a module the dialog is unchanged.
-
-### New — Close the project from the mini-panel
-With a project open, double-click the status indicator (the red **Recording** dot or the **Paused** bars) to close the image and the project, as **File › Project › Close project** does; QuPath offers to save unsaved work first. The indicator then goes back to **▶ Start**.
-
-### Changed
-- The full panel opens taller, so the **⤡** button at the bottom right shows without resizing.
-
----
-
 ## What's new in v1.2.4
 
 ### New — A mini-panel on the image
