@@ -395,9 +395,13 @@ public class ValidationStamper {
         stampBtn.setDefaultButton(false);
         stamp.setDefaultButton(true);
 
-        Hyperlink cancel = new Hyperlink("Cancel");
-        cancel.setStyle("-fx-text-fill: " + TEXT_SUB + "; -fx-font-size: 12; -fx-border-color: transparent;");
+        // A real cancel button, not a link: Esc must cancel here as it does on the standard one,
+        // which no longer answers once its bar is hidden.
+        Button cancel = new Button("Cancel");
+        cancel.setStyle(cancelBtn.getStyle());
         cancel.setOnAction(e -> cancelBtn.fire());
+        cancelBtn.setCancelButton(false);
+        cancel.setCancelButton(true);
 
         javafx.scene.layout.VBox actions = new javafx.scene.layout.VBox(10);
         actions.setAlignment(javafx.geometry.Pos.CENTER);
