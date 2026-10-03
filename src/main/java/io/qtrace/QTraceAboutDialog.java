@@ -85,6 +85,11 @@ public class QTraceAboutDialog {
         if (mode == Mode.CERTIFIED) content.getChildren().add(buildCertCard(activeLicense));
         content.getChildren().add(hRule());
         content.getChildren().add(buildFeatureGrid(mode));
+        VBox modules = buildModules();
+        if (modules != null) {
+            content.getChildren().add(hRule());
+            content.getChildren().add(modules);
+        }
         content.getChildren().add(hRule());
         content.getChildren().add(buildFooter(mode, inactive));
         return content;
@@ -431,6 +436,38 @@ public class QTraceAboutDialog {
     /** Red for a security failure (invalid signature), amber otherwise. */
     private static String inactiveColor() {
         return QTraceController.entitlementIsError() ? RED : ORANGE;
+    }
+
+    /**
+     * Installed qTrace modules (loader mode) with their version; one the licence no longer
+     * includes is greyed out and says so. Null when there is nothing to list.
+     */
+    private static VBox buildModules() {
+        if (!QTraceUpdater.loaderMode()) return null;
+        var local = ModuleUpdates.localVersions(QTraceUpdater.extensionsDir(QTraceAboutDialog.class));
+        if (local.isEmpty()) return null;
+
+        VBox box = new VBox(4);
+        box.setPadding(new Insets(12, 24, 12, 24));
+        Label title = new Label("Installed modules");
+        title.setFont(Font.font("System", FontWeight.BOLD, 10));
+        title.setTextFill(Color.web(TEXT_MUTED));
+        box.getChildren().add(title);
+        local.forEach((module, version) -> {
+            boolean on = ModuleEntitlements.isEntitled(module);
+            Label name = new Label(module);
+            name.setFont(Font.font("System", FontWeight.BOLD, 12));
+            name.setTextFill(Color.web(on ? TEXT_MAIN : TEXT_MUTED));
+            name.setMinWidth(110);
+            Label detail = new Label(on ? "v" + version : "v" + version + " — no longer included in your licence");
+            detail.setFont(Font.font("System", 11));
+            detail.setTextFill(Color.web(on ? TEXT_SUB : TEXT_MUTED));
+            HBox row = new HBox(8, name, detail);
+            row.setId("module-" + module);
+            row.setOpacity(on ? 1.0 : 0.6);
+            box.getChildren().add(row);
+        });
+        return box;
     }
 
     private static Label colHeader(String text, String color) {

@@ -89,6 +89,9 @@ public final class QTraceUpdater {
     private static final String BOOTSTRAP_URL = System.getProperty("qtrace.loader.bootstrap",
         "https://github.com/RomainTourte/qTrace-core/releases/latest/download/qtrace-bootstrap.json");
     private static final String MODULES_URL = SERVER + "/api/modules";
+
+    /** GET with the certificate: the licensed modules served to it (also read by ModuleEntitlements). */
+    static String modulesUrl() { return MODULES_URL; }
     private static final String COMP_DOWNLOAD_URL = SERVER + "/api/download/compliance/licensed";
 
     @FunctionalInterface

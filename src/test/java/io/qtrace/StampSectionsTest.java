@@ -23,6 +23,16 @@ class StampSectionsTest {
     @AfterEach
     void clear() {
         StampSections.clear();
+        ModuleEntitlements.setForTest(null);
+    }
+
+    @Test
+    void aModuleTheLicenceNoLongerIncludesAddsNothing() {
+        StampSections.register("security", () -> section(false));
+        ModuleEntitlements.setForTest(java.util.Set.of("compliance"));
+        assertTrue(StampSections.create().isEmpty());
+        ModuleEntitlements.setForTest(java.util.Set.of("compliance", "security"));
+        assertEquals(1, StampSections.create().size());
     }
 
     @Test
@@ -33,7 +43,7 @@ class StampSectionsTest {
     @Test
     void aRegisteredSectionIsBuiltAnewForEachDialog() {
         int[] built = {0};
-        StampSections.register(() -> { built[0]++; return section(true); });
+        StampSections.register("security", () -> { built[0]++; return section(true); });
         assertEquals(1, StampSections.create().size());
         assertEquals(1, StampSections.create().size());
         assertEquals(2, built[0]);
@@ -42,8 +52,8 @@ class StampSectionsTest {
     @Test
     void sectionsComeInRegistrationOrder() {
         StampSection a = section(true), b = section(false);
-        StampSections.register(() -> a);
-        StampSections.register(() -> b);
+        StampSections.register("security", () -> a);
+        StampSections.register("security", () -> b);
         assertEquals(List.of(a, b), StampSections.create());
     }
 
@@ -51,9 +61,9 @@ class StampSectionsTest {
     void aSectionThatFailsToBuildNeverBlocksTheStamp() {
         StampSection ok = section(true);
         Supplier<StampSection> broken = () -> { throw new IllegalStateException("boom"); };
-        StampSections.register(broken);
-        StampSections.register(() -> null);
-        StampSections.register(() -> ok);
+        StampSections.register("security", broken);
+        StampSections.register("security", () -> null);
+        StampSections.register("security", () -> ok);
         assertEquals(List.of(ok), StampSections.create());
     }
 

@@ -129,6 +129,8 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         QTraceLicenseGate.checkAtStartup(qupath, controller);
         // Provisional identity certificate → swapped for the verified one when it exists.
         CertificateRefresher.start(qupath, controller);
+        // Installed modules the licence no longer includes are switched off (server's answer).
+        ModuleEntitlements.refresh();
 
         // ── Startup update checks (async; user-validated, applied on restart) ──
         // Both checks are Core-driven so an old Compliance JAR still gets updated.
