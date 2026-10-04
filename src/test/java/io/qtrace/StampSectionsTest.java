@@ -20,6 +20,12 @@ class StampSectionsTest {
         };
     }
 
+    // Explicit, not whatever ~/.qTrace/modules-entitled.json says on the machine running the tests.
+    @org.junit.jupiter.api.BeforeEach
+    void securityIsIncluded() {
+        ModuleEntitlements.setForTest(java.util.Set.of("security"));
+    }
+
     @AfterEach
     void clear() {
         StampSections.clear();
