@@ -60,6 +60,13 @@ public interface VersionEditor {
         /** Moves an instruction up ({@code delta < 0}) or down inside its packet. */
         void moveStep(int packet, int step, int delta);
 
+        /**
+         * Moves an instruction to another place, in its packet or in another one: it lands
+         * before the instruction now at {@code toStep} of {@code toPacket}
+         * ({@code steps.size()}: at the end).
+         */
+        void moveStepTo(int packet, int step, int toPacket, int toStep);
+
         void removeStep(int packet, int step);
 
         /** Inserts an instruction at {@code at} ({@code steps.size()} appends). */

@@ -137,6 +137,12 @@ public class QTraceCommitGraph {
     private static final String ROW_IDLE = "-fx-border-color: transparent; -fx-border-width: 0 0 0 3;";
     private static final String ROW_SELECTED = "-fx-background-color: rgba(250,179,135,0.12);"
         + "-fx-border-color: " + PEACH + "; -fx-border-width: 0 0 0 3;";
+    // While a packet or an instruction is dragged over a row: where it would land.
+    private static final String ROW_DROP_BEFORE = "-fx-border-color: " + MAUVE + " transparent transparent transparent;"
+        + "-fx-border-width: 2 0 0 3;";
+    private static final String ROW_DROP_AFTER = "-fx-border-color: transparent transparent " + MAUVE + " transparent;"
+        + "-fx-border-width: 0 0 2 3;";
+    private static final String DRAG_PREFIX = "qtrace-workflow:";
     // Virtualized: real traces carry ~900 steps; one node tree per row made every click relayout
     // them all (~1 s per click). A ListView only builds the rows on screen.
     private final ListView<VersionTimeline.Entry> timelineList;
@@ -240,6 +246,14 @@ public class QTraceCommitGraph {
             Node n = nodes.get(e.sessionIndex());
             if (e.kind() == VersionTimeline.Kind.STEP) showStepDetail(e, n); else showDetail(n);
             redraw(n);
+        });
+        // A drag near the top or the bottom of the list scrolls it: a workflow is longer than the window.
+        timelineList.addEventFilter(javafx.scene.input.DragEvent.DRAG_OVER, e -> {
+            if (editing == null || dragOf(e.getDragboard()) == null) return;
+            if (timelineList.lookup(".virtual-flow") instanceof javafx.scene.control.skin.VirtualFlow<?> flow) {
+                if (e.getY() < 28) flow.scrollPixels(-14);
+                else if (e.getY() > timelineList.getHeight() - 28) flow.scrollPixels(14);
+            }
         });
         VBox.setVgrow(timelineList, Priority.ALWAYS);
 
@@ -670,6 +684,7 @@ public class QTraceCommitGraph {
         if (flag != null) { text.setOpacity(0.55); dot.setOpacity(0.55); }
         if (editing != null) {
             HBox.setHgrow(text, Priority.ALWAYS);
+            row.getChildren().add(0, dragHandle("step:" + n.index + ":" + VersionTimeline.stepIndex(allEntries, e)));
             row.getChildren().add(stepEditButtons(e, n));
         } else if (host != null && e.replayable()) {
             HBox.setHgrow(text, Priority.ALWAYS);
@@ -774,6 +789,29 @@ public class QTraceCommitGraph {
         TimelineCell() {
             setStyle("-fx-padding: 0; -fx-background-color: transparent;");
             selectedProperty().addListener((o, was, sel) -> applySelection());
+            // Editing mode: a row is where a dragged packet or instruction is dropped.
+            setOnDragOver(ev -> {
+                Drag d = editing != null ? dragOf(ev.getDragboard()) : null;
+                if (d == null || row == null || getItem() == null || !landsElsewhere(d, getItem(), lowerHalf(ev))) return;
+                ev.acceptTransferModes(javafx.scene.input.TransferMode.MOVE);
+                row.setStyle(dropsAfter(d, getItem(), lowerHalf(ev)) ? ROW_DROP_AFTER : ROW_DROP_BEFORE);
+                ev.consume();
+            });
+            setOnDragExited(ev -> applySelection());
+            setOnDragDropped(ev -> {
+                Drag d = editing != null ? dragOf(ev.getDragboard()) : null;
+                VersionTimeline.Entry target = getItem();
+                boolean lower = lowerHalf(ev);
+                boolean ok = d != null && target != null && landsElsewhere(d, target, lower);
+                ev.setDropCompleted(ok);
+                ev.consume();
+                // Once the drop is over: the change rebuilds the very rows the gesture runs on.
+                if (ok) javafx.application.Platform.runLater(() -> drop(d, target, lower));
+            });
+        }
+
+        private boolean lowerHalf(javafx.scene.input.DragEvent ev) {
+            return ev.getY() > getHeight() / 2;
         }
 
         @Override
@@ -1009,8 +1047,96 @@ public class QTraceCommitGraph {
         HBox box = new HBox(4, add, up, down, merge, remove);
         box.setAlignment(Pos.CENTER_RIGHT);
         HBox.setHgrow(text, Priority.ALWAYS);
+        row.getChildren().add(0, dragHandle("packet:" + n.index));
         row.getChildren().add(box);
         return row;
+    }
+
+    // ── Editing mode: drag and drop ────────────────────────────────────────────
+
+    /** What is being dragged: a whole packet ({@code step} -1), or one instruction of it. */
+    private record Drag(int packet, int step) {
+        boolean wholePacket() { return step < 0; }
+    }
+
+    private static Drag dragOf(javafx.scene.input.Dragboard db) {
+        if (db == null || !db.hasString() || !db.getString().startsWith(DRAG_PREFIX)) return null;
+        try {
+            String[] parts = db.getString().substring(DRAG_PREFIX.length()).split(":");
+            if (parts[0].equals("packet") && parts.length == 2) return new Drag(Integer.parseInt(parts[1]), -1);
+            if (parts[0].equals("step") && parts.length == 3)
+                return new Drag(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+        } catch (NumberFormatException e) {
+            // Some other text on the dragboard.
+        }
+        return null;
+    }
+
+    /** The grip at the left of a row: a packet's moves it with all its instructions, an instruction's moves it alone. */
+    private Label dragHandle(String what) {
+        Label h = new Label("⋮⋮");
+        fill(h, Color.web(TEXT_MUTED));
+        h.setFont(Font.font("System", FontWeight.BOLD, 13));
+        h.setMinWidth(16);
+        h.setCursor(javafx.scene.Cursor.OPEN_HAND);
+        h.setTooltip(new Tooltip(QTraceI18n.t("graph.edit.drag")));
+        h.setOnDragDetected(ev -> {
+            javafx.scene.input.Dragboard db = h.startDragAndDrop(javafx.scene.input.TransferMode.MOVE);
+            javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+            content.putString(DRAG_PREFIX + what);
+            db.setContent(content);
+            if (h.getParent() != null) db.setDragView(h.getParent().snapshot(null, null));
+            ev.consume();
+        });
+        return h;
+    }
+
+    /**
+     * Where a dragged instruction lands in the target row's packet: before or after an
+     * instruction row (upper or lower half), first of the packet on the packet's own row.
+     */
+    private int landingStep(VersionTimeline.Entry target, boolean lowerHalf) {
+        if (target.kind() != VersionTimeline.Kind.STEP) return 0;
+        int at = VersionTimeline.stepIndex(allEntries, target);
+        return at < 0 ? -1 : at + (lowerHalf ? 1 : 0);
+    }
+
+    /** False when the drop would leave everything where it is. */
+    private boolean landsElsewhere(Drag d, VersionTimeline.Entry target, boolean lowerHalf) {
+        if (d.wholePacket()) return target.sessionIndex() != d.packet();
+        int at = landingStep(target, lowerHalf);
+        if (at < 0) return false;
+        return target.sessionIndex() != d.packet() || (at != d.step() && at != d.step() + 1);
+    }
+
+    /** The drop line: under the row when the dragged item lands after it. */
+    private boolean dropsAfter(Drag d, VersionTimeline.Entry target, boolean lowerHalf) {
+        // A packet takes the place of the packet it is dropped on.
+        if (d.wholePacket()) return d.packet() < target.sessionIndex();
+        return target.kind() != VersionTimeline.Kind.STEP || lowerHalf;
+    }
+
+    private void drop(Drag d, VersionTimeline.Entry target, boolean lowerHalf) {
+        if (editing == null) return;
+        int toPacket = target.sessionIndex();
+        if (d.wholePacket()) {
+            if (shownSession != null) shownSession = toPacket;   // the packet shown alone keeps being shown
+            edit(() -> editing.movePacket(d.packet(), toPacket - d.packet()), -1);
+            Integer row = milestoneIndex.get(toPacket);
+            if (row != null) timelineList.getSelectionModel().select(row);
+            return;
+        }
+        int at = landingStep(target, lowerHalf);
+        if (at < 0) return;
+        int landed = toPacket == d.packet() && at > d.step() ? at - 1 : at;
+        edit(() -> editing.moveStepTo(d.packet(), d.step(), toPacket, at), -1);
+        int k = 0;
+        List<VersionTimeline.Entry> rows = timelineList.getItems();
+        for (int i = 0; i < rows.size(); i++) {
+            VersionTimeline.Entry e = rows.get(i);
+            if (e.kind() != VersionTimeline.Kind.STEP || e.sessionIndex() != toPacket) continue;
+            if (k++ == landed) { timelineList.getSelectionModel().select(i); return; }
+        }
     }
 
     /** Under an instruction's detail: rewrite it, or cut its packet in two from here on. */
