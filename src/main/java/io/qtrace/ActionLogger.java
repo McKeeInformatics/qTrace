@@ -168,6 +168,17 @@ public class ActionLogger implements WorkflowListener {
     private volatile boolean                   displaySettingsHooked        = false;
     private final List<DisplaySettingsRecord>  displaySettingsRecords       = new ArrayList<>();
 
+    // ── Class list (Annotations tab > class panel) — see ClassListRecord ──────────
+    private final List<ClassListRecord>        classListRecords             = new ArrayList<>();
+    private List<ClassListRecord.Entry>        classListBaseline            = List.of();
+    private Object                             classListProject             = null; // the project the baseline is of
+    private boolean                            classListHooked              = false;
+    private boolean                            classListStarted             = false;
+    // Looked at on the next FX pulse, not inside the change: opening a project replaces the whole
+    // list, and by then getProject() says so whichever of the two was set first.
+    private final javafx.collections.ListChangeListener<qupath.lib.objects.classes.PathClass> classListListener =
+        change -> Platform.runLater(this::classListChanged);
+
     // Cell intensity classifications ─────────────────────────────────────────
     private final Map<String, CellIntensityRecord> cellIntensityRecords = new LinkedHashMap<>();
 
@@ -405,6 +416,7 @@ public class ActionLogger implements WorkflowListener {
             startAlignmentWatcher();
             startMeasurementMapWatcher();
             startDisplaySettingsWatcher();
+            startClassListWatcher();
         }
 
         refreshManualAnnotationCount();
@@ -430,6 +442,8 @@ public class ActionLogger implements WorkflowListener {
         stopDisplaySettingsWatcher();
         displaySettingsHooked = false;
         displaySettingsRecords.clear();
+        stopClassListWatcher();
+        classListRecords.clear();
         stopClassifierWatcher();
         stopObjectClassifierWatcher();
         knownClassifiers.clear();
@@ -1149,6 +1163,7 @@ public class ActionLogger implements WorkflowListener {
         s.currentAlignment = currentAlignment;
         s.measurementMapRecords.addAll(measurementMapRecords);
         s.displaySettingsRecords.addAll(displaySettingsRecords);
+        s.classListRecords.addAll(classListRecords);
         s.cellIntensityRecords.putAll(cellIntensityRecords);
         s.replayedFrom          = replayedFrom != null ? replayedFrom.deepCopy() : null;
         s.lastKnownStepCount    = lastKnownStepCount;
@@ -1197,6 +1212,8 @@ public class ActionLogger implements WorkflowListener {
         measurementMapRecords.addAll(s.measurementMapRecords);
         displaySettingsRecords.clear();
         displaySettingsRecords.addAll(s.displaySettingsRecords);
+        classListRecords.clear();
+        classListRecords.addAll(s.classListRecords);
         cellIntensityRecords.clear();
         cellIntensityRecords.putAll(s.cellIntensityRecords);
         replayedFrom          = s.replayedFrom;
@@ -1547,6 +1564,66 @@ public class ActionLogger implements WorkflowListener {
     // Unlike Measurement maps, ImageDisplay is a proper public API object already holding
     // the live state (channels, min/max, colors, gamma) — no scene-graph scraping needed.
     // Only the dialog's Stage is polled, purely to know *when* to take the snapshot (on close).
+
+    // ── Class list ───────────────────────────────────────────────────────────────
+
+    public List<ClassListRecord> getClassListRecords() {
+        return Collections.unmodifiableList(classListRecords);
+    }
+
+    /** FX thread or not: the list is only read and listened to on the FX thread. */
+    private void startClassListWatcher() {
+        classListStarted = true;
+        Platform.runLater(() -> {
+            if (classListHooked) return;
+            classListBaseline = classListSnapshot();
+            classListProject = qupath.getProject();
+            qupath.getAvailablePathClasses().addListener(classListListener);
+            classListHooked = true;
+        });
+    }
+
+    private void stopClassListWatcher() {
+        // Never started without QuPath's window (headless replay, tests): no FX toolkit to ask.
+        if (!classListStarted) return;
+        classListStarted = false;
+        Platform.runLater(() -> {
+            qupath.getAvailablePathClasses().removeListener(classListListener);
+            classListHooked = false;
+        });
+    }
+
+    /** The class panel as it is now, without its "None" entry. */
+    private List<ClassListRecord.Entry> classListSnapshot() {
+        List<ClassListRecord.Entry> out = new ArrayList<>();
+        for (qupath.lib.objects.classes.PathClass pc : qupath.getAvailablePathClasses()) {
+            if (pc == null || pc.getName() == null) continue;
+            out.add(new ClassListRecord.Entry(pc.toString(), pc.getColor()));
+        }
+        return out;
+    }
+
+    /** Records what the user changed in the class panel since the last look. FX thread. */
+    private void classListChanged() {
+        if (!classListHooked) return;
+        try {
+            List<ClassListRecord.Entry> now = classListSnapshot();
+            // Another project (or none) was opened: its classes are not something the user did.
+            if (qupath.getProject() != classListProject) {
+                classListProject = qupath.getProject();
+                classListBaseline = now;
+                return;
+            }
+            List<ClassListRecord> changes = ClassListRecord.diff(classListBaseline, now, Instant.now());
+            classListBaseline = now;
+            for (ClassListRecord c : changes) {
+                classListRecords.add(c);
+                ActivityLog.add("[Classes] " + (ClassListRecord.ADD.equals(c.action) ? "Added — " : "Removed — ") + c.name);
+            }
+        } catch (Exception e) {
+            ActivityLog.add("[Classes] WARNING: could not read the class list — " + e.getMessage());
+        }
+    }
 
     public List<DisplaySettingsRecord> getDisplaySettingsRecords() {
         return Collections.unmodifiableList(displaySettingsRecords);

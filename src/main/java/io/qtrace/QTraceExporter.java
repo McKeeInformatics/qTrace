@@ -390,6 +390,12 @@ public class QTraceExporter {
         session.add("display_settings", displaySettingsArr);
         session.addProperty("display_settings_count", displaySettingsArr.size());
 
+        // Class panel (Add/Remove > Add class, Remove class, Populate from…) — scriptable,
+        // replayed as real steps by QTraceReplayEngine (see ClassListRecord).
+        JsonArray classListArr = buildClassListArray();
+        session.add("class_list", classListArr);
+        session.addProperty("class_list_count", classListArr.size());
+
         // Annotations with per-author attribution
         session.add("annotations", buildAnnotationsObject(imageData, outputDir, imageName));
 
@@ -663,6 +669,21 @@ public class QTraceExporter {
             mo.addProperty("timestamp",    mm.timestamp.toString());
             mo.addProperty("scriptable",   false);
             arr.add(mo);
+        }
+        return arr;
+    }
+
+    /** Changes to the class panel, in the order they were made — see ClassListRecord. */
+    private JsonArray buildClassListArray() {
+        JsonArray arr = new JsonArray();
+        for (ClassListRecord c : logger.getClassListRecords()) {
+            JsonObject co = new JsonObject();
+            co.addProperty("action", c.action);
+            co.addProperty("name", c.name);
+            if (c.colorRgb != null) co.addProperty("color_rgb", c.colorRgb);
+            co.addProperty("timestamp", c.timestamp.toString());
+            co.addProperty("scriptable", true);
+            arr.add(co);
         }
         return arr;
     }

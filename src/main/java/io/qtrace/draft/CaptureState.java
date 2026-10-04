@@ -23,6 +23,7 @@ import com.google.gson.JsonObject;
 import io.qtrace.AlignmentRecord;
 import io.qtrace.CellIntensityRecord;
 import io.qtrace.ClassifierRecord;
+import io.qtrace.ClassListRecord;
 import io.qtrace.DisplaySettingsRecord;
 import io.qtrace.ImportedObjectFileRecord;
 import io.qtrace.MeasurementMapRecord;
@@ -64,6 +65,7 @@ public class CaptureState {
     public AlignmentRecord                       currentAlignment       = null;
     public List<MeasurementMapRecord>            measurementMapRecords  = new ArrayList<>();
     public List<DisplaySettingsRecord>           displaySettingsRecords = new ArrayList<>();
+    public List<ClassListRecord>                 classListRecords       = new ArrayList<>();
     public Map<String, CellIntensityRecord>      cellIntensityRecords   = new LinkedHashMap<>();
 
     /** Set when the session is a Replay of another .qtrace (see ActionLogger.markReplayStart). */
