@@ -157,7 +157,11 @@ public class QTraceCommitGraph {
     private VersionEditor.Document editing;
     private boolean editingDirty;
     private String  editingStatus = "";
-    private final Button modeBtn, addPacketBtn, mergeBtn, saveBtn;
+    private final Button modeBtn, recordBtn, addPacketBtn, mergeBtn, saveBtn;
+    // "Record": what the user does in QuPath goes into one packet, named by its id (it can be
+    // moved meanwhile). Null when not recording.
+    private WorkflowRecording recording;
+    private String recordingPacketId;
     // Packets picked in the graph (click, Ctrl+click, Shift+click) — several can be merged.
     private final java.util.TreeSet<Integer> pickedPackets = new java.util.TreeSet<>();
     private int lastPicked = -1;
@@ -185,6 +189,9 @@ public class QTraceCommitGraph {
         modeBtn = new Button();
         styleButton(modeBtn);
         modeBtn.setOnAction(e -> toggleEditing());
+        recordBtn = new Button();
+        styleButton(recordBtn);
+        recordBtn.setOnAction(e -> toggleRecording());
         addPacketBtn = new Button(QTraceI18n.t("graph.edit.packet.add"));
         styleButton(addPacketBtn);
         addPacketBtn.setOnAction(e -> edit(() -> editing.addPacket(nodes.size(), null), -1));
@@ -204,7 +211,7 @@ public class QTraceCommitGraph {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox header = new HBox(10, headerLabel, spacer, addPacketBtn, mergeBtn, saveBtn, modeBtn, openBtn);
+        HBox header = new HBox(10, headerLabel, spacer, recordBtn, addPacketBtn, mergeBtn, saveBtn, modeBtn, openBtn);
         header.setId("graph-header"); // looked up by the screenshot harness — see ScreenshotHarness
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 10, 14));
@@ -422,7 +429,15 @@ public class QTraceCommitGraph {
      * image's .qtrace, adopted when the window was opened before that file existed. FX thread.
      */
     public void refresh(File current) {
-        if (!stage.isShowing() || editing != null) return;   // a workflow does not follow the capture
+        if (!stage.isShowing()) return;
+        if (editing != null) {
+            // A workflow does not follow the capture — except its recording packet, while recording.
+            if (recording != null) {
+                refreshDelay.setOnFinished(e -> syncRecording());
+                refreshDelay.playFromStart();
+            }
+            return;
+        }
         if (loadedFile == null && current != null) loadedFile = current;
         refreshDelay.setOnFinished(e -> {
             int size = timelineList.getItems().size();
@@ -904,6 +919,15 @@ public class QTraceCommitGraph {
         show(modeBtn, on || ed != null);
         modeBtn.setText(on ? QTraceI18n.t("graph.edit.exit") : ed != null ? ed.label() : "");
         modeBtn.setDisable(!on && loadedFile == null);   // nothing recorded yet: nothing to compose from
+        show(recordBtn, on);
+        boolean rec = recording != null;
+        recordBtn.setText(QTraceI18n.t(rec ? "graph.edit.record.stop" : "graph.edit.record"));
+        recordBtn.setTooltip(new Tooltip(QTraceI18n.t(rec ? "graph.edit.record.stop.tip" : "graph.edit.record.tip")));
+        recordBtn.setStyle("-fx-background-color: " + (rec ? RED : BG_SURFACE) + "; -fx-text-fill: " + (rec ? BG_BASE : RED) + ";"
+            + "-fx-border-color: " + (rec ? RED : BORDER) + "; -fx-border-radius: 4; -fx-background-radius: 4;"
+            + "-fx-cursor: hand; -fx-padding: 4 10 4 10; -fx-font-weight: bold;");
+        banner.setText(QTraceI18n.t(rec ? "graph.edit.record.banner" : "graph.edit.banner"));
+        banner.setStyle("-fx-background-color: " + (rec ? RED : MAUVE) + "; -fx-text-fill: " + BG_BASE + ";");
         show(addPacketBtn, on);
         show(mergeBtn, on);
         mergeBtn.setText(pickedPackets.size() >= 2
@@ -978,7 +1002,81 @@ public class QTraceCommitGraph {
         if (row != null) timelineList.getSelectionModel().select(row);
     }
 
+    // ── Editing mode: recording ────────────────────────────────────────────────
+
+    /**
+     * Record: a new packet at the end of the workflow receives what the user does in QuPath
+     * from now on. Stop: the packet is kept as it is — or removed when nothing was done.
+     */
+    private void toggleRecording() {
+        if (editing == null) return;
+        if (recording != null) {
+            syncRecording();
+            int packet = recordingPacket();
+            recording = null;
+            recordingPacketId = null;
+            if (packet >= 0 && nodes.get(packet).steps == 0) edit(() -> editing.removePacket(packet), -1);
+            else updateModeControls();
+            return;
+        }
+        recording = new WorkflowRecording(host != null ? host.liveSession(null) : null);
+        edit(() -> editing.addPacket(nodes.size(), QTraceI18n.t("graph.edit.record.packet")), -1);
+        JsonArray packets = editing.root().getAsJsonArray("sessions");
+        recordingPacketId = packets.isEmpty() ? null : str(packets.get(packets.size() - 1).getAsJsonObject(), "session_id", null);
+        updateModeControls();
+        Integer row = milestoneIndex.get(nodes.size() - 1);   // the new packet, last in the list
+        if (row != null) {
+            timelineList.getSelectionModel().select(row);
+            timelineList.scrollTo(row);
+        }
+    }
+
+    /** Where the recording packet is now, or -1 when it was removed. */
+    private int recordingPacket() {
+        if (editing == null || recordingPacketId == null) return -1;
+        JsonArray packets = editing.root().getAsJsonArray("sessions");
+        for (int i = 0; i < packets.size(); i++)
+            if (recordingPacketId.equals(str(packets.get(i).getAsJsonObject(), "session_id", null))) return i;
+        return -1;
+    }
+
+    /**
+     * Brings the recording packet up to date with the capture: it holds exactly what was done
+     * since Record, as it is now (a reshaped annotation keeps one instruction, with its last
+     * shape). Until Stop the packet follows the capture: changes made to it by hand are replaced.
+     */
+    private void syncRecording() {
+        if (editing == null || recording == null) return;
+        int packet = recordingPacket();
+        if (packet < 0) {   // the author removed the packet: nothing left to record into
+            recording = null;
+            recordingPacketId = null;
+            updateModeControls();
+            return;
+        }
+        List<JsonObject> done = recording.recorded(host != null ? host.liveSession(null) : null);
+        JsonArray held = editing.root().getAsJsonArray("sessions").get(packet).getAsJsonObject().getAsJsonArray("steps");
+        boolean same = held.size() == done.size();
+        for (int i = 0; same && i < done.size(); i++) {
+            JsonObject h = held.get(i).getAsJsonObject();
+            same = str(h, "command", "").equals(str(done.get(i), "command", ""))
+                && str(h, "script_fragment", "").equals(str(done.get(i), "script_fragment", ""));
+        }
+        if (same) return;
+
+        int top = firstVisibleRow();
+        int selected = timelineList.getSelectionModel().getSelectedIndex();
+        for (int i = held.size() - 1; i >= 0; i--) editing.removeStep(packet, i);
+        for (int i = 0; i < done.size(); i++)
+            editing.addStep(packet, i, str(done.get(i), "command", ""), str(done.get(i), "script_fragment", ""));
+        editingDirty = true;
+        editingStatus = "";
+        reload(selected, top, false);
+    }
+
     private void leaveEditing() {
+        recording = null;
+        recordingPacketId = null;
         pickedPackets.clear();
         lastPicked = -1;
         editing = null;
