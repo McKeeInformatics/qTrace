@@ -225,6 +225,35 @@ public final class VersionTimeline {
     }
 
     /**
+     * The rows of a workflow being edited ({@link VersionEditor}), in the order it plays: each
+     * packet's row, then its instructions from the first to the last — every one of them, even
+     * two alike — and nothing but instructions. With {@code session}, that packet only.
+     */
+    public static List<Entry> workflowOrder(List<Entry> entries, Integer session) {
+        List<Entry> out = new ArrayList<>();
+        for (Entry e : entries) {
+            if (session != null && e.sessionIndex() != session) continue;
+            if (e.kind() == Kind.STEP && e.source() != Source.WORKFLOW) continue;
+            out.add(e);
+        }
+        return out;
+    }
+
+    /**
+     * Where an instruction row stands in its packet's {@code steps[]}; -1 for any other row.
+     * {@code row} is one of {@code entries}: two equal rows are told apart.
+     */
+    public static int stepIndex(List<Entry> entries, Entry row) {
+        if (row.kind() != Kind.STEP || row.source() != Source.WORKFLOW) return -1;
+        int index = 0;
+        for (Entry e : entries) {
+            if (e == row) return index;
+            if (e.kind() == Kind.STEP && e.source() == Source.WORKFLOW && e.sessionIndex() == row.sessionIndex()) index++;
+        }
+        return -1;
+    }
+
+    /**
      * The rows the window lists: steps inherited from an earlier session (pre-tracking, or
      * carried into a stamp from the unstamped sessions before it) are
      * left out — each session shows only what was done in it — and, when {@code session} is

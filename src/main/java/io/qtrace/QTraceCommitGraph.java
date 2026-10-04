@@ -79,6 +79,7 @@ public class QTraceCommitGraph {
     private static final String GREEN      = "#a6e3a1";
     private static final String PEACH      = "#fab387";
     private static final String RED        = "#f38ba8";
+    private static final String MAUVE      = "#cba6f7";   // a workflow's packets: neither stamped nor unstamped
 
     // ── Layout constants ───────────────────────────────────────────────────────
     private static final double X_GAP   = 190;
@@ -98,6 +99,12 @@ public class QTraceCommitGraph {
         JsonObject contributions;   // { contributor, actions:{cat:count} }
         double  cx, cy;             // canvas centre (for hit-testing)
         int     index;
+        // A workflow's packet (VersionEditor): its notes, the stamp facts of the session it comes
+        // from (null for a packet created in the workflow), what it holds.
+        boolean packet;
+        String  packetNotes;
+        JsonObject origin;
+        int     steps, sideRecords;
     }
 
     /**
@@ -139,6 +146,14 @@ public class QTraceCommitGraph {
     private JsonObject timelineRoot;
     private Integer shownSession;   // node clicked in the graph: only its steps are listed; null = all
 
+    // Editing mode, added by a module (VersionEditors): the window shows the workflow being
+    // composed from the record instead of the record, which is never written. Null outside it.
+    private VersionEditor.Document editing;
+    private boolean editingDirty;
+    private String  editingStatus = "";
+    private final Button modeBtn, addPacketBtn, saveBtn;
+    private final Label  banner;
+
     public QTraceCommitGraph(QuPathGUI qupath) {
         this.qupath = qupath;
         this.stage  = new Stage();
@@ -158,9 +173,25 @@ public class QTraceCommitGraph {
         styleButton(openBtn);
         openBtn.setOnAction(e -> chooseFile());
 
+        modeBtn = new Button();
+        styleButton(modeBtn);
+        modeBtn.setOnAction(e -> toggleEditing());
+        addPacketBtn = new Button(QTraceI18n.t("graph.edit.packet.add"));
+        styleButton(addPacketBtn);
+        addPacketBtn.setOnAction(e -> edit(() -> editing.addPacket(nodes.size(), null), -1));
+        saveBtn = new Button(QTraceI18n.t("graph.edit.save"));
+        styleButton(saveBtn);
+        saveBtn.setOnAction(e -> saveWorkflow());
+
+        banner = new Label(QTraceI18n.t("graph.edit.banner"));
+        banner.setMaxWidth(Double.MAX_VALUE);
+        banner.setPadding(new Insets(6, 14, 6, 14));
+        banner.setFont(Font.font("System", FontWeight.BOLD, 11));
+        banner.setStyle("-fx-background-color: " + MAUVE + "; -fx-text-fill: " + BG_BASE + ";");
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox header = new HBox(10, headerLabel, spacer, openBtn);
+        HBox header = new HBox(10, headerLabel, spacer, addPacketBtn, saveBtn, modeBtn, openBtn);
         header.setId("graph-header"); // looked up by the screenshot harness — see ScreenshotHarness
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 10, 14));
@@ -230,12 +261,14 @@ public class QTraceCommitGraph {
         split.setStyle("-fx-background-color: " + BG_BASE + "; -fx-box-border: transparent;");
 
         BorderPane root = new BorderPane();
-        root.setTop(header);
+        root.setTop(new VBox(header, banner));
         root.setCenter(split);
         root.setRight(detailBox);
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
 
         stage.setScene(new Scene(root, 1180, 760));
+        stage.setOnCloseRequest(e -> { if (!mayLeaveEditing()) e.consume(); });
+        updateModeControls();
     }
 
     // ── Public API ─────────────────────────────────────────────────────────────
@@ -288,9 +321,13 @@ public class QTraceCommitGraph {
             File dir = QTraceConfig.get().readExportDir().orElse(QTraceConfig.get().getExportDir()).toFile();
             if (dir.isDirectory()) fc.setInitialDirectory(dir);
         } catch (Exception ignored) {}
+        // A saved workflow reopens where it is edited: only offered with an editor.
+        if (editor() != null) fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("qTrace", "*.qtrace", "*.qtflow"));
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(".qtrace", "*.qtrace"));
         File f = fc.showOpenDialog(stage);
-        if (f != null) load(f);
+        if (f == null || !mayLeaveEditing()) return;
+        leaveEditing();
+        load(f);
     }
 
     /** {@code file} null: no .qtrace yet — only the host's capture in progress. */
@@ -299,18 +336,24 @@ public class QTraceCommitGraph {
         nodes.clear();
         JsonObject loaded = null;
         try {
-            JsonObject root = file != null
+            JsonObject root = editing != null ? editing.root() : file != null
                 ? JsonParser.parseString(Files.readString(file.toPath())).getAsJsonObject() : new JsonObject();
+            // A workflow file is opened to be edited, when a module can.
+            if (editing == null && isWorkflow(root) && editor() != null) {
+                editing = editor().open(root, file);
+                root = editing.root();
+            }
             loaded = root;
             if (!root.has("sessions") || !root.get("sessions").isJsonArray()) root.add("sessions", new JsonArray());
             JsonArray sessions = root.getAsJsonArray("sessions");
-            JsonObject live = host != null ? host.liveSession(file) : null;
+            // The capture in progress belongs to the record, not to a workflow.
+            JsonObject live = host != null && !isWorkflow(root) ? host.liveSession(file) : null;
             if (live != null) sessions.add(live);
 
             String imgName = root.has("image") && root.getAsJsonObject("image").has("name")
                 ? root.getAsJsonObject("image").get("name").getAsString()
                 : file != null ? file.getName() : live != null ? str(live, "image_name", "") : "";
-            headerLabel.setText("⑃  " + imgName);
+            headerLabel.setText(isWorkflow(root) ? "✎  " + str(root, "title", imgName) : "⑃  " + imgName);
 
             for (int i = 0; i < sessions.size(); i++) {
                 nodes.add(parseNode(sessions.get(i).getAsJsonObject(), i));
@@ -327,6 +370,11 @@ public class QTraceCommitGraph {
         redraw(null);
         showEmptyDetail();
         buildTimeline(loaded);
+        updateModeControls();
+    }
+
+    private static boolean isWorkflow(JsonObject root) {
+        return "workflow".equals(str(root, "kind", null));
     }
 
     private final javafx.animation.PauseTransition refreshDelay =
@@ -338,7 +386,7 @@ public class QTraceCommitGraph {
      * image's .qtrace, adopted when the window was opened before that file existed. FX thread.
      */
     public void refresh(File current) {
-        if (!stage.isShowing()) return;
+        if (!stage.isShowing() || editing != null) return;   // a workflow does not follow the capture
         if (loadedFile == null && current != null) loadedFile = current;
         refreshDelay.setOnFinished(e -> {
             int size = timelineList.getItems().size();
@@ -354,7 +402,7 @@ public class QTraceCommitGraph {
      * its .qtrace, null when it has none yet — then only its capture in progress, if any). FX thread.
      */
     public void showImage(File current) {
-        if (!stage.isShowing()) return;
+        if (!stage.isShowing() || editing != null) return;
         refreshDelay.stop();
         load(current);
     }
@@ -407,6 +455,15 @@ public class QTraceCommitGraph {
         n.stepsCaptured = s.has("steps_captured") ? s.get("steps_captured").getAsInt() : 0;
         n.stamped       = StampIntegrity.isStamped(s);
         n.live          = s.has("live") && s.get("live").getAsBoolean();
+        n.packet        = "workflow".equals(str(s, "validation_state", null));
+        if (n.packet) {
+            n.notes       = str(s, "title", null);
+            n.packetNotes = str(s, "notes", "");
+            n.origin      = s.has("origin") && s.get("origin").isJsonObject() ? s.getAsJsonObject("origin") : null;
+            n.steps       = s.has("steps") && s.get("steps").isJsonArray() ? s.getAsJsonArray("steps").size() : 0;
+            for (String side : new String[] {"class_list", "display_settings"})
+                if (s.has(side) && s.get(side).isJsonArray()) n.sideRecords += s.getAsJsonArray(side).size();
+        }
 
         if (s.has("steps") && s.get("steps").isJsonArray()) {
             for (JsonElement el : s.getAsJsonArray("steps")) {
@@ -435,7 +492,8 @@ public class QTraceCommitGraph {
 
     private void layout() {
         for (Node n : nodes) {
-            n.cx = ORIGIN_X + (nodes.size() - 1 - n.index) * X_GAP;   // latest session first, on the left
+            // A record: latest session first, on the left. A workflow: in the order it plays.
+            n.cx = ORIGIN_X + (editing != null ? n.index : nodes.size() - 1 - n.index) * X_GAP;
             n.cy = LANE_Y;   // v1: single "main" lane
         }
         double width = Math.max(900, ORIGIN_X * 2 + Math.max(0, nodes.size() - 1) * X_GAP);
@@ -460,7 +518,8 @@ public class QTraceCommitGraph {
         g.setLineWidth(3);
         for (int i = 1; i < nodes.size(); i++) {
             Node a = nodes.get(i - 1), b = nodes.get(i);
-            g.strokeLine(b.cx + NODE_R, b.cy, a.cx - NODE_R, a.cy);   // b, the later one, is on the left
+            if (a.cx < b.cx) g.strokeLine(a.cx + NODE_R, a.cy, b.cx - NODE_R, b.cy);
+            else g.strokeLine(b.cx + NODE_R, b.cy, a.cx - NODE_R, a.cy);   // a record: b, the later one, is on the left
         }
 
         for (Node n : nodes) drawNode(g, n, n == selected);
@@ -474,8 +533,8 @@ public class QTraceCommitGraph {
             g.setLineWidth(3);
             g.strokeOval(n.cx - NODE_R - 4, n.cy - NODE_R - 4, (NODE_R + 4) * 2, (NODE_R + 4) * 2);
         }
-        if (n.stamped) {
-            g.setFill(nodeColor);
+        if (n.stamped || n.packet) {
+            g.setFill(n.packet ? Color.web(MAUVE) : nodeColor);
             g.fillOval(n.cx - NODE_R, n.cy - NODE_R, NODE_R * 2, NODE_R * 2);
         } else {
             // Unstamped (autosaved) session: hollow, dashed — recorded, not validated.
@@ -489,7 +548,7 @@ public class QTraceCommitGraph {
         }
 
         // Commit index inside the node.
-        g.setFill(Color.web(n.stamped ? BG_BASE : TEXT_MUTED));
+        g.setFill(Color.web(n.stamped || n.packet ? BG_BASE : TEXT_MUTED));
         g.setFont(Font.font("System", FontWeight.BOLD, 13));
         g.setTextAlign(TextAlignment.CENTER);
         g.fillText("#" + (n.index + 1), n.cx, n.cy + 4);
@@ -513,6 +572,13 @@ public class QTraceCommitGraph {
         g.setFont(Font.font("System", FontWeight.BOLD, 11));
         g.fillText(ellipsis(title(n), 22), n.cx, n.cy + NODE_R + 18);
 
+        // A packet says what it holds: it has no stamp, and no date of its own.
+        if (n.packet) {
+            g.setFill(Color.web(MAUVE));
+            g.setFont(Font.font("System", FontWeight.BOLD, 10));
+            g.fillText(QTraceI18n.f("graph.edit.packet.count", n.steps), n.cx, n.cy + NODE_R + 34);
+            return;
+        }
         // Validator + signature mark — or the unstamped mark.
         if (!n.stamped) {
             g.setFill(Color.web(TEXT_MUTED));
@@ -546,10 +612,16 @@ public class QTraceCommitGraph {
     private void showTimeline() {
         JsonObject root = timelineRoot;
         milestoneIndex.clear();
-        List<VersionTimeline.Entry> entries = VersionTimeline.shown(allEntries, shownSession);
+        List<VersionTimeline.Entry> entries = editing != null
+            ? VersionTimeline.workflowOrder(allEntries, shownSession) : VersionTimeline.shown(allEntries, shownSession);
         for (int i = 0; i < entries.size(); i++)
             if (entries.get(i).kind() != VersionTimeline.Kind.STEP) milestoneIndex.put(entries.get(i).sessionIndex(), i);
         timelineList.getItems().setAll(entries);
+        timelineFooter.setTooltip(null);
+        if (editing != null) {
+            showEditingFooter(entries);
+            return;
+        }
         if (entries.isEmpty()) {
             timelineFooter.setText("");
             return;
@@ -596,7 +668,10 @@ public class QTraceCommitGraph {
 
         HBox row = timelineRow(dot, e.time(), text);
         if (flag != null) { text.setOpacity(0.55); dot.setOpacity(0.55); }
-        if (host != null && e.replayable()) {
+        if (editing != null) {
+            HBox.setHgrow(text, Priority.ALWAYS);
+            row.getChildren().add(stepEditButtons(e, n));
+        } else if (host != null && e.replayable()) {
             HBox.setHgrow(text, Priority.ALWAYS);
             row.getChildren().add(skipButton(e, n));
         }
@@ -624,6 +699,7 @@ public class QTraceCommitGraph {
     }
 
     private HBox milestoneRow(VersionTimeline.Entry e, Node n) {
+        if (n.packet) return packetRow(e, n);
         boolean stamped = e.kind() == VersionTimeline.Kind.STAMP;
         Circle dot = new Circle(7);
         if (stamped) {
@@ -751,6 +827,329 @@ public class QTraceCommitGraph {
             script.setFont(Font.font(MONO, 10));
             detailBox.getChildren().add(script);
         }
+        if (editing != null) addStepEditActions(e, n);
+    }
+
+    // ── Editing mode (VersionEditor) ───────────────────────────────────────────
+
+    /** The module's editor, when the licence includes one and the window belongs to QuPath. */
+    private VersionEditor editor() {
+        List<VersionEditor> editors = host != null ? VersionEditors.entitled() : List.of();
+        return editors.isEmpty() ? null : editors.get(0);
+    }
+
+    private void updateModeControls() {
+        VersionEditor ed = editor();
+        boolean on = editing != null;
+        show(modeBtn, on || ed != null);
+        modeBtn.setText(on ? QTraceI18n.t("graph.edit.exit") : ed != null ? ed.label() : "");
+        modeBtn.setDisable(!on && loadedFile == null);   // nothing recorded yet: nothing to compose from
+        show(addPacketBtn, on);
+        show(saveBtn, on);
+        show(banner, on);
+    }
+
+    private static void show(javafx.scene.Node node, boolean visible) {
+        node.setVisible(visible);
+        node.setManaged(visible);
+    }
+
+    /** Enters the mode on the record shown, or leaves it — the record is read again as it is on disk. */
+    private void toggleEditing() {
+        if (editing != null) {
+            if (!mayLeaveEditing()) return;
+            File record = loadedFile != null && loadedFile.getName().endsWith(".qtflow") ? null : loadedFile;
+            leaveEditing();
+            if (record != null) load(record); else chooseOrEmpty();
+            return;
+        }
+        VersionEditor ed = editor();
+        if (ed == null || loadedFile == null) return;
+        try {
+            JsonObject root = JsonParser.parseString(Files.readString(loadedFile.toPath())).getAsJsonObject();
+            editing = ed.open(root, loadedFile);
+        } catch (Exception ex) {
+            headerLabel.setText(QTraceI18n.t("graph.load.error") + " — " + ex.getMessage());
+            return;
+        }
+        editingDirty = false;
+        editingStatus = "";
+        load(loadedFile);
+    }
+
+    private void leaveEditing() {
+        editing = null;
+        editingDirty = false;
+        editingStatus = "";
+        shownSession = null;
+    }
+
+    /** After a workflow file is closed: the open image's record, else an empty window. */
+    private void chooseOrEmpty() {
+        load(null);
+    }
+
+    /** False when the author keeps editing rather than lose unsaved changes. */
+    private boolean mayLeaveEditing() {
+        if (editing == null || !editingDirty) return true;
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+            javafx.scene.control.Alert.AlertType.CONFIRMATION, QTraceI18n.t("graph.edit.discard"),
+            javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL);   // Esc = Cancel
+        alert.setHeaderText(null);
+        alert.setTitle(QTraceI18n.t("graph.window.title"));
+        alert.initOwner(stage);
+        return alert.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL) == javafx.scene.control.ButtonType.OK;
+    }
+
+    /**
+     * Applies a change to the workflow, then shows it: the list keeps its place, and
+     * {@code select} (a row, -1 for none) is selected.
+     */
+    private void edit(Runnable change, int select) {
+        if (editing == null) return;
+        int top = firstVisibleRow();
+        change.run();
+        editingDirty = true;
+        editingStatus = "";
+        reload(select, top, false);
+    }
+
+    private void saveWorkflow() {
+        if (editing == null) return;
+        FileChooser fc = new FileChooser();
+        fc.setTitle(QTraceI18n.t("graph.edit.save"));
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(".qtflow", "*.qtflow"));
+        if (loadedFile != null) {
+            File dir = loadedFile.getParentFile();
+            if (dir != null && dir.isDirectory()) fc.setInitialDirectory(dir);
+            String name = loadedFile.getName();
+            int dot = name.lastIndexOf('.');
+            fc.setInitialFileName((dot > 0 ? name.substring(0, dot) : name) + ".qtflow");
+        }
+        File f = fc.showSaveDialog(stage);
+        if (f == null) return;
+        try {
+            editing.save(f);
+            editingDirty = false;
+            editingStatus = QTraceI18n.f("graph.edit.saved", f.getName());
+        } catch (Exception ex) {
+            editingStatus = QTraceI18n.t("graph.edit.save.error") + " — " + ex.getMessage();
+        }
+        showEditingFooter(timelineList.getItems());
+    }
+
+    /** What the workflow holds, the last save, and what its author should know before saving. */
+    private void showEditingFooter(List<VersionTimeline.Entry> entries) {
+        String footer = QTraceI18n.f("graph.edit.footer", VersionTimeline.stepCount(entries), nodes.size());
+        if (!editingStatus.isEmpty()) footer += "  ·  " + editingStatus;
+        List<String> warnings = editing.warnings();
+        if (!warnings.isEmpty()) {
+            footer += "  ·  ⚠ " + warnings.get(0) + (warnings.size() > 1 ? "  (+" + (warnings.size() - 1) + ")" : "");
+            timelineFooter.setTooltip(new Tooltip(String.join("\n", warnings)));
+        }
+        timelineFooter.setText(footer);
+    }
+
+    private int rowOf(VersionTimeline.Entry e) {
+        List<VersionTimeline.Entry> rows = timelineList.getItems();
+        for (int i = 0; i < rows.size(); i++) if (rows.get(i) == e) return i;
+        return -1;
+    }
+
+    private Button rowButton(String text, String tipKey, Runnable action) {
+        Button b = new Button(text);
+        b.setFocusTraversable(false);
+        b.setMinSize(24, 22);
+        b.setPrefSize(24, 22);
+        b.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-text-fill: " + TEXT_SUB + ";"
+            + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4;"
+            + "-fx-font-weight: bold; -fx-padding: 0; -fx-cursor: hand;");
+        b.setTooltip(new Tooltip(QTraceI18n.t(tipKey)));
+        b.setOnAction(ev -> action.run());
+        return b;
+    }
+
+    /** ↑ ↓ move the instruction inside its packet, ✕ takes it out of the workflow. */
+    private Region stepEditButtons(VersionTimeline.Entry e, Node n) {
+        int si = VersionTimeline.stepIndex(allEntries, e);
+        Button up = rowButton("↑", "graph.edit.step.up", () -> edit(() -> editing.moveStep(n.index, si, -1), rowOf(e) - 1));
+        Button down = rowButton("↓", "graph.edit.step.down", () -> edit(() -> editing.moveStep(n.index, si, 1), rowOf(e) + 1));
+        Button remove = rowButton("✕", "graph.edit.step.remove", () -> edit(() -> editing.removeStep(n.index, si), -1));
+        up.setDisable(si <= 0);
+        down.setDisable(si >= n.steps - 1);
+        HBox box = new HBox(4, up, down, remove);
+        box.setAlignment(Pos.CENTER_RIGHT);
+        return box;
+    }
+
+    /** A packet's row: its title, what it holds, and — while editing — what can be done with it. */
+    private HBox packetRow(VersionTimeline.Entry e, Node n) {
+        Circle dot = new Circle(7, Color.web(MAUVE));
+        Label head = new Label("#" + (n.index + 1) + " — " + title(n));
+        fill(head, Color.web(MAUVE));
+        head.setFont(Font.font("System", FontWeight.BOLD, 12));
+        Label sub = new Label(QTraceI18n.f("graph.edit.packet.count", n.steps)
+            + (n.sideRecords > 0 ? "  ·  " + QTraceI18n.f("graph.edit.packet.side", n.sideRecords) : ""));
+        fill(sub, Color.web(TEXT_SUB));
+        sub.setFont(Font.font(MONO, 10));
+        VBox text = new VBox(1, head, sub);
+
+        HBox row = timelineRow(dot, "", text);
+        row.setPadding(new Insets(8, 14, 8, 11));
+        if (editing == null) return row;
+
+        Button add = rowButton("＋", "graph.edit.step.add", () -> showStepForm(n, n.steps, "", "", true));
+        Button up = rowButton("↑", "graph.edit.packet.up", () -> edit(() -> editing.movePacket(n.index, -1), -1));
+        Button down = rowButton("↓", "graph.edit.packet.down", () -> edit(() -> editing.movePacket(n.index, 1), -1));
+        Button merge = rowButton("⤓", "graph.edit.packet.merge", () -> edit(() -> editing.mergeWithNext(n.index), -1));
+        Button remove = rowButton("✕", "graph.edit.packet.remove", () -> edit(() -> editing.removePacket(n.index), -1));
+        up.setDisable(n.index == 0);
+        down.setDisable(n.index >= nodes.size() - 1);
+        merge.setDisable(n.index >= nodes.size() - 1);
+        HBox box = new HBox(4, add, up, down, merge, remove);
+        box.setAlignment(Pos.CENTER_RIGHT);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        row.getChildren().add(box);
+        return row;
+    }
+
+    /** Under an instruction's detail: rewrite it, or cut its packet in two from here on. */
+    private void addStepEditActions(VersionTimeline.Entry e, Node n) {
+        int si = VersionTimeline.stepIndex(allEntries, e);
+        if (si < 0) return;
+        Button editBtn = new Button(QTraceI18n.t("graph.edit.edit"));
+        styleButton(editBtn);
+        editBtn.setOnAction(ev -> showStepForm(n, si, e.command(), e.script(), false));
+        Button split = new Button(QTraceI18n.t("graph.edit.packet.split"));
+        styleButton(split);
+        split.setDisable(si == 0);   // a packet is not split before its first instruction
+        split.setOnAction(ev -> edit(() -> editing.splitPacket(n.index, si), -1));
+        HBox actions = new HBox(8, editBtn, split);
+        actions.setPadding(new Insets(10, 0, 0, 0));
+        detailBox.getChildren().add(actions);
+    }
+
+    /** The detail panel as a form: an instruction's title and script, to rewrite or to add. */
+    private void showStepForm(Node n, int at, String title, String script, boolean isNew) {
+        javafx.scene.control.TextField titleField = new javafx.scene.control.TextField(title);
+        javafx.scene.control.TextArea scriptArea = new javafx.scene.control.TextArea(script == null ? "" : script);
+        scriptArea.setFont(Font.font(MONO, 11));
+        scriptArea.setPrefRowCount(18);
+        VBox.setVgrow(scriptArea, Priority.ALWAYS);
+
+        int selected = timelineList.getSelectionModel().getSelectedIndex();
+        Button ok = new Button(QTraceI18n.t(isNew ? "graph.edit.add" : "graph.edit.apply"));
+        styleButton(ok);
+        ok.disableProperty().bind(javafx.beans.binding.Bindings.createBooleanBinding(
+            () -> scriptArea.getText().isBlank(), scriptArea.textProperty()));
+        ok.setOnAction(ev -> edit(() -> {
+            if (isNew) editing.addStep(n.index, at, titleField.getText(), scriptArea.getText());
+            else editing.editStep(n.index, at, titleField.getText(), scriptArea.getText());
+        }, isNew ? -1 : selected));
+
+        detailBox.getChildren().setAll(
+            sectionTitle(QTraceI18n.t(isNew ? "graph.edit.step.new" : "graph.edit.step.edit")),
+            muted("#" + (n.index + 1) + " — " + title(n)),
+            sectionTitle(QTraceI18n.t("graph.edit.title")), titleField,
+            sectionTitle(QTraceI18n.t("graph.step.script")), scriptArea,
+            formButtons(ok));
+    }
+
+    /** The detail panel as a form: a packet's title and notes. */
+    private void showPacketForm(Node n) {
+        javafx.scene.control.TextField titleField = new javafx.scene.control.TextField(title(n));
+        javafx.scene.control.TextArea notesArea = new javafx.scene.control.TextArea(n.packetNotes == null ? "" : n.packetNotes);
+        notesArea.setWrapText(true);
+        notesArea.setPrefRowCount(10);
+
+        int selected = timelineList.getSelectionModel().getSelectedIndex();
+        Button ok = new Button(QTraceI18n.t("graph.edit.apply"));
+        styleButton(ok);
+        ok.setOnAction(ev -> edit(() -> {
+            editing.renamePacket(n.index, titleField.getText());
+            editing.setPacketNotes(n.index, notesArea.getText());
+        }, selected));
+
+        detailBox.getChildren().setAll(
+            sectionTitle(QTraceI18n.t("graph.edit.packet.edit")),
+            sectionTitle(QTraceI18n.t("graph.edit.title")), titleField,
+            sectionTitle(QTraceI18n.t("graph.detail.notes")), notesArea,
+            formButtons(ok));
+    }
+
+    /** OK beside a Cancel that answers to Esc and puts the detail back. */
+    private HBox formButtons(Button ok) {
+        Button cancel = new Button(QTraceI18n.t("graph.edit.cancel"));
+        styleButton(cancel);
+        cancel.setCancelButton(true);
+        cancel.setOnAction(ev -> {
+            VersionTimeline.Entry sel = timelineList.getSelectionModel().getSelectedItem();
+            if (sel == null || sel.sessionIndex() >= nodes.size()) { showEmptyDetail(); return; }
+            Node n = nodes.get(sel.sessionIndex());
+            if (sel.kind() == VersionTimeline.Kind.STEP) showStepDetail(sel, n); else showDetail(n);
+        });
+        HBox box = new HBox(8, ok, cancel);
+        box.setPadding(new Insets(10, 0, 0, 0));
+        return box;
+    }
+
+    /**
+     * A packet: what its author wrote, then — set apart, never editable — what the stamp of the
+     * session it comes from said. The author is the certificate holder, not a field.
+     */
+    private void showPacketDetail(Node n) {
+        detailBox.getChildren().clear();
+        detailBox.getChildren().add(sectionTitle("#" + (n.index + 1) + " — " + title(n)));
+        addBadgeRow(n);
+        detailBox.getChildren().add(muted(QTraceI18n.t("graph.edit.author.hint")));
+        detailBox.getChildren().add(kv(QTraceI18n.t("graph.edit.packet.holds"), QTraceI18n.f("graph.edit.packet.count", n.steps)));
+        if (n.sideRecords > 0)
+            detailBox.getChildren().add(muted(QTraceI18n.f("graph.edit.packet.side.hint", n.sideRecords)));
+
+        if (n.packetNotes != null && !n.packetNotes.isBlank()) {
+            detailBox.getChildren().add(sectionTitle(QTraceI18n.t("graph.detail.notes")));
+            Label notes = new Label(n.packetNotes);
+            notes.setWrapText(true);
+            notes.setTextFill(Color.web(TEXT_SUB));
+            notes.setFont(Font.font("System", 11));
+            detailBox.getChildren().add(notes);
+        }
+
+        detailBox.getChildren().add(sectionTitle(QTraceI18n.t("graph.edit.origin")));
+        if (n.origin == null) {
+            detailBox.getChildren().add(muted(QTraceI18n.t("graph.edit.origin.none")));
+        } else {
+            JsonObject o = n.origin;
+            boolean stamped = o.has("stamped") && o.get("stamped").getAsBoolean();
+            detailBox.getChildren().add(kv(QTraceI18n.t("graph.detail.validation"),
+                QTraceI18n.t(stamped ? "graph.detail.stamped" : "graph.detail.unstamped")));
+            originRow(o, "user", "graph.edit.origin.recorded");
+            if (o.has("validator"))
+                detailBox.getChildren().add(kv(QTraceI18n.t("graph.detail.validator"),
+                    (o.has("signed") && o.get("signed").getAsBoolean() ? "✓ " : "") + str(o, "validator", "")));
+            originRow(o, "confidence", "graph.detail.confidence");
+            originRow(o, "classifier_fidelity", "graph.detail.fidelity");
+            originRow(o, "scope", "graph.detail.scope");
+            String date = str(o, "date", str(o, "exported_at", null));
+            if (date != null) detailBox.getChildren().add(kv(QTraceI18n.t("graph.detail.date"), dateShort(date)));
+            String hash = str(o, "image_hash", null);
+            if (hash != null && hash.length() >= 12)
+                detailBox.getChildren().add(kv(QTraceI18n.t("graph.detail.imagehash"), hash.substring(0, 12) + "…"));
+            detailBox.getChildren().add(muted(QTraceI18n.t("graph.edit.origin.hint")));
+        }
+
+        if (editing == null) return;
+        Button editBtn = new Button(QTraceI18n.t("graph.edit.edit"));
+        styleButton(editBtn);
+        editBtn.setOnAction(ev -> showPacketForm(n));
+        HBox actions = new HBox(8, editBtn);
+        actions.setPadding(new Insets(10, 0, 0, 0));
+        detailBox.getChildren().add(actions);
+    }
+
+    private void originRow(JsonObject origin, String field, String labelKey) {
+        String v = str(origin, field, null);
+        if (v != null && !v.isBlank()) detailBox.getChildren().add(kv(QTraceI18n.t(labelKey), v));
     }
 
     // ── Detail panel ───────────────────────────────────────────────────────────
@@ -762,6 +1161,7 @@ public class QTraceCommitGraph {
     }
 
     private void showDetail(Node n) {
+        if (n.packet) { showPacketDetail(n); return; }
         detailBox.getChildren().clear();
         detailBox.getChildren().add(sectionTitle("#" + (n.index + 1) + " — " + title(n)));
 
