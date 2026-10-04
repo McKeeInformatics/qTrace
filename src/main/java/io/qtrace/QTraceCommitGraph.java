@@ -276,8 +276,14 @@ public class QTraceCommitGraph {
 
         BorderPane root = new BorderPane();
         root.setTop(new VBox(header, banner));
-        root.setCenter(split);
-        root.setRight(detailBox);
+        // The detail panel is as wide as the reader wants it: a script, or a form in editing mode,
+        // needs more room than a commit's few lines. It keeps its width when the window is resized.
+        detailBox.setMinWidth(220);
+        SplitPane main = new SplitPane(split, detailBox);
+        main.setDividerPositions(1 - 280.0 / 1180);
+        SplitPane.setResizableWithParent(detailBox, false);
+        main.setStyle("-fx-background-color: " + BG_BASE + "; -fx-box-border: transparent;");
+        root.setCenter(main);
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
 
         stage.setScene(new Scene(root, 1180, 760));
