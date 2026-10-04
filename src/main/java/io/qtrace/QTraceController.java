@@ -767,6 +767,10 @@ public class QTraceController {
             return s;
         }
 
+        @Override public File currentRecord() {
+            return currentQtraceFile();
+        }
+
         @Override public void setReplaySkip(File qtrace, String fragment, boolean skip) throws IOException {
             boolean current = qtrace == null || isCurrentQtrace(qtrace);
             if (current && logger != null && logger.isAttached()) logger.setReplaySkip(fragment, skip);

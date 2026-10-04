@@ -119,6 +119,9 @@ public class QTraceCommitGraph {
          */
         JsonObject liveSession(File qtrace);
 
+        /** The .qtrace of the image open in QuPath, or null when it has none yet (or no image is open). */
+        default File currentRecord() { return null; }
+
         /** Takes an instruction out of the replay or puts it back, wherever it is still unstamped. */
         void setReplaySkip(File qtrace, String fragment, boolean skip) throws java.io.IOException;
     }
@@ -918,7 +921,6 @@ public class QTraceCommitGraph {
         boolean on = editing != null;
         show(modeBtn, on || ed != null);
         modeBtn.setText(on ? QTraceI18n.t("graph.edit.exit") : ed != null ? ed.label() : "");
-        modeBtn.setDisable(!on && loadedFile == null);   // nothing recorded yet: nothing to compose from
         show(recordBtn, on);
         boolean rec = recording != null;
         recordBtn.setText(QTraceI18n.t(rec ? "graph.edit.record.stop" : "graph.edit.record"));
@@ -942,19 +944,34 @@ public class QTraceCommitGraph {
         node.setManaged(visible);
     }
 
-    /** Enters the mode on the record shown, or leaves it — the record is read again as it is on disk. */
+    /**
+     * Enters the mode on what the window shows, or leaves it. Entering: the record, or, when the
+     * image has none yet, its capture in progress — or nothing at all, and the workflow starts
+     * empty. Leaving: the record is read again as it is on disk; after a workflow opened from
+     * its own file, the window goes back to the image open in QuPath.
+     */
     private void toggleEditing() {
         if (editing != null) {
             if (!mayLeaveEditing()) return;
-            File record = loadedFile != null && loadedFile.getName().endsWith(".qtflow") ? null : loadedFile;
+            boolean ownFile = loadedFile != null && loadedFile.getName().endsWith(".qtflow");
+            File record = !ownFile ? loadedFile : host != null ? host.currentRecord() : null;
             leaveEditing();
-            if (record != null) load(record); else chooseOrEmpty();
+            load(record);
             return;
         }
         VersionEditor ed = editor();
-        if (ed == null || loadedFile == null) return;
+        if (ed == null) return;
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(loadedFile.toPath())).getAsJsonObject();
+            JsonObject root;
+            if (loadedFile != null) {
+                root = JsonParser.parseString(Files.readString(loadedFile.toPath())).getAsJsonObject();
+            } else {
+                root = new JsonObject();
+                JsonArray sessions = new JsonArray();
+                JsonObject live = host != null ? host.liveSession(null) : null;
+                if (live != null) sessions.add(live);
+                root.add("sessions", sessions);
+            }
             editing = ed.open(root, loadedFile);
         } catch (Exception ex) {
             headerLabel.setText(QTraceI18n.t("graph.load.error") + " — " + ex.getMessage());
@@ -1083,11 +1100,6 @@ public class QTraceCommitGraph {
         editingDirty = false;
         editingStatus = "";
         shownSession = null;
-    }
-
-    /** After a workflow file is closed: the open image's record, else an empty window. */
-    private void chooseOrEmpty() {
-        load(null);
     }
 
     /** False when the author keeps editing rather than lose unsaved changes. */
