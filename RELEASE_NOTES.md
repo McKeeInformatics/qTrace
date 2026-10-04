@@ -21,6 +21,12 @@ Each recorded session — autosave, stamp or replay — adds a commit to a local
 ### Changed — Bug reports describe your workstation
 A report of type **Bug** now also carries your workstation's configuration — OS, processor, memory, graphics card, screens, Java, free disk space — and the list of QuPath extensions with their versions; a line in the dialog says so. The same configuration is sent at each QuPath start, along with the qTrace version. Never the machine name, your login or a file path.
 
+### Changed — A record opens only for who may read it
+Opening a record in the Player by `qtc_…` ID or by link now requires a right on it: it is yours, its owner shared it with you (portal › **Shares**), or you hold an anonymous share link (`…/share/g/…`, now accepted by the Player). Knowing the ID is no longer enough — the Player then says **You don't have access to this record. Ask its owner to share it with you.** The owner sees who opened the record, and when, on its page of the portal. Local `.qtrace` files open as before, and a certificate's verdict stays public.
+
+### New — Training, for the organizations that enabled it
+When your organization gives you the training module, the Player's **📂 Open** menu gains a **Training…** entry: the training steps of your organization, each with its explanation and its reference records, which open in the Player in one click. Tick **I have done this step** to keep track of where you are.
+
 ### Fixed
 - The Player replays the certified session of a `qtc_…` certificate rather than the image's whole history; **Full image history** replays everything.
 - A manual annotation taken out of the replay stays out when qTrace captures it again.
