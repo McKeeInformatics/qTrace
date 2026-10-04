@@ -88,6 +88,13 @@ public interface VersionEditor {
         /** Appends the next packet's instructions to this one and removes the next packet. */
         void mergeWithNext(int packet);
 
+        /**
+         * Merges several packets into the first of them: their instructions follow one another
+         * in the order the packets play, whatever order they are given in, and the other
+         * packets are removed. Fewer than two packets, or one out of range, changes nothing.
+         */
+        void mergePackets(List<Integer> packets);
+
         /** Splits a packet in two: the instructions from {@code atStep} on go to a new packet after it. */
         void splitPacket(int packet, int atStep);
 

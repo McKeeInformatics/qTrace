@@ -157,7 +157,10 @@ public class QTraceCommitGraph {
     private VersionEditor.Document editing;
     private boolean editingDirty;
     private String  editingStatus = "";
-    private final Button modeBtn, addPacketBtn, saveBtn;
+    private final Button modeBtn, addPacketBtn, mergeBtn, saveBtn;
+    // Packets picked in the graph (click, Ctrl+click, Shift+click) — several can be merged.
+    private final java.util.TreeSet<Integer> pickedPackets = new java.util.TreeSet<>();
+    private int lastPicked = -1;
     private final Label  banner;
 
     public QTraceCommitGraph(QuPathGUI qupath) {
@@ -185,6 +188,10 @@ public class QTraceCommitGraph {
         addPacketBtn = new Button(QTraceI18n.t("graph.edit.packet.add"));
         styleButton(addPacketBtn);
         addPacketBtn.setOnAction(e -> edit(() -> editing.addPacket(nodes.size(), null), -1));
+        mergeBtn = new Button();
+        styleButton(mergeBtn);
+        mergeBtn.setTooltip(new Tooltip(QTraceI18n.t("graph.edit.merge.tip")));
+        mergeBtn.setOnAction(e -> mergePicked());
         saveBtn = new Button(QTraceI18n.t("graph.edit.save"));
         styleButton(saveBtn);
         saveBtn.setOnAction(e -> saveWorkflow());
@@ -197,7 +204,7 @@ public class QTraceCommitGraph {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox header = new HBox(10, headerLabel, spacer, addPacketBtn, saveBtn, modeBtn, openBtn);
+        HBox header = new HBox(10, headerLabel, spacer, addPacketBtn, mergeBtn, saveBtn, modeBtn, openBtn);
         header.setId("graph-header"); // looked up by the screenshot harness — see ScreenshotHarness
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 10, 14));
@@ -222,6 +229,15 @@ public class QTraceCommitGraph {
         // A node limits the timeline to its session; a click beside the nodes lists everything again.
         canvas.setOnMouseClicked(e -> {
             Node hit = nodeAt(e.getX(), e.getY());
+            // Editing mode: Ctrl or Shift adds packets to the ones picked, to merge them.
+            if (editing != null && hit != null && (e.isShortcutDown() || e.isShiftDown())) {
+                pickPacket(hit.index, e.isShiftDown());
+                return;
+            }
+            pickedPackets.clear();
+            if (editing != null && hit != null) pickedPackets.add(hit.index);
+            lastPicked = hit != null ? hit.index : -1;
+            updateModeControls();
             shownSession = hit != null ? Integer.valueOf(hit.index) : null;
             showTimeline();
             if (hit != null) selectCommit(hit);
@@ -542,7 +558,7 @@ public class QTraceCommitGraph {
             else g.strokeLine(b.cx + NODE_R, b.cy, a.cx - NODE_R, a.cy);   // a record: b, the later one, is on the left
         }
 
-        for (Node n : nodes) drawNode(g, n, n == selected);
+        for (Node n : nodes) drawNode(g, n, n == selected || (editing != null && pickedPackets.contains(n.index)));
     }
 
     private void drawNode(GraphicsContext g, Node n, boolean selected) {
@@ -889,6 +905,10 @@ public class QTraceCommitGraph {
         modeBtn.setText(on ? QTraceI18n.t("graph.edit.exit") : ed != null ? ed.label() : "");
         modeBtn.setDisable(!on && loadedFile == null);   // nothing recorded yet: nothing to compose from
         show(addPacketBtn, on);
+        show(mergeBtn, on);
+        mergeBtn.setText(pickedPackets.size() >= 2
+            ? QTraceI18n.f("graph.edit.merge.n", pickedPackets.size()) : QTraceI18n.t("graph.edit.merge"));
+        mergeBtn.setDisable(pickedPackets.size() < 2);
         show(saveBtn, on);
         show(banner, on);
     }
@@ -921,7 +941,46 @@ public class QTraceCommitGraph {
         load(loadedFile);
     }
 
+    /**
+     * Ctrl+click adds a packet to the ones picked or takes it out; Shift+click picks every
+     * packet from the last one clicked to this one. With several picked, the list shows the
+     * whole workflow and the panel says what merging them gives.
+     */
+    private void pickPacket(int index, boolean range) {
+        if (range && lastPicked >= 0) {
+            for (int i = Math.min(lastPicked, index); i <= Math.max(lastPicked, index); i++) pickedPackets.add(i);
+        } else if (!pickedPackets.remove(index)) {
+            pickedPackets.add(index);
+        }
+        lastPicked = index;
+        shownSession = null;
+        showTimeline();
+        timelineList.getSelectionModel().clearSelection();
+        redraw(null);
+        updateModeControls();
+
+        detailBox.getChildren().clear();
+        detailBox.getChildren().add(sectionTitle(QTraceI18n.f("graph.edit.picked", pickedPackets.size())));
+        for (int i : pickedPackets)
+            if (i < nodes.size()) detailBox.getChildren().add(bullet("#" + (i + 1) + " — " + title(nodes.get(i))));
+        detailBox.getChildren().add(muted(QTraceI18n.t("graph.edit.merge.tip")));
+    }
+
+    /** Merges the picked packets into the first of them, their instructions in the order the packets play. */
+    private void mergePicked() {
+        if (editing == null || pickedPackets.size() < 2) return;
+        List<Integer> picked = new ArrayList<>(pickedPackets);
+        int first = picked.get(0);
+        edit(() -> editing.mergePackets(picked), -1);
+        shownSession = null;
+        showTimeline();
+        Integer row = milestoneIndex.get(first);
+        if (row != null) timelineList.getSelectionModel().select(row);
+    }
+
     private void leaveEditing() {
+        pickedPackets.clear();
+        lastPicked = -1;
         editing = null;
         editingDirty = false;
         editingStatus = "";
@@ -953,6 +1012,8 @@ public class QTraceCommitGraph {
         if (editing == null) return;
         int top = firstVisibleRow();
         change.run();
+        pickedPackets.clear();   // positions changed: what was picked no longer names the same packets
+        lastPicked = -1;
         editingDirty = true;
         editingStatus = "";
         reload(select, top, false);
