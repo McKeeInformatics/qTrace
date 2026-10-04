@@ -1240,12 +1240,15 @@ public class QTraceCommitGraph {
             else editing.editStep(n.index, at, titleField.getText(), scriptArea.getText());
         }, isNew ? -1 : selected));
 
+        titleField.setPromptText(QTraceI18n.t("graph.edit.title.prompt"));
         detailBox.getChildren().setAll(
             sectionTitle(QTraceI18n.t(isNew ? "graph.edit.step.new" : "graph.edit.step.edit")),
             muted("#" + (n.index + 1) + " — " + title(n)),
             sectionTitle(QTraceI18n.t("graph.edit.title")), titleField,
             sectionTitle(QTraceI18n.t("graph.step.script")), scriptArea,
             formButtons(ok));
+        // The title first: it is what the list and the player show for this instruction.
+        javafx.application.Platform.runLater(() -> { titleField.requestFocus(); titleField.selectAll(); });
     }
 
     /** The detail panel as a form: a packet's title and notes. */
