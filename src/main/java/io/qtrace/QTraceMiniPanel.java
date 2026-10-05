@@ -91,6 +91,8 @@ public final class QTraceMiniPanel {
         column.widthProperty().addListener((o, a, b) -> place());
         column.heightProperty().addListener((o, a, b) -> place());
         rebuild();
+        // A module can load after the column was drawn: its button comes in then.
+        PanelExtensions.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
         var project = qupath.projectProperty();
@@ -217,10 +219,10 @@ public final class QTraceMiniPanel {
             nodes.add(separator());
             Button versionsBtn = button(icon(panel::iconVersions), "btn.versions.caption", workspace);
             versionsBtn.setOnAction(e -> controller.showCommitGraph());
-            PanelFlyout.attach(versionsBtn, PanelExtensions.VERSIONS, true);
             Button reportBtn = button(icon(panel::iconReport), "btn.report.caption", workspace);
             reportBtn.setOnAction(e -> controller.generateActivityReport());
             nodes.add(versionsBtn);
+            addModuleButtons(nodes, PanelExtensions.VERSIONS, workspace);
             nodes.add(reportBtn);
         }
 
@@ -228,12 +230,12 @@ public final class QTraceMiniPanel {
         nodes.add(separator());
         Button dashboardBtn = button(icon(panel::iconDashboard), "btn.dashboard.caption", tools);
         dashboardBtn.setOnAction(e -> controller.showDashboard());
-        PanelFlyout.attach(dashboardBtn, PanelExtensions.DASHBOARD, true);
         Button importBtn = button(icon(panel::iconImport), "btn.import.caption", tools);
         importBtn.setOnAction(e -> controller.startBatchExport());
         resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
         resetBtn.setOnAction(e -> panel.confirmReset());
         nodes.add(dashboardBtn);
+        addModuleButtons(nodes, PanelExtensions.DASHBOARD, tools);
         nodes.add(importBtn);
         nodes.add(resetBtn);
 
@@ -256,6 +258,15 @@ public final class QTraceMiniPanel {
 
         column.getChildren().setAll(nodes);
         refresh();
+    }
+
+    /** The modules' buttons that go with a panel button, under it ({@link PanelExtensions}). */
+    private void addModuleButtons(List<Node> nodes, String anchor, Color hover) {
+        for (PanelExtensions.Entry entry : PanelExtensions.entitled(anchor)) {
+            Button b = titled(icon(QTracePanel.moduleIcon(entry)), entry.label(), hover);
+            b.setOnAction(e -> QTracePanel.runModuleEntry(entry));
+            nodes.add(b);
+        }
     }
 
     /** Re-renders from the panel's state — on every state change. FX thread. */

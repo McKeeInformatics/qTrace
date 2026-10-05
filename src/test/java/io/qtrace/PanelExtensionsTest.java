@@ -24,13 +24,13 @@ class PanelExtensionsTest {
     }
 
     @Test
-    void aButtonWithoutAModuleHasNothingToUnfold() {
+    void aButtonWithoutAModuleIsFollowedByNothing() {
         ModuleEntitlements.setForTest(Set.of("cohort"));
         assertTrue(PanelExtensions.entitled(PanelExtensions.DASHBOARD).isEmpty());
     }
 
     @Test
-    void anEntryUnfoldsFromItsOwnButtonOnly() {
+    void aModuleButtonFollowsItsOwnButtonOnly() {
         ModuleEntitlements.setForTest(Set.of("cohort", "workfloweditor"));
         PanelExtensions.register("cohort", PanelExtensions.DASHBOARD, "Cohort map", NOTHING);
         PanelExtensions.register("workfloweditor", PanelExtensions.VERSIONS, "Workflow Editor", NOTHING);
@@ -39,7 +39,7 @@ class PanelExtensionsTest {
     }
 
     @Test
-    void aModuleTheLicenceDoesNotIncludeUnfoldsNothing() {
+    void aModuleTheLicenceDoesNotIncludeAddsNoButton() {
         PanelExtensions.register("cohort", PanelExtensions.DASHBOARD, "Cohort map", NOTHING);
         ModuleEntitlements.setForTest(Set.of("compliance"));
         assertTrue(PanelExtensions.entitled(PanelExtensions.DASHBOARD).isEmpty());
@@ -67,10 +67,20 @@ class PanelExtensionsTest {
     }
 
     @Test
-    void whoeverDrawsThePanelIsToldWhenAnEntryArrives() {
+    void whoeverDrawsThePanelIsToldWhenAButtonArrivesOncePerOwner() {
         int[] told = {0};
-        PanelExtensions.onChange(() -> told[0]++);
+        PanelExtensions.onChange("panel", () -> told[0] += 100);
+        PanelExtensions.onChange("panel", () -> told[0]++);   // the panel drawn again: replaces
         PanelExtensions.register("cohort", PanelExtensions.DASHBOARD, "Cohort map", NOTHING);
         assertEquals(1, told[0]);
+    }
+
+    @Test
+    void aButtonCarriesTheIconItsModuleDraws() {
+        ModuleEntitlements.setForTest(Set.of("cohort"));
+        javafx.scene.Group drawn = new javafx.scene.Group();
+        PanelExtensions.register("cohort", PanelExtensions.DASHBOARD, "Cohort map", c -> drawn, NOTHING);
+        assertEquals(drawn, PanelExtensions.entitled(PanelExtensions.DASHBOARD).get(0).icon()
+            .apply(javafx.scene.paint.Color.WHITE));
     }
 }

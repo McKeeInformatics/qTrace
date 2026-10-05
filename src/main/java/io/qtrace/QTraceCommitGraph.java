@@ -407,6 +407,7 @@ public class QTraceCommitGraph {
         if (editing == null) toggleEditing();
     }
 
+    public boolean isEditing()   { return editing != null; }
     public boolean isShowing()   { return stage.isShowing(); }
     public boolean isIconified() { return stage.isIconified(); }
     public void    minimize()    { stage.setIconified(true); }

@@ -748,11 +748,16 @@ public class QTraceController {
     /**
      * Opens the Version window on the open image, in the editing mode a module adds to it (the
      * workflow editor's entry under the panel's Version button). Same conditions as
-     * {@link #showCommitGraph()}; unlike it, never minimizes a window that is already up.
+     * {@link #showCommitGraph()}. A toggle like the panel's other buttons: when the window is
+     * already up in that mode, a second click minimizes it — the workflow being edited is kept.
      */
     public void showCommitGraphEditing() {
-        if (commitGraph != null && commitGraph.isShowing()) commitGraph.front();
-        else showCommitGraph();
+        if (commitGraph != null && commitGraph.isShowing()) {
+            if (commitGraph.isEditing() && !commitGraph.isIconified()) { commitGraph.minimize(); return; }
+            commitGraph.front();
+        } else {
+            showCommitGraph();
+        }
         if (commitGraph != null && commitGraph.isShowing()) commitGraph.startEditing();
     }
 

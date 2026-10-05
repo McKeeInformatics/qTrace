@@ -1,41 +1,54 @@
 package io.qtrace;
 
+import javafx.scene.Group;
+import javafx.scene.paint.Color;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
- * What modules add to the panel: entries that unfold from one of its buttons ({@link
- * PanelFlyout}) — the cohort map from Dashboard, the workflow editor from Version. A module
- * registers its entry when it is installed; the panel lists those of the modules the licence
- * includes ({@link ModuleEntitlements}) each time a button is pointed at. With no module
+ * What modules add to the panel: a button of their own, placed right after the one it goes
+ * with — the cohort map after Dashboard, the workflow editor after Version (under it on the
+ * mini-panel's column). A module registers its button when it is installed; the panel shows
+ * those of the modules the licence includes ({@link ModuleEntitlements}). With no module
  * registered the panel is unchanged.
  */
 public final class PanelExtensions {
 
-    /** The panel buttons an entry can unfold from. */
+    /** The panel buttons a module's button can follow. */
     public static final String DASHBOARD = "dashboard";
     public static final String VERSIONS  = "versions";
 
-    /** @param module the registering module's Qtrace-Module name, e.g. "cohort" */
-    public record Entry(String module, String anchor, String label, Runnable action) {}
+    /**
+     * @param module the registering module's Qtrace-Module name, e.g. "cohort"
+     * @param icon   the button's icon drawn in a 24-unit box with the given colour, like the
+     *               panel's own; null for a plain mark
+     * @param action run on the FX thread at each click. Panel buttons are toggles: the action
+     *               closes what it opened when it is already up
+     */
+    public record Entry(String module, String anchor, String label, Function<Color, Group> icon, Runnable action) {}
 
     private static final List<Entry> ENTRIES = new ArrayList<>();
-    private static final List<Runnable> LISTENERS = new CopyOnWriteArrayList<>();
+    private static final Map<Object, Runnable> LISTENERS = new ConcurrentHashMap<>();
 
     private PanelExtensions() {}
 
-    /**
-     * @param anchor {@link #DASHBOARD} or {@link #VERSIONS}
-     * @param action run on the FX thread when the entry is clicked
-     */
-    public static void register(String module, String anchor, String label, Runnable action) {
+    /** @param anchor {@link #DASHBOARD} or {@link #VERSIONS} */
+    public static void register(String module, String anchor, String label, Function<Color, Group> icon, Runnable action) {
         if (module == null || anchor == null || label == null || action == null) return;
         synchronized (ENTRIES) {
             ENTRIES.removeIf(e -> e.module().equals(module) && e.anchor().equals(anchor) && e.label().equals(label));
-            ENTRIES.add(new Entry(module, anchor, label, action));
+            ENTRIES.add(new Entry(module, anchor, label, icon, action));
         }
-        for (Runnable l : LISTENERS) l.run();
+        for (Runnable l : LISTENERS.values()) l.run();
+    }
+
+    /** Without an icon — what the modules published against Core 1.2.5 call. */
+    public static void register(String module, String anchor, String label, Runnable action) {
+        register(module, anchor, label, null, action);
     }
 
     /** The entries of one button, in registration order, without the modules the licence does not include. */
@@ -48,9 +61,12 @@ public final class PanelExtensions {
         return out;
     }
 
-    /** Called (on the registering thread) each time an entry is registered: a button may now have something to unfold. */
-    static void onChange(Runnable listener) {
-        LISTENERS.add(listener);
+    /**
+     * Called (on the registering thread) each time a button is registered — a module can load
+     * after the panel was drawn. One listener per {@code owner}: registering again replaces it.
+     */
+    static void onChange(Object owner, Runnable listener) {
+        LISTENERS.put(owner, listener);
     }
 
     static void clear() {
