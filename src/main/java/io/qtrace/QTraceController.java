@@ -771,6 +771,13 @@ public class QTraceController {
             return currentQtraceFile();
         }
 
+        @Override public boolean playInPlayer(String source) {
+            QTracePlugin plugin = QTracePluginManager.getEntitled();
+            if (plugin == null) return false;
+            plugin.replay(qupath, logger, source);
+            return true;
+        }
+
         @Override public void setReplaySkip(File qtrace, String fragment, boolean skip) throws IOException {
             boolean current = qtrace == null || isCurrentQtrace(qtrace);
             if (current && logger != null && logger.isAttached()) logger.setReplaySkip(fragment, skip);

@@ -40,6 +40,12 @@ public interface QTracePlugin {
     default void certifyStamp(ValidationStamp stamp, QuPathGUI qupath) {}
     default void verifyContributor(String contributorId, QuPathGUI qupath) {}
     default void replay(QuPathGUI qupath, ActionLogger logger) {}
+    /**
+     * Opens the replay player on a source — a qtc_… or qtw_… ID, a share link or a local path —
+     * as if the user had given it to the player (e.g. the workflow just published from the
+     * Version window).
+     */
+    default void replay(QuPathGUI qupath, ActionLogger logger, String source) {}
 
     /** Returns the Compliance plugin version string, e.g. "1.0.2". */
     default String getPluginVersion() { return null; }

@@ -122,6 +122,9 @@ public class QTraceCommitGraph {
         /** The .qtrace of the image open in QuPath, or null when it has none yet (or no image is open). */
         default File currentRecord() { return null; }
 
+        /** Opens the replay player on a source (a qtw_… ID, …); false when there is no player to open. */
+        default boolean playInPlayer(String source) { return false; }
+
         /** Takes an instruction out of the replay or puts it back, wherever it is still unstamped. */
         void setReplaySkip(File qtrace, String fragment, boolean skip) throws java.io.IOException;
     }
@@ -161,6 +164,11 @@ public class QTraceCommitGraph {
     private boolean editingDirty;
     private String  editingStatus = "";
     private final Button modeBtn, recordBtn, addPacketBtn, mergeBtn, saveBtn, publishBtn;
+    // Console of the editing mode, under the list: what was saved, published, refused. It can be folded.
+    private final VBox consoleBox;
+    private final javafx.scene.control.TextArea consoleArea;
+    private final Button consoleToggle, consolePlayBtn;
+    private String lastPublishedId;
     // "Record": what the user does in QuPath goes into one packet, named by its id (it can be
     // moved meanwhile). Null when not recording.
     private WorkflowRecording recording;
@@ -316,7 +324,40 @@ public class QTraceCommitGraph {
         timelineFooter.setStyle("-fx-background-color: " + BG_SURFACE + ";"
             + "-fx-border-color: " + BORDER + "; -fx-border-width: 1 0 0 0;");
 
-        VBox timelinePane = new VBox(timelineTitle, timelineList, timelineFooter);
+        consoleArea = new javafx.scene.control.TextArea();
+        consoleArea.setEditable(false);
+        consoleArea.setWrapText(true);
+        consoleArea.setPrefRowCount(6);
+        consoleArea.setStyle("-fx-control-inner-background: " + BG_SURFACE + "; -fx-text-fill: " + TEXT_SUB + ";"
+            + "-fx-font-family: '" + MONO + "'; -fx-font-size: 11; -fx-background-insets: 0; -fx-focus-color: transparent;"
+            + "-fx-faint-focus-color: transparent;");
+        consoleToggle = new Button();
+        consoleToggle.setStyle("-fx-background-color: transparent; -fx-text-fill: " + BLUE + "; -fx-font-weight: bold;"
+            + "-fx-font-size: 12; -fx-cursor: hand; -fx-padding: 4 0 4 0;");
+        consoleToggle.setOnAction(e -> { show(consoleArea, !consoleArea.isVisible()); updateConsoleControls(); });
+        consolePlayBtn = new Button(QTraceI18n.t("graph.edit.console.play"));
+        styleButton(consolePlayBtn);
+        consolePlayBtn.setOnAction(e -> playPublished());
+        Button consoleCopy = new Button(QTraceI18n.t("graph.edit.console.copy"));
+        styleButton(consoleCopy);
+        consoleCopy.setOnAction(e -> {
+            javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+            content.putString(consoleArea.getText());
+            javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
+        });
+        Button consoleClear = new Button(QTraceI18n.t("graph.edit.console.clear"));
+        styleButton(consoleClear);
+        consoleClear.setOnAction(e -> consoleArea.clear());
+        Region consoleSpacer = new Region();
+        HBox.setHgrow(consoleSpacer, Priority.ALWAYS);
+        HBox consoleHead = new HBox(8, consoleToggle, consoleSpacer, consolePlayBtn, consoleCopy, consoleClear);
+        consoleHead.setAlignment(Pos.CENTER_LEFT);
+        consoleHead.setPadding(new Insets(2, 14, 2, 14));
+        consoleBox = new VBox(consoleHead, consoleArea);
+        consoleBox.setStyle("-fx-background-color: " + BG_BASE + "; -fx-border-color: " + BORDER + "; -fx-border-width: 1 0 0 0;");
+        updateConsoleControls();
+
+        VBox timelinePane = new VBox(timelineTitle, timelineList, timelineFooter, consoleBox);
         timelinePane.setStyle("-fx-background-color: " + BG_BASE + ";"
             + "-fx-border-color: " + BORDER + "; -fx-border-width: 1 0 0 0;");
 
@@ -962,6 +1003,8 @@ public class QTraceCommitGraph {
         mergeBtn.setDisable(pickedPackets.size() < 2);
         show(saveBtn, on);
         show(publishBtn, on);
+        show(consoleBox, on);
+        updateConsoleControls();
         javafx.scene.control.SelectionMode mode = on ? javafx.scene.control.SelectionMode.MULTIPLE : javafx.scene.control.SelectionMode.SINGLE;
         if (timelineList.getSelectionModel().getSelectionMode() != mode) timelineList.getSelectionModel().setSelectionMode(mode);
         show(banner, on);
@@ -1008,6 +1051,7 @@ public class QTraceCommitGraph {
         editingDirty = false;
         editingStatus = "";
         load(loadedFile);
+        log(QTraceI18n.f("graph.edit.console.opened", loadedFile != null ? loadedFile.getName() : "—", nodes.size()));
     }
 
     /**
@@ -1045,6 +1089,28 @@ public class QTraceCommitGraph {
         showTimeline();
         Integer row = milestoneIndex.get(first);
         if (row != null) timelineList.getSelectionModel().select(row);
+    }
+
+    // ── Editing mode: console ──────────────────────────────────────────────────
+
+    /** One line in the console, with its time; the console unfolds when something is said. */
+    private void log(String line) {
+        String time = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        consoleArea.appendText((consoleArea.getText().isEmpty() ? "" : "\n") + time + "  " + line);
+        if (!consoleArea.isVisible()) show(consoleArea, true);
+        updateConsoleControls();
+    }
+
+    private void updateConsoleControls() {
+        consoleToggle.setText((consoleArea.isVisible() ? "▾  " : "▸  ") + QTraceI18n.t("graph.edit.console"));
+        show(consolePlayBtn, lastPublishedId != null);
+    }
+
+    /** Opens the replay player on the workflow just published. */
+    private void playPublished() {
+        if (lastPublishedId == null) return;
+        if (host != null && host.playInPlayer(lastPublishedId)) log(QTraceI18n.f("graph.edit.console.playing", lastPublishedId));
+        else log(QTraceI18n.f("graph.edit.console.noplayer", lastPublishedId));
     }
 
     // ── Editing mode: recording ────────────────────────────────────────────────
@@ -1120,6 +1186,8 @@ public class QTraceCommitGraph {
     }
 
     private void leaveEditing() {
+        lastPublishedId = null;
+        consoleArea.clear();
         recording = null;
         recordingPacketId = null;
         pickedPackets.clear();
@@ -1175,8 +1243,11 @@ public class QTraceCommitGraph {
             editing.save(f);
             editingDirty = false;
             editingStatus = QTraceI18n.f("graph.edit.saved", f.getName());
+            log(QTraceI18n.f("graph.edit.console.saved", f.getAbsolutePath()));
+            for (String w : editing.warnings()) log("⚠ " + w);
         } catch (Exception ex) {
             editingStatus = QTraceI18n.t("graph.edit.save.error") + " — " + ex.getMessage();
+            log("✗ " + editingStatus);
         }
         showEditingFooter(timelineList.getItems());
     }
@@ -1205,6 +1276,7 @@ public class QTraceCommitGraph {
         publishBtn.setGraphic(spinner);
         publishBtn.setText(QTraceI18n.t("graph.edit.publishing"));
         editingStatus = QTraceI18n.t("graph.edit.publishing");
+        log(QTraceI18n.t("graph.edit.console.publishing"));
         showEditingFooter(timelineList.getItems());
         Thread t = new Thread(() -> {
             String published = null, failure = null;
@@ -1224,7 +1296,12 @@ public class QTraceCommitGraph {
                     content.putString(ok.split(" ")[0]);
                     javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
                     editingStatus = QTraceI18n.f("graph.edit.published", ok);
+                    lastPublishedId = ok.split(" ")[0];
+                    log(QTraceI18n.f("graph.edit.console.published", ok));
+                    log(QTraceI18n.f("graph.edit.console.howtoplay", lastPublishedId));
+                    for (String w : doc.warnings()) log("⚠ " + w);
                 } else {
+                    log("✗ " + QTraceI18n.t("graph.edit.publish.error") + " — " + ko);
                     editingStatus = QTraceI18n.t("graph.edit.publish.error");
                     javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
                         javafx.scene.control.Alert.AlertType.ERROR, ko, javafx.scene.control.ButtonType.OK);
