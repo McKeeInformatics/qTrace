@@ -541,72 +541,14 @@ public class QTraceDashboard {
 
     /** Scans the configured export directory + current project for every .qtrace / image. Off-FX-thread only. */
     private static ScanResult scanAllRows(QuPathGUI qupath) {
+        ProjectRecords.Scan scan = ProjectRecords.scan(qupath);
         List<RowData> rows = new ArrayList<>();
-
-        File qtDir = null;
-        // Project Folder mode: <project>/qTrace/trace, or nothing without an open project
-        // (QTraceController.showDashboard asks for one) — never the configured fallback.
-        try { qtDir = QTraceConfig.get().readExportDir().map(Path::toFile).orElse(null); } catch (Exception ignored) {}
-
-        Map<String, JsonObject> qtraceMap = new LinkedHashMap<>();
-        Map<String, File>       fileMap   = new LinkedHashMap<>();
-        if (qtDir != null && qtDir.exists() && qtDir.isDirectory()) {
-            File[] files = qtDir.listFiles((d, n) -> n.endsWith(".qtrace"));
-            if (files != null) {
-                Arrays.sort(files, Comparator.comparing(File::getName));
-                for (File f : files) {
-                    try {
-                        JsonObject root = JsonParser.parseString(
-                            Files.readString(f.toPath())).getAsJsonObject();
-                        // image name is always at root.image.name (format 2.0)
-                        JsonObject img = jsonObj(root, "image");
-                        String imgName = img != null
-                            ? str(img, "name", f.getName().replace(".qtrace", ""))
-                            : f.getName().replace(".qtrace", "");
-                        qtraceMap.put(imgName, root);
-                        fileMap.put(imgName, f);
-                    } catch (Exception ignored) {}
-                }
-            }
-        }
-
-        Set<String> added = new LinkedHashSet<>();
-        try {
-            var project = qupath.getProject();
-            if (project != null) {
-                for (var entry : project.getImageList()) {
-                    String name = entry.getImageName();
-                    added.add(name);
-                    rows.add(new RowData(name, findMatchingQtrace(name, qtraceMap),
-                        findMatchingFile(name, fileMap)));
-                }
-            }
-        } catch (Exception ignored) {}
-
-        for (var e : qtraceMap.entrySet()) {
-            boolean already = added.stream().anyMatch(n -> namesMatch(n, e.getKey()));
-            if (!already) rows.add(new RowData(e.getKey(), e.getValue(), fileMap.get(e.getKey())));
-        }
-
-        String dirPath = qtDir != null ? qtDir.getAbsolutePath() : null;
-        return new ScanResult(rows, qtraceMap.size(), dirPath);
-    }
-
-    private static JsonObject findMatchingQtrace(String name, Map<String, JsonObject> map) {
-        for (var e : map.entrySet())
-            if (namesMatch(name, e.getKey())) return e.getValue();
-        return null;
-    }
-
-    private static File findMatchingFile(String name, Map<String, File> map) {
-        for (var e : map.entrySet())
-            if (namesMatch(name, e.getKey())) return e.getValue();
-        return null;
+        for (var r : scan.rows()) rows.add(new RowData(r.imageName(), r.qtrace(), r.qtraceFile()));
+        return new ScanResult(rows, scan.qtraceCount(), scan.dirPath());
     }
 
     private static boolean namesMatch(String a, String b) {
-        if (a == null || b == null) return false;
-        return a.equals(b) || a.contains(b) || b.contains(a);
+        return ProjectRecords.namesMatch(a, b);
     }
 
     // ── Filter / sort / render ────────────────────────────────────────────────
