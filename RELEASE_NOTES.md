@@ -20,6 +20,7 @@ A workflow is a sequence of instructions grouped in packets, composed from a rec
 
 ### Fixed
 - The mini-player's menus were grey on white; they are dark with light entries.
+- Leaving an image no longer adds an unstamped session when nothing was done on it, and closing **Brightness & contrast** without changing anything is no longer recorded.
 
 ---
 
