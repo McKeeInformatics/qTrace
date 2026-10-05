@@ -86,6 +86,7 @@ public class QTraceSettingsDialog {
         TextField tfClassifier  = pathField(cfg.rawClassifierDir());
         TextField tfTraining    = pathField(cfg.rawTrainingDir());
         TextField tfLogs        = pathField(cfg.rawLogsDir());
+        TextField tfWorkflows   = pathField(cfg.rawWorkflowDir());
 
         GridPane grid = new GridPane();
         grid.setId("settings-paths-grid"); // looked up by the screenshot harness — see ScreenshotHarness
@@ -106,10 +107,11 @@ public class QTraceSettingsDialog {
         addRow(grid, 1, "Classifier Git tracking",     tfClassifier,  dlg);
         addRow(grid, 2, "Training GeoJSON",            tfTraining,    dlg);
         addRow(grid, 3, "Player replay logs",          tfLogs,        dlg);
+        addRow(grid, 4, "Workflows (.qtflow)",         tfWorkflows,   dlg);
 
         // Hint
         Label hint = new Label("Leave blank to use default: " + QTraceConfig.defaultDirString()
-            + "  (replay logs default to ~/.qTrace/replay-logs/)");
+            + "  (replay logs default to ~/.qTrace/replay-logs/, workflows to a \"workflows\" folder beside the traces)");
         hint.setTextFill(Color.web(TEXT_MUTED));
         hint.setFont(Font.font("System", 10));
         hint.setWrapText(true);
@@ -157,14 +159,16 @@ public class QTraceSettingsDialog {
             tfClassifier.setDisable(useProj);
             tfTraining.setDisable(useProj);
             tfLogs.setDisable(useProj);
+            tfWorkflows.setDisable(useProj);
             if (useProj) {
                 if (projectBaseDir != null) {
                     tfExport.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.TRACE_SUBDIR, null).toString());
                     tfClassifier.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.GITTRACK_SUBDIR, null).toString());
                     tfTraining.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.GEOJSON_SUBDIR, null).toString());
                     tfLogs.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.LOGS_SUBDIR, null).toString());
+                    tfWorkflows.setText(QTraceConfig.resolveDir(true, projectBaseDir, QTraceConfig.WORKFLOW_SUBDIR, null).toString());
                 } else {
-                    for (TextField tf : new TextField[] { tfExport, tfClassifier, tfTraining, tfLogs }) {
+                    for (TextField tf : new TextField[] { tfExport, tfClassifier, tfTraining, tfLogs, tfWorkflows }) {
                         tf.setText("");
                         tf.setPromptText("(open a QuPath project to resolve this path)");
                     }
@@ -174,6 +178,7 @@ public class QTraceSettingsDialog {
                 tfClassifier.setText(cfg.rawClassifierDir());
                 tfTraining.setText(cfg.rawTrainingDir());
                 tfLogs.setText(cfg.rawLogsDir());
+                tfWorkflows.setText(cfg.rawWorkflowDir());
             }
         };
         chkProjectFolder.selectedProperty().addListener((obs, was, sel) -> refreshPathFields.run());
@@ -506,6 +511,7 @@ public class QTraceSettingsDialog {
                 cfg.setClassifierDir(tfClassifier.getText());
                 cfg.setTrainingDir(tfTraining.getText());
                 cfg.setLogsDir(tfLogs.getText());
+                cfg.setWorkflowDir(tfWorkflows.getText());
             }
             cfg.setUseProjectFolder(chkProjectFolder.isSelected());
             cfg.setValidatorName(tfValidator.getText());

@@ -56,6 +56,7 @@ public class QTraceConfig {
     public static final String GEOJSON_SUBDIR   = "geoJson";
     public static final String LOGS_SUBDIR      = "logs";
     public static final String GITTRACK_SUBDIR  = "gitTrack";
+    public static final String WORKFLOW_SUBDIR  = "workflow";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -66,6 +67,7 @@ public class QTraceConfig {
     private String exportDir;
     private String classifierDir;
     private String trainingDir;
+    private String workflowDir; // .qtflow files of the workflow editor — null = <export dir>/workflows
     private String lastReplayBrowseDir; // last folder the Compliance Player's "Browse" opened from
     private String logsDir; // Player replay logs — null = ~/.qTrace/replay-logs/
     private Boolean useProjectFolder; // when true, store everything under <project>/qTrace/ instead of the paths above
@@ -123,6 +125,10 @@ public class QTraceConfig {
     public Path getExportDir()      { return resolve(exportDir);       }
     public Path getClassifierDir()  { return resolve(classifierDir);   }
     public Path getTrainingDir()    { return resolve(trainingDir);     }
+    /** Workflows (.qtflow) have a folder of their own; not set: "workflows" beside the traces. */
+    public Path getWorkflowDir() {
+        return workflowDir != null && !workflowDir.isBlank() ? Path.of(workflowDir) : getExportDir().resolve("workflows");
+    }
 
     /** Where the Player's "Browse" should start — the last folder it was used from, or the configured export dir until then. */
     public Path getLastReplayBrowseDir() {
@@ -140,6 +146,7 @@ public class QTraceConfig {
     public void setExportDir(String p)      { this.exportDir       = blank(p); }
     public void setClassifierDir(String p)  { this.classifierDir   = blank(p); }
     public void setTrainingDir(String p)    { this.trainingDir     = blank(p); }
+    public void setWorkflowDir(String p)    { this.workflowDir     = blank(p); }
     public void setLastReplayBrowseDir(String p) { this.lastReplayBrowseDir = blank(p); }
     public void setLogsDir(String p)        { this.logsDir         = blank(p); }
 
@@ -199,6 +206,7 @@ public class QTraceConfig {
     public Path resolveExportDir(Path projectBaseDir)     { return resolveDir(isUseProjectFolder(), projectBaseDir, TRACE_SUBDIR,    getExportDir());     }
     public Path resolveClassifierDir(Path projectBaseDir) { return resolveDir(isUseProjectFolder(), projectBaseDir, GITTRACK_SUBDIR, getClassifierDir()); }
     public Path resolveTrainingDir(Path projectBaseDir)   { return resolveDir(isUseProjectFolder(), projectBaseDir, GEOJSON_SUBDIR,  getTrainingDir());   }
+    public Path resolveWorkflowDir(Path projectBaseDir)   { return resolveDir(isUseProjectFolder(), projectBaseDir, WORKFLOW_SUBDIR, getWorkflowDir());   }
     public Path resolveLogsDir(Path projectBaseDir)       { return resolveDir(isUseProjectFolder(), projectBaseDir, LOGS_SUBDIR,     getLogsDir());       }
 
     /**
@@ -234,6 +242,8 @@ public class QTraceConfig {
     public Path outputExportDir()     { return ensured(resolveExportDir(currentProjectDir())); }
     public Path outputClassifierDir() { return ensured(resolveClassifierDir(currentProjectDir())); }
     public Path outputTrainingDir()   { return ensured(resolveTrainingDir(currentProjectDir())); }
+    /** Where workflows (.qtflow) are saved and opened from: the project's qTrace/workflow, else the configured folder. */
+    public Path outputWorkflowDir()   { return ensured(resolveWorkflowDir(currentProjectDir())); }
 
     /** Where readers look for .qtrace files; empty = Project Folder mode but no project open. */
     public Optional<Path> readExportDir() {
@@ -249,7 +259,7 @@ public class QTraceConfig {
 
     /** Creates the four Project Folder mode subfolders under {@code <projectBaseDir>/qTrace/} if missing. */
     public static void createProjectDirs(Path projectBaseDir) throws IOException {
-        for (String sub : new String[] { TRACE_SUBDIR, GEOJSON_SUBDIR, LOGS_SUBDIR, GITTRACK_SUBDIR }) {
+        for (String sub : new String[] { TRACE_SUBDIR, GEOJSON_SUBDIR, LOGS_SUBDIR, GITTRACK_SUBDIR, WORKFLOW_SUBDIR }) {
             Files.createDirectories(projectSubdir(projectBaseDir, sub));
         }
     }
@@ -351,6 +361,7 @@ public class QTraceConfig {
     public String rawExportDir()      { return exportDir       != null ? exportDir       : ""; }
     public String rawClassifierDir()  { return classifierDir   != null ? classifierDir   : ""; }
     public String rawTrainingDir()    { return trainingDir     != null ? trainingDir     : ""; }
+    public String rawWorkflowDir()    { return workflowDir     != null ? workflowDir     : ""; }
     public String rawLogsDir()        { return logsDir         != null ? logsDir         : ""; }
 
     public static String defaultDirString() { return DEFAULT_DIR.toString(); }

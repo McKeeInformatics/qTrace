@@ -431,7 +431,10 @@ public class QTraceCommitGraph {
         fc.setTitle(QTraceI18n.t("graph.open"));
         try {
             File dir = QTraceConfig.get().readExportDir().orElse(QTraceConfig.get().getExportDir()).toFile();
-            if (dir.isDirectory()) fc.setInitialDirectory(dir);
+            // With a workflow editor, Open starts in the workflows folder: that is what is reopened here.
+            File workflows = editor() != null ? QTraceConfig.get().outputWorkflowDir().toFile() : null;
+            if (workflows != null && workflows.isDirectory()) fc.setInitialDirectory(workflows);
+            else if (dir.isDirectory()) fc.setInitialDirectory(dir);
         } catch (Exception ignored) {}
         // A saved workflow reopens where it is edited: only offered with an editor.
         if (editor() != null) fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("qTrace", "*.qtrace", "*.qtflow"));
@@ -1230,9 +1233,16 @@ public class QTraceCommitGraph {
         FileChooser fc = new FileChooser();
         fc.setTitle(QTraceI18n.t("graph.edit.save"));
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(".qtflow", "*.qtflow"));
-        if (loadedFile != null) {
-            File dir = loadedFile.getParentFile();
+        // Workflows have a folder of their own (Settings › Paths), created the first time one is saved.
+        try {
+            java.nio.file.Path dir = QTraceConfig.get().outputWorkflowDir();
+            Files.createDirectories(dir);
+            fc.setInitialDirectory(dir.toFile());
+        } catch (Exception e) {
+            File dir = loadedFile != null ? loadedFile.getParentFile() : null;
             if (dir != null && dir.isDirectory()) fc.setInitialDirectory(dir);
+        }
+        if (loadedFile != null) {
             String name = loadedFile.getName();
             int dot = name.lastIndexOf('.');
             fc.setInitialFileName((dot > 0 ? name.substring(0, dot) : name) + ".qtflow");

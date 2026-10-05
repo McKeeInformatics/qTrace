@@ -68,6 +68,29 @@ class QTraceConfigTest {
     }
 
     @Test
+    void workflows_haveAFolderOfTheirOwn_nextToTheTraces() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        QTraceConfig fresh = gson.fromJson("{}", QTraceConfig.class);
+        assertEquals("", fresh.rawWorkflowDir());
+        assertEquals(fresh.getExportDir().resolve("workflows"), fresh.getWorkflowDir(),
+            "not set: a workflows folder beside the traces, never mixed with them");
+
+        fresh.setWorkflowDir("/data/workflows");
+        QTraceConfig reread = gson.fromJson(gson.toJson(fresh), QTraceConfig.class);
+        assertEquals(Path.of("/data/workflows"), reread.getWorkflowDir());
+        reread.setWorkflowDir("  ");
+        assertEquals("", reread.rawWorkflowDir());
+    }
+
+    @Test
+    void workflows_goUnderTheProjectFolder_inProjectFolderMode() {
+        Path project = Path.of("/my/project");
+        assertEquals(project.resolve("qTrace").resolve("workflow"),
+            QTraceConfig.resolveDir(true, project, QTraceConfig.WORKFLOW_SUBDIR, FALLBACK));
+        assertEquals(FALLBACK, QTraceConfig.resolveDir(false, project, QTraceConfig.WORKFLOW_SUBDIR, FALLBACK));
+    }
+
+    @Test
     void createProjectDirs_createsAllFourSubfolders(@TempDir Path tempDir) throws Exception {
         QTraceConfig.createProjectDirs(tempDir);
 
@@ -76,6 +99,7 @@ class QTraceConfigTest {
         assertTrue(Files.isDirectory(root.resolve("geoJson")));
         assertTrue(Files.isDirectory(root.resolve("logs")));
         assertTrue(Files.isDirectory(root.resolve("gitTrack")));
+        assertTrue(Files.isDirectory(root.resolve("workflow")), "and the workflows folder with them");
     }
 
     // ── Folder that already exists with another case (qtrace/, QTRACE/, Trace/…) ─────
