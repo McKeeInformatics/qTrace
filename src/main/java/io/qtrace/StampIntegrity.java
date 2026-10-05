@@ -101,16 +101,119 @@ public final class StampIntegrity {
         java.nio.file.Path certs = exportDir
             .resolve("case_" + caseId.replaceAll("[^a-zA-Z0-9._-]", "_")).resolve("certs");
         if (!java.nio.file.Files.isDirectory(certs)) return null;
-        try (var files = java.nio.file.Files.list(certs)) {
-            for (var p : (Iterable<java.nio.file.Path>) files.filter(f -> f.toString().endsWith(".qtcert"))::iterator) {
-                try {
-                    JsonObject payload = signedPayload(com.google.gson.JsonParser.parseString(
-                        java.nio.file.Files.readString(p)).getAsJsonObject());
-                    if (payload != null && sessionId.equals(str(payload, "session_id", null))) return payload;
-                } catch (Exception ignored) {}
+        // The session names its certificate (external_files, type "cert"): read that one. Opening
+        // every certificate of the case to find it costs seconds per image on a real project.
+        String named = certFileName(session);
+        if (named != null) {
+            JsonObject payload = payloadOf(certs.resolve(named), sessionId);
+            if (payload != null) return payload;
+        }
+        java.nio.file.Path indexed = certIndex(certs).get(sessionId);
+        return indexed != null ? payloadOf(indexed, sessionId) : null;
+    }
+
+    // ── Which certificate of a case folder belongs to which session ─────────────────────────
+    // Learnt by skimming each .qtcert once (no JSON tree: certificates run to tens of MB), and
+    // kept while the folder's listing does not change — the Dashboard, the panel and the cohort
+    // map ask for every image of a project in a row.
+
+    private record CertIndex(String listing, java.util.Map<String, java.nio.file.Path> bySession) {}
+
+    private static final java.util.Map<java.nio.file.Path, CertIndex> CERT_INDEX =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static java.util.Map<String, java.nio.file.Path> certIndex(java.nio.file.Path certs) {
+        java.util.List<java.nio.file.Path> files = new java.util.ArrayList<>();
+        StringBuilder listing = new StringBuilder();
+        try (var list = java.nio.file.Files.list(certs)) {
+            for (var p : (Iterable<java.nio.file.Path>) list.filter(f -> f.toString().endsWith(".qtcert")).sorted()::iterator) {
+                files.add(p);
+                listing.append(p.getFileName()).append('|').append(java.nio.file.Files.size(p)).append('|')
+                    .append(java.nio.file.Files.getLastModifiedTime(p).toMillis()).append(';');
             }
-        } catch (Exception ignored) {}
-        return null;
+        } catch (Exception e) {
+            return java.util.Map.of();
+        }
+        String now = listing.toString();
+        CertIndex known = CERT_INDEX.get(certs);
+        if (known != null && known.listing().equals(now)) return known.bySession();
+        synchronized (CERT_INDEX) {
+            known = CERT_INDEX.get(certs);
+            if (known != null && known.listing().equals(now)) return known.bySession();
+            java.util.Map<String, java.nio.file.Path> bySession = new java.util.HashMap<>();
+            for (java.nio.file.Path p : files) {
+                String id = sessionIdOf(p);
+                if (id != null) bySession.putIfAbsent(id, p);
+            }
+            CERT_INDEX.put(certs, new CertIndex(now, bySession));
+            return bySession;
+        }
+    }
+
+    /**
+     * The session a .qtcert certifies, read without building its JSON tree: the signed text
+     * (v1.1, {@code qtrace_payload_json}) when there is one, else the readable copy — the same
+     * choice as {@link #signedPayload}. Null when the file is not a certificate.
+     */
+    static String sessionIdOf(java.nio.file.Path cert) {
+        try (com.google.gson.stream.JsonReader r = new com.google.gson.stream.JsonReader(
+                java.nio.file.Files.newBufferedReader(cert))) {
+            String fromSigned = null, fromCopy = null;
+            r.beginObject();
+            while (r.hasNext()) {
+                String key = r.nextName();
+                if ("qtrace_payload_json".equals(key) && r.peek() == com.google.gson.stream.JsonToken.STRING) {
+                    try (com.google.gson.stream.JsonReader inner = new com.google.gson.stream.JsonReader(
+                            new java.io.StringReader(r.nextString()))) {
+                        fromSigned = topLevelSessionId(inner);
+                    } catch (Exception ignored) {}
+                } else if ("qtrace_payload".equals(key) && r.peek() == com.google.gson.stream.JsonToken.BEGIN_OBJECT) {
+                    fromCopy = topLevelSessionId(r);
+                } else {
+                    r.skipValue();
+                }
+            }
+            return fromSigned != null ? fromSigned : fromCopy;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Reads one whole object, returning its own {@code session_id} (not a nested one). */
+    private static String topLevelSessionId(com.google.gson.stream.JsonReader r) throws java.io.IOException {
+        String id = null;
+        r.beginObject();
+        while (r.hasNext()) {
+            if ("session_id".equals(r.nextName()) && r.peek() == com.google.gson.stream.JsonToken.STRING) id = r.nextString();
+            else r.skipValue();
+        }
+        r.endObject();
+        return id;
+    }
+
+    /** The stamped session a .qtcert carries, when it is the one of {@code sessionId}; else null. */
+    private static JsonObject payloadOf(java.nio.file.Path cert, String sessionId) {
+        try {
+            if (!java.nio.file.Files.isRegularFile(cert)) return null;
+            JsonObject payload = signedPayload(com.google.gson.JsonParser.parseString(
+                java.nio.file.Files.readString(cert)).getAsJsonObject());
+            return payload != null && sessionId.equals(str(payload, "session_id", null)) ? payload : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** File name of the certificate a stamped session points to, or null (older records, Core). */
+    private static String certFileName(JsonObject session) {
+        if (!session.has("external_files") || !session.get("external_files").isJsonArray()) return null;
+        String found = null;
+        for (com.google.gson.JsonElement e : session.getAsJsonArray("external_files")) {
+            if (!e.isJsonObject() || !"cert".equals(str(e.getAsJsonObject(), "type", null))) continue;
+            String name = str(e.getAsJsonObject(), "filename", null);
+            // A bare file name only: never a path out of the case's certs folder.
+            if (name != null && !name.contains("/") && !name.contains("\\")) found = name;
+        }
+        return found;
     }
 
     /**
