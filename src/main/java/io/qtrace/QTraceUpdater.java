@@ -64,12 +64,15 @@ public final class QTraceUpdater {
     private static final Logger log = LoggerFactory.getLogger(QTraceUpdater.class);
     private static final String TAG = "[qtrace-update] ";
 
-    // One startup session may update Core AND Compliance. Each check is an open task
-    // until it resolves (nothing to offer / prompt declined / download finished); the
-    // single "installed — Quit QuPath Now" dialog is shown only once ALL tasks are done,
-    // otherwise quitting after the first install dropped the second prompt unseen.
+    // One startup session may update several extensions. Each check, then each install, is an
+    // open task until it resolves; when the last check closes, the updates found are offered in
+    // ONE message, and when the last install closes, the single "installed — Quit QuPath Now"
+    // message is shown.
     private static final AtomicInteger openTasks = new AtomicInteger();
     private static final List<String> installedThisSession = new ArrayList<>();
+    // Updates found by this session's checks: shown together, in one message, once every check
+    // has answered (see taskDone) — one prompt per extension made a startup a row of popups.
+    private static final List<UpdateBatch.Item> offered = new ArrayList<>();
     private static final java.util.Set<Path> scheduledForDeletion = new java.util.HashSet<>();
     // installModulesNow(qupath, false): its caller shows the restart itself.
     private static volatile boolean quietInstall;
@@ -209,8 +212,8 @@ public final class QTraceUpdater {
                     openTasks.incrementAndGet();
                     final String bearer = o.licensed() ? jwt : null;
                     Downloader dl = () -> httpGetBytes(o.url(), bearer);
-                    if (!promptAndInstall(qupath, o.module(), local.getOrDefault(o.module(), "0"),
-                            o.version(), o.sha256(), dl)) taskDone(qupath);
+                    promptAndInstall(qupath, o.module(), local.getOrDefault(o.module(), "0"), o.version(), o.sha256(), dl);
+                    taskDone(qupath);
                 }
             } catch (Exception e) {
                 log.info(TAG + "modules check failed: {}", e.toString());
@@ -327,10 +330,10 @@ public final class QTraceUpdater {
     // ── Shared install flow ─────────────────────────────────────────────────────
 
     /**
-     * Prompts the user about {@code remoteVer} and, on confirmation, downloads,
-     * verifies (if {@code expectedSha256} non-null) and installs the JAR.
-     * Safe to call from any thread. Returns true when a prompt was scheduled: the
-     * caller's open task is then closed by this flow (see {@link #taskDone}).
+     * Notes that {@code module} has a newer version. Nothing is shown here: every update found
+     * by this session's checks is offered in one message once they have all answered
+     * ({@link #taskDone}), and installed together on confirmation. Safe to call from any thread.
+     * Always returns false — the caller still closes its own open task.
      */
     public static boolean promptAndInstall(QuPathGUI qupath, String module, String currentVer,
                                         String remoteVer, String expectedSha256, Downloader downloader) {
@@ -338,42 +341,56 @@ public final class QTraceUpdater {
             log.info(TAG + "{}: up to date (local={} remote={})", module, currentVer, remoteVer);
             return false;
         }
-        if (remoteVer.equals(QTraceConfig.get().getDismissedUpdateVersion())) {
-            log.info(TAG + "{}: {} was dismissed by the user", module, remoteVer);
-            return false;
+        log.info(TAG + "{}: update found {} → {}", module, currentVer, remoteVer);
+        synchronized (offered) {
+            offered.add(new UpdateBatch.Item(module, currentVer, remoteVer, expectedSha256, downloader));
         }
-        log.info(TAG + "{}: offering {} → {}", module, currentVer, remoteVer);
+        return false;
+    }
+
+    /**
+     * The one update message of a startup: the extensions to update, then Install (all of
+     * them), Later, or Skip these versions. Installing ends with the single "installed — Quit
+     * QuPath Now" message ({@link #promptQuit}).
+     */
+    private static void promptUpdates(QuPathGUI qupath, UpdateBatch batch) {
+        if (batch.wasSkipped(QTraceConfig.get().getDismissedUpdateVersion())) {
+            log.info(TAG + "{} skipped by the user earlier", batch.signature());
+            return;
+        }
+        log.info(TAG + "offering {}", batch.signature());
+        boolean one = batch.items().size() == 1;
 
         // Shown only once no modal dialog is open (QuPath's Welcome window at startup):
         // stacked on top of it, the post-install "Quit QuPath Now" could never work.
         Platform.runLater(() -> whenNoModalOpen("update prompt", () -> {
-            String label = moduleLabel(module);
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
             alert.setTitle(QTraceI18n.t("update.title"));
-            alert.setHeaderText(QTraceI18n.t("update.available")
-                .replace("{0}", label).replace("{1}", remoteVer).replace("{2}", currentVer));
-            alert.setContentText(QTraceI18n.t("update.prompt"));
+            alert.setHeaderText(QTraceI18n.t(one ? "update.available.one" : "update.available.many"));
+            alert.setContentText(String.join("\n", batch.lines()) + "\n\n" + QTraceI18n.t("update.prompt"));
             if (qupath != null && qupath.getStage() != null) alert.initOwner(qupath.getStage());
 
             ButtonType install = new ButtonType(QTraceI18n.t("update.install"), ButtonBar.ButtonData.OK_DONE);
             ButtonType later   = new ButtonType(QTraceI18n.t("update.later"),   ButtonBar.ButtonData.CANCEL_CLOSE);
-            ButtonType ignore  = new ButtonType(QTraceI18n.t("update.ignore"),  ButtonBar.ButtonData.OTHER);
+            ButtonType ignore  = new ButtonType(QTraceI18n.t(one ? "update.ignore" : "update.ignore.many"), ButtonBar.ButtonData.OTHER);
             alert.getButtonTypes().setAll(install, later, ignore);
 
             Optional<ButtonType> result = alert.showAndWait();
-            log.info(TAG + "{}: user chose {}", module, result.map(ButtonType::getText).orElse("<closed>"));
-            if (result.isEmpty() || result.get() == later) { taskDone(qupath); return; }
+            log.info(TAG + "update prompt: user chose {}", result.map(ButtonType::getText).orElse("<closed>"));
+            if (result.isEmpty() || result.get() == later) return;
             if (result.get() == ignore) {
-                QTraceConfig.get().setDismissedUpdateVersion(remoteVer);
+                QTraceConfig.get().setDismissedUpdateVersion(batch.signature());
                 QTraceConfig.get().save();
-                taskDone(qupath);
                 return;
             }
-            // Install → background download + write
-            CompletableFuture.runAsync(() ->
-                downloadAndInstall(qupath, module, remoteVer, expectedSha256, downloader));
+            // Install → every extension, one after the other, in the background; the last
+            // one to finish brings the single post-install message.
+            openTasks.addAndGet(batch.items().size());
+            CompletableFuture.runAsync(() -> {
+                for (UpdateBatch.Item it : batch.items())
+                    downloadAndInstall(qupath, it.module(), it.remoteVer(), it.sha256(), it.downloader());
+            });
         }));
-        return true;
     }
 
     private static void downloadAndInstall(QuPathGUI qupath, String module, String remoteVer,
@@ -406,7 +423,7 @@ public final class QTraceUpdater {
             if (!underLoader) QTraceUpdater.reapOldJars(QTraceUpdater.class, module);
 
             synchronized (installedThisSession) {
-                installedThisSession.add(moduleLabel(module) + " v" + remoteVer);
+                installedThisSession.add(UpdateBatch.moduleLabel(module) + " v" + remoteVer);
             }
         } catch (Exception e) {
             log.warn(TAG + "{}: install of {} failed", module, remoteVer, e);
@@ -416,15 +433,21 @@ public final class QTraceUpdater {
         }
     }
 
-    private static String moduleLabel(String module) {
-        if ("core".equals(module)) return "Core";
-        if ("compliance".equals(module)) return "Compliance";
-        return module.isEmpty() ? module : Character.toUpperCase(module.charAt(0)) + module.substring(1);
-    }
-
-    /** Closes one open task; the last one shows the single post-install dialog. */
+    /**
+     * Closes one open task. The last one shows the one update message when the checks found
+     * something to update, or the single post-install message when installs just finished.
+     */
     private static void taskDone(QuPathGUI qupath) {
         if (openTasks.decrementAndGet() > 0) return;
+        UpdateBatch batch;
+        synchronized (offered) {
+            batch = UpdateBatch.of(offered);
+            offered.clear();
+        }
+        if (!batch.isEmpty()) {
+            promptUpdates(qupath, batch);
+            return;
+        }
         String installed;
         synchronized (installedThisSession) {
             if (installedThisSession.isEmpty()) return;
