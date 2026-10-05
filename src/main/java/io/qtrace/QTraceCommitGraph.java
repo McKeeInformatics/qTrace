@@ -271,7 +271,28 @@ public class QTraceCommitGraph {
         Label placeholder = muted(QTraceI18n.t("graph.timeline.empty"));
         fill(placeholder, Color.web(TEXT_MUTED));
         timelineList.setPlaceholder(placeholder);
+        // Editing mode: several instructions can be selected (Ctrl, Shift), removed or moved together.
+        timelineList.getSelectionModel().getSelectedItems().addListener(
+            (javafx.collections.ListChangeListener<VersionTimeline.Entry>) c -> {
+                if (editing != null && selectedSteps().size() > 1) showStepsPickedDetail();
+            });
+        timelineList.setOnContextMenuRequested(e -> {
+            List<VersionEditor.Step> picked = selectedSteps();
+            if (editing == null || picked.isEmpty()) return;
+            javafx.scene.control.MenuItem remove = new javafx.scene.control.MenuItem(
+                QTraceI18n.f("graph.edit.steps.remove", picked.size()));
+            remove.setOnAction(ev -> removeSelectedSteps());
+            new javafx.scene.control.ContextMenu(remove).show(timelineList, e.getScreenX(), e.getScreenY());
+            e.consume();
+        });
+        timelineList.setOnKeyPressed(e -> {
+            if (editing != null && (e.getCode() == javafx.scene.input.KeyCode.DELETE || e.getCode() == javafx.scene.input.KeyCode.BACK_SPACE)) {
+                removeSelectedSteps();
+                e.consume();
+            }
+        });
         timelineList.getSelectionModel().selectedItemProperty().addListener((o, was, e) -> {
+            if (editing != null && selectedSteps().size() > 1) return;   // the group has its own panel
             if (e == null || e.sessionIndex() >= nodes.size()) return;
             Node n = nodes.get(e.sessionIndex());
             if (e.kind() == VersionTimeline.Kind.STEP) showStepDetail(e, n); else showDetail(n);
@@ -941,6 +962,8 @@ public class QTraceCommitGraph {
         mergeBtn.setDisable(pickedPackets.size() < 2);
         show(saveBtn, on);
         show(publishBtn, on);
+        javafx.scene.control.SelectionMode mode = on ? javafx.scene.control.SelectionMode.MULTIPLE : javafx.scene.control.SelectionMode.SINGLE;
+        if (timelineList.getSelectionModel().getSelectionMode() != mode) timelineList.getSelectionModel().setSelectionMode(mode);
         show(banner, on);
     }
 
@@ -1243,11 +1266,18 @@ public class QTraceCommitGraph {
     /** ↑ ↓ move the instruction inside its packet, ✕ takes it out of the workflow. */
     private Region stepEditButtons(VersionTimeline.Entry e, Node n) {
         int si = VersionTimeline.stepIndex(allEntries, e);
-        Button up = rowButton("↑", "graph.edit.step.up", () -> edit(() -> editing.moveStep(n.index, si, -1), rowOf(e) - 1));
-        Button down = rowButton("↓", "graph.edit.step.down", () -> edit(() -> editing.moveStep(n.index, si, 1), rowOf(e) + 1));
-        Button remove = rowButton("✕", "graph.edit.step.remove", () -> edit(() -> editing.removeStep(n.index, si), -1));
-        up.setDisable(si <= 0);
-        down.setDisable(si >= n.steps - 1);
+        // On a row of a group of selected instructions, the buttons act on the whole group.
+        Button up = rowButton("↑", "graph.edit.step.up", () -> {
+            if (inGroup(e)) shiftSelectedSteps(-1); else edit(() -> editing.moveStep(n.index, si, -1), rowOf(e) - 1);
+        });
+        Button down = rowButton("↓", "graph.edit.step.down", () -> {
+            if (inGroup(e)) shiftSelectedSteps(1); else edit(() -> editing.moveStep(n.index, si, 1), rowOf(e) + 1);
+        });
+        Button remove = rowButton("✕", "graph.edit.step.remove", () -> {
+            if (inGroup(e)) removeSelectedSteps(); else edit(() -> editing.removeStep(n.index, si), -1);
+        });
+        up.setDisable(si <= 0 && !inGroup(e));
+        down.setDisable(si >= n.steps - 1 && !inGroup(e));
         HBox box = new HBox(4, up, down, remove);
         box.setAlignment(Pos.CENTER_RIGHT);
         return box;
@@ -1287,15 +1317,89 @@ public class QTraceCommitGraph {
 
     // ── Editing mode: drag and drop ────────────────────────────────────────────
 
+    /** The selected instructions being dragged together by the grip of one of them; null for a single drag. */
+    private List<VersionEditor.Step> draggedGroup;
+
+    // ── Editing mode: several instructions at once ─────────────────────────────
+
+    /** The instructions selected in the list, in the order they play — packet rows left out. */
+    private List<VersionEditor.Step> selectedSteps() {
+        List<VersionEditor.Step> out = new ArrayList<>();
+        if (editing == null) return out;
+        // By row, not by value: two instructions alike are two rows, selected each on its own.
+        List<VersionTimeline.Entry> rows = timelineList.getItems();
+        for (int i : new java.util.TreeSet<>(timelineList.getSelectionModel().getSelectedIndices())) {
+            if (i < 0 || i >= rows.size() || rows.get(i).kind() != VersionTimeline.Kind.STEP) continue;
+            int si = VersionTimeline.stepIndex(allEntries, rows.get(i));
+            if (si >= 0) out.add(new VersionEditor.Step(rows.get(i).sessionIndex(), si));
+        }
+        return out;
+    }
+
+    /** True when this row is one of several selected instructions: its buttons and its grip act on all of them. */
+    private boolean inGroup(VersionTimeline.Entry e) {
+        List<VersionEditor.Step> picked = selectedSteps();
+        return picked.size() > 1 && picked.contains(new VersionEditor.Step(e.sessionIndex(), VersionTimeline.stepIndex(allEntries, e)));
+    }
+
+    private void removeSelectedSteps() {
+        List<VersionEditor.Step> picked = selectedSteps();
+        if (!picked.isEmpty()) edit(() -> editing.removeSteps(picked), -1);
+    }
+
+    private void shiftSelectedSteps(int delta) {
+        List<VersionEditor.Step> picked = selectedSteps();
+        if (picked.isEmpty()) return;
+        List<List<VersionEditor.Step>> now = new ArrayList<>();
+        edit(() -> now.add(editing.shiftSteps(picked, delta)), -1);
+        if (!now.isEmpty()) selectSteps(now.get(0));
+    }
+
+    /** Selects the rows of these instructions, after a change rebuilt the list. */
+    private void selectSteps(List<VersionEditor.Step> steps) {
+        timelineList.getSelectionModel().clearSelection();
+        List<VersionTimeline.Entry> rows = timelineList.getItems();
+        int[] next = new int[nodes.size() + 1];
+        for (int i = 0; i < rows.size(); i++) {
+            VersionTimeline.Entry e = rows.get(i);
+            if (e.kind() != VersionTimeline.Kind.STEP || e.sessionIndex() >= nodes.size()) continue;
+            if (steps.contains(new VersionEditor.Step(e.sessionIndex(), next[e.sessionIndex()]++))) timelineList.getSelectionModel().select(i);
+        }
+    }
+
+    /** The detail panel for several selected instructions: what they are, and what can be done with them. */
+    private void showStepsPickedDetail() {
+        List<VersionTimeline.Entry> picked = new ArrayList<>();
+        List<VersionTimeline.Entry> rows = timelineList.getItems();
+        for (int i : new java.util.TreeSet<>(timelineList.getSelectionModel().getSelectedIndices()))
+            if (i >= 0 && i < rows.size() && rows.get(i).kind() == VersionTimeline.Kind.STEP) picked.add(rows.get(i));
+        detailBox.getChildren().clear();
+        detailBox.getChildren().add(sectionTitle(QTraceI18n.f("graph.edit.steps.picked", picked.size())));
+        for (int i = 0; i < picked.size() && i < 15; i++)
+            detailBox.getChildren().add(bullet(ellipsis(picked.get(i).command().isBlank() ? "—" : picked.get(i).command(), 40)));
+        if (picked.size() > 15) detailBox.getChildren().add(muted("… +" + (picked.size() - 15)));
+        detailBox.getChildren().add(muted(QTraceI18n.t("graph.edit.steps.tip")));
+        Button remove = new Button(QTraceI18n.f("graph.edit.steps.remove", picked.size()));
+        styleButton(remove);
+        remove.setOnAction(ev -> removeSelectedSteps());
+        HBox actions = new HBox(8, remove);
+        actions.setPadding(new Insets(10, 0, 0, 0));
+        detailBox.getChildren().add(actions);
+    }
+
     /** What is being dragged: a whole packet ({@code step} -1), or one instruction of it. */
     private record Drag(int packet, int step) {
         boolean wholePacket() { return step < 0; }
     }
 
     private static Drag dragOf(javafx.scene.input.Dragboard db) {
-        if (db == null || !db.hasString() || !db.getString().startsWith(DRAG_PREFIX)) return null;
+        return db != null && db.hasString() ? dragOfText(db.getString()) : null;
+    }
+
+    private static Drag dragOfText(String text) {
+        if (text == null || !text.startsWith(DRAG_PREFIX)) return null;
         try {
-            String[] parts = db.getString().substring(DRAG_PREFIX.length()).split(":");
+            String[] parts = text.substring(DRAG_PREFIX.length()).split(":");
             if (parts[0].equals("packet") && parts.length == 2) return new Drag(Integer.parseInt(parts[1]), -1);
             if (parts[0].equals("step") && parts.length == 3)
                 return new Drag(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
@@ -1313,7 +1417,14 @@ public class QTraceCommitGraph {
         h.setMinWidth(16);
         h.setCursor(javafx.scene.Cursor.OPEN_HAND);
         h.setTooltip(new Tooltip(QTraceI18n.t("graph.edit.drag")));
+        // A press on the grip is not a click on the row: the selection stays as it is, so a
+        // selected row can be dragged with the others selected.
+        h.setOnMousePressed(javafx.scene.input.MouseEvent::consume);
         h.setOnDragDetected(ev -> {
+            Drag dragged = dragOfText(DRAG_PREFIX + what);
+            List<VersionEditor.Step> picked = selectedSteps();
+            draggedGroup = dragged != null && !dragged.wholePacket() && picked.size() > 1
+                && picked.contains(new VersionEditor.Step(dragged.packet(), dragged.step())) ? picked : null;
             javafx.scene.input.Dragboard db = h.startDragAndDrop(javafx.scene.input.TransferMode.MOVE);
             javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
             content.putString(DRAG_PREFIX + what);
@@ -1339,6 +1450,11 @@ public class QTraceCommitGraph {
         if (d.wholePacket()) return target.sessionIndex() != d.packet();
         int at = landingStep(target, lowerHalf);
         if (at < 0) return false;
+        // A group lands anywhere but on one of its own rows.
+        if (draggedGroup != null) {
+            return target.kind() != VersionTimeline.Kind.STEP || !draggedGroup.contains(
+                new VersionEditor.Step(target.sessionIndex(), VersionTimeline.stepIndex(allEntries, target)));
+        }
         return target.sessionIndex() != d.packet() || (at != d.step() && at != d.step() + 1);
     }
 
@@ -1361,6 +1477,14 @@ public class QTraceCommitGraph {
         }
         int at = landingStep(target, lowerHalf);
         if (at < 0) return;
+        if (draggedGroup != null) {
+            List<VersionEditor.Step> group = draggedGroup;
+            draggedGroup = null;
+            List<List<VersionEditor.Step>> now = new ArrayList<>();
+            edit(() -> now.add(editing.moveSteps(group, toPacket, at)), -1);
+            if (!now.isEmpty()) selectSteps(now.get(0));
+            return;
+        }
         int landed = toPacket == d.packet() && at > d.step() ? at - 1 : at;
         edit(() -> editing.moveStepTo(d.packet(), d.step(), toPacket, at), -1);
         int k = 0;

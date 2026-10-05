@@ -48,6 +48,9 @@ public interface VersionEditor {
      * {@code root().sessions[]}, instructions by their position in the packet's {@code steps[]}.
      * A position out of range changes nothing.
      */
+    /** One instruction of a workflow: its packet, and its place in that packet's {@code steps[]}. */
+    record Step(int packet, int step) {}
+
     interface Document {
 
         /**
@@ -68,6 +71,27 @@ public interface VersionEditor {
         void moveStepTo(int packet, int step, int toPacket, int toStep);
 
         void removeStep(int packet, int step);
+
+        /** Removes several instructions at once, wherever they are. */
+        void removeSteps(List<Step> steps);
+
+        /**
+         * Moves several instructions together, in the order they play, to one place: before the
+         * instruction now at {@code toStep} of {@code toPacket} ({@code steps.size()}: at the
+         * end). They end up next to one another, even when they were not.
+         *
+         * @return where they are now, in the same order; the same places when nothing moved
+         */
+        List<Step> moveSteps(List<Step> steps, int toPacket, int toStep);
+
+        /**
+         * Moves several instructions one place up ({@code delta < 0}) or down, each inside its
+         * packet, keeping the distance between them. In a packet where the first one is already
+         * at the top (or the last one at the bottom), none of them moves.
+         *
+         * @return where they are now, in the same order
+         */
+        List<Step> shiftSteps(List<Step> steps, int delta);
 
         /** Inserts an instruction at {@code at} ({@code steps.size()} appends). */
         void addStep(int packet, int at, String title, String script);
