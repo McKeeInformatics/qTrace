@@ -160,7 +160,7 @@ public class QTraceCommitGraph {
     private VersionEditor.Document editing;
     private boolean editingDirty;
     private String  editingStatus = "";
-    private final Button modeBtn, recordBtn, addPacketBtn, mergeBtn, saveBtn;
+    private final Button modeBtn, recordBtn, addPacketBtn, mergeBtn, saveBtn, publishBtn;
     // "Record": what the user does in QuPath goes into one packet, named by its id (it can be
     // moved meanwhile). Null when not recording.
     private WorkflowRecording recording;
@@ -205,6 +205,10 @@ public class QTraceCommitGraph {
         saveBtn = new Button(QTraceI18n.t("graph.edit.save"));
         styleButton(saveBtn);
         saveBtn.setOnAction(e -> saveWorkflow());
+        publishBtn = new Button(QTraceI18n.t("graph.edit.publish"));
+        styleButton(publishBtn);
+        publishBtn.setTooltip(new Tooltip(QTraceI18n.t("graph.edit.publish.tip")));
+        publishBtn.setOnAction(e -> publishWorkflow());
 
         banner = new Label(QTraceI18n.t("graph.edit.banner"));
         banner.setMaxWidth(Double.MAX_VALUE);
@@ -214,7 +218,7 @@ public class QTraceCommitGraph {
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox header = new HBox(10, headerLabel, spacer, recordBtn, addPacketBtn, mergeBtn, saveBtn, modeBtn, openBtn);
+        HBox header = new HBox(10, headerLabel, spacer, recordBtn, addPacketBtn, mergeBtn, saveBtn, publishBtn, modeBtn, openBtn);
         header.setId("graph-header"); // looked up by the screenshot harness — see ScreenshotHarness
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 10, 14));
@@ -936,6 +940,7 @@ public class QTraceCommitGraph {
             ? QTraceI18n.f("graph.edit.merge.n", pickedPackets.size()) : QTraceI18n.t("graph.edit.merge"));
         mergeBtn.setDisable(pickedPackets.size() < 2);
         show(saveBtn, on);
+        show(publishBtn, on);
         show(banner, on);
     }
 
@@ -1151,6 +1156,57 @@ public class QTraceCommitGraph {
             editingStatus = QTraceI18n.t("graph.edit.save.error") + " — " + ex.getMessage();
         }
         showEditingFooter(timelineList.getItems());
+    }
+
+    /**
+     * Publishes the workflow on qtrace.ca, once its author has confirmed: it leaves the
+     * workstation. The module does the sending, off the FX thread; its ID is copied so it can be
+     * handed to whoever attaches it to a training.
+     */
+    private void publishWorkflow() {
+        if (editing == null) return;
+        javafx.scene.control.Alert confirm = new javafx.scene.control.Alert(
+            javafx.scene.control.Alert.AlertType.CONFIRMATION, QTraceI18n.t("graph.edit.publish.confirm"),
+            javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL);   // Esc = Cancel
+        confirm.setHeaderText(null);
+        confirm.setTitle(QTraceI18n.t("graph.window.title"));
+        confirm.initOwner(stage);
+        if (confirm.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL) != javafx.scene.control.ButtonType.OK) return;
+
+        VersionEditor.Document doc = editing;
+        publishBtn.setDisable(true);
+        editingStatus = QTraceI18n.t("graph.edit.publishing");
+        showEditingFooter(timelineList.getItems());
+        Thread t = new Thread(() -> {
+            String published = null, failure = null;
+            try {
+                published = doc.publish();
+            } catch (Exception ex) {
+                failure = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();
+            }
+            String ok = published, ko = failure;
+            javafx.application.Platform.runLater(() -> {
+                publishBtn.setDisable(false);
+                if (editing != doc) return;   // the author left the workflow meanwhile
+                if (ok != null) {
+                    javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+                    content.putString(ok.split(" ")[0]);
+                    javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
+                    editingStatus = QTraceI18n.f("graph.edit.published", ok);
+                } else {
+                    editingStatus = QTraceI18n.t("graph.edit.publish.error");
+                    javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                        javafx.scene.control.Alert.AlertType.ERROR, ko, javafx.scene.control.ButtonType.OK);
+                    alert.setHeaderText(QTraceI18n.t("graph.edit.publish.error"));
+                    alert.setTitle(QTraceI18n.t("graph.window.title"));
+                    alert.initOwner(stage);
+                    alert.show();
+                }
+                showEditingFooter(timelineList.getItems());
+            });
+        }, "qtrace-workflow-publish");
+        t.setDaemon(true);
+        t.start();
     }
 
     /** What the workflow holds, the last save, and what its author should know before saving. */

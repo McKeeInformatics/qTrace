@@ -103,5 +103,14 @@ public interface VersionEditor {
 
         /** Writes the workflow, signed by its author when a signing key is available. */
         void save(File file) throws IOException;
+
+        /**
+         * Publishes the workflow on qtrace.ca, signed like a saved one, with the classifiers its
+         * instructions apply. Blocking, with network: not for the FX thread.
+         *
+         * @return what to tell the author, e.g. its ID and version
+         * @throws IOException with a message for the author when qtrace.ca refuses or cannot be reached
+         */
+        String publish() throws IOException;
     }
 }
