@@ -169,6 +169,8 @@ public class QTraceCommitGraph {
     private final javafx.scene.control.TextArea consoleArea;
     private final Button consoleToggle, consolePlayBtn;
     private String lastPublishedId;
+    private boolean changedSincePublish;   // the workflow on screen is no longer the one published
+    private File workflowFile;             // the .qtflow it was opened from or last saved to
     // "Record": what the user does in QuPath goes into one packet, named by its id (it can be
     // moved meanwhile). Null when not recording.
     private WorkflowRecording recording;
@@ -457,6 +459,7 @@ public class QTraceCommitGraph {
             if (editing == null && isWorkflow(root) && editor() != null) {
                 editing = editor().open(root, file);
                 root = editing.root();
+                workflowFile = file;
             }
             loaded = root;
             if (!root.has("sessions") || !root.get("sessions").isJsonArray()) root.add("sessions", new JsonArray());
@@ -1106,14 +1109,37 @@ public class QTraceCommitGraph {
 
     private void updateConsoleControls() {
         consoleToggle.setText((consoleArea.isVisible() ? "▾  " : "▸  ") + QTraceI18n.t("graph.edit.console"));
-        show(consolePlayBtn, lastPublishedId != null);
+        show(consolePlayBtn, editing != null);
     }
 
-    /** Opens the replay player on the workflow just published. */
+    /**
+     * Opens the replay player on the workflow being edited: the published one when it was
+     * published in this session and not changed since; otherwise the workflow as it is on
+     * screen — its file when it is saved and unchanged, else a copy written aside, so what
+     * plays is always what the author sees.
+     */
     private void playPublished() {
-        if (lastPublishedId == null) return;
-        if (host != null && host.playInPlayer(lastPublishedId)) log(QTraceI18n.f("graph.edit.console.playing", lastPublishedId));
-        else log(QTraceI18n.f("graph.edit.console.noplayer", lastPublishedId));
+        if (editing == null) return;
+        String source;
+        if (lastPublishedId != null && !changedSincePublish) {
+            source = lastPublishedId;
+            log(QTraceI18n.f("graph.edit.console.playing", lastPublishedId));
+        } else {
+            File file = workflowFile != null && workflowFile.isFile() && !editingDirty ? workflowFile : null;
+            if (file == null) {
+                try {
+                    String name = loadedFile != null ? loadedFile.getName().replaceFirst("\\.[^.]*$", "") : "workflow";
+                    file = Files.createTempDirectory("qtrace_workflow_").resolve(name + ".qtflow").toFile();
+                    editing.save(file);
+                } catch (Exception ex) {
+                    log("✗ " + QTraceI18n.t("graph.edit.save.error") + " — " + ex.getMessage());
+                    return;
+                }
+            }
+            source = file.getAbsolutePath();
+            log(QTraceI18n.t("graph.edit.console.playing.local"));
+        }
+        if (host == null || !host.playInPlayer(source)) log(QTraceI18n.t("graph.edit.console.noplayer"));
     }
 
     // ── Editing mode: recording ────────────────────────────────────────────────
@@ -1189,6 +1215,8 @@ public class QTraceCommitGraph {
     }
 
     private void leaveEditing() {
+        workflowFile = null;
+        changedSincePublish = false;
         lastPublishedId = null;
         consoleArea.clear();
         recording = null;
@@ -1223,6 +1251,7 @@ public class QTraceCommitGraph {
         change.run();
         pickedPackets.clear();   // positions changed: what was picked no longer names the same packets
         lastPicked = -1;
+        changedSincePublish = true;
         editingDirty = true;
         editingStatus = "";
         reload(select, top, false);
@@ -1251,6 +1280,7 @@ public class QTraceCommitGraph {
         if (f == null) return;
         try {
             editing.save(f);
+            workflowFile = f.getName().endsWith(".qtflow") ? f : new File(f.getParentFile(), f.getName() + ".qtflow");
             editingDirty = false;
             editingStatus = QTraceI18n.f("graph.edit.saved", f.getName());
             log(QTraceI18n.f("graph.edit.console.saved", f.getAbsolutePath()));
@@ -1307,6 +1337,7 @@ public class QTraceCommitGraph {
                     javafx.scene.input.Clipboard.getSystemClipboard().setContent(content);
                     editingStatus = QTraceI18n.f("graph.edit.published", ok);
                     lastPublishedId = ok.split(" ")[0];
+                    changedSincePublish = false;
                     log(QTraceI18n.f("graph.edit.console.published", ok));
                     log(QTraceI18n.f("graph.edit.console.howtoplay", lastPublishedId));
                     for (String w : doc.warnings()) log("⚠ " + w);
