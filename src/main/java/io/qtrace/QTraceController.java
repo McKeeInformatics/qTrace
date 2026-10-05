@@ -745,6 +745,17 @@ public class QTraceController {
         }
     }
 
+    /**
+     * Opens the Version window on the open image, in the editing mode a module adds to it (the
+     * workflow editor's entry under the panel's Version button). Same conditions as
+     * {@link #showCommitGraph()}; unlike it, never minimizes a window that is already up.
+     */
+    public void showCommitGraphEditing() {
+        if (commitGraph != null && commitGraph.isShowing()) commitGraph.front();
+        else showCommitGraph();
+        if (commitGraph != null && commitGraph.isShowing()) commitGraph.startEditing();
+    }
+
     /** What the Version window needs from the open image: its capture in progress, and the −/+ of a step. */
     private final QTraceCommitGraph.Host graphHost = new QTraceCommitGraph.Host() {
         @Override public JsonObject liveSession(File qtrace) {

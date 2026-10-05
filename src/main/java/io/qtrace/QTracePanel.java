@@ -403,6 +403,7 @@ public class QTracePanel {
                 QTraceI18n.t("btn.versions.tooltip"), Color.web(GROUP_WORKSPACE));
             btnGraph.setId("versions-button"); // looked up by the screenshot harness — see ScreenshotHarness
             btnGraph.setOnAction(e -> controller.showCommitGraph());
+            PanelFlyout.attach(btnGraph, PanelExtensions.VERSIONS, false);
 
             Button btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),
                 QTraceI18n.t("btn.report.tooltip"), Color.web(GROUP_WORKSPACE));
@@ -425,6 +426,7 @@ public class QTracePanel {
         importBtn.setId("import-button");
         resetBtn.setId("reset-button");
         dashboardBtn.setOnAction(e -> controller.showDashboard());
+        PanelFlyout.attach(dashboardBtn, PanelExtensions.DASHBOARD, false);
         importBtn.setOnAction(e -> controller.startBatchExport());
         resetBtn.setOnAction(e -> confirmReset());
         resetBtn.setDisable(!controller.hasActiveImage());
@@ -818,16 +820,19 @@ public class QTracePanel {
         String idleStyle  = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 3;";
         String hoverStyle = "-fx-background-color: " + BG_ELEVATED + "; -fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 3;";
         btn.setStyle(idleStyle);
-        btn.setOnMouseEntered(e -> {
-            if (btn.isDisabled()) return;
-            btn.setGraphic(iconFactory.apply(hoverColor));
+        // Lit / at rest, also driven by the button's flyout when a module extends it (PanelFlyout).
+        Runnable hover = () -> {
+            btn.setGraphic(PanelFlyout.marked(btn, iconFactory.apply(hoverColor), hoverColor));
             btn.setStyle(hoverStyle);
-        });
-        btn.setOnMouseExited(e -> {
-            if (btn.isDisabled()) return;
-            btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+        };
+        Runnable idle = () -> {
+            btn.setGraphic(PanelFlyout.marked(btn, iconFactory.apply(Color.web(TEXT_MUTED)), Color.web(TEXT_MUTED)));
             btn.setStyle(idleStyle);
-        });
+        };
+        btn.getProperties().put(PanelFlyout.HOVER, hover);
+        btn.getProperties().put(PanelFlyout.IDLE, idle);
+        btn.setOnMouseEntered(e -> { if (!btn.isDisabled()) hover.run(); });
+        btn.setOnMouseExited(e -> { if (!btn.isDisabled() && !PanelFlyout.isOpenOn(btn)) idle.run(); });
         return btn;
     }
 
@@ -843,18 +848,21 @@ public class QTracePanel {
         String idleStyle  = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
         String hoverStyle = "-fx-background-color: " + BG_ELEVATED + "; -fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
         btn.setStyle(idleStyle);
-        btn.setOnMouseEntered(e -> {
-            if (btn.isDisabled()) return;
-            btn.setGraphic(iconFactory.apply(hoverColor));
+        // Lit / at rest, also driven by the button's flyout when a module extends it (PanelFlyout).
+        Runnable hover = () -> {
+            btn.setGraphic(PanelFlyout.marked(btn, iconFactory.apply(hoverColor), hoverColor));
             btn.setTextFill(Color.web(TEXT_SUB));
             btn.setStyle(hoverStyle);
-        });
-        btn.setOnMouseExited(e -> {
-            if (btn.isDisabled()) return;
-            btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+        };
+        Runnable idle = () -> {
+            btn.setGraphic(PanelFlyout.marked(btn, iconFactory.apply(Color.web(TEXT_MUTED)), Color.web(TEXT_MUTED)));
             btn.setTextFill(Color.web(TEXT_MUTED));
             btn.setStyle(idleStyle);
-        });
+        };
+        btn.getProperties().put(PanelFlyout.HOVER, hover);
+        btn.getProperties().put(PanelFlyout.IDLE, idle);
+        btn.setOnMouseEntered(e -> { if (!btn.isDisabled()) hover.run(); });
+        btn.setOnMouseExited(e -> { if (!btn.isDisabled() && !PanelFlyout.isOpenOn(btn)) idle.run(); });
         return btn;
     }
 

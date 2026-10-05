@@ -402,6 +402,11 @@ public class QTraceCommitGraph {
         stage.setIconified(false);
     }
 
+    /** Enters the module's editing mode on what the window shows, if it is not already in it. */
+    public void startEditing() {
+        if (editing == null) toggleEditing();
+    }
+
     public boolean isShowing()   { return stage.isShowing(); }
     public boolean isIconified() { return stage.isIconified(); }
     public void    minimize()    { stage.setIconified(true); }

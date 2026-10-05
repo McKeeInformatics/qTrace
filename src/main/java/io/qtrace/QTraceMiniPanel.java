@@ -217,6 +217,7 @@ public final class QTraceMiniPanel {
             nodes.add(separator());
             Button versionsBtn = button(icon(panel::iconVersions), "btn.versions.caption", workspace);
             versionsBtn.setOnAction(e -> controller.showCommitGraph());
+            PanelFlyout.attach(versionsBtn, PanelExtensions.VERSIONS, true);
             Button reportBtn = button(icon(panel::iconReport), "btn.report.caption", workspace);
             reportBtn.setOnAction(e -> controller.generateActivityReport());
             nodes.add(versionsBtn);
@@ -227,6 +228,7 @@ public final class QTraceMiniPanel {
         nodes.add(separator());
         Button dashboardBtn = button(icon(panel::iconDashboard), "btn.dashboard.caption", tools);
         dashboardBtn.setOnAction(e -> controller.showDashboard());
+        PanelFlyout.attach(dashboardBtn, PanelExtensions.DASHBOARD, true);
         Button importBtn = button(icon(panel::iconImport), "btn.import.caption", tools);
         importBtn.setOnAction(e -> controller.startBatchExport());
         resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
