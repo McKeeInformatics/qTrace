@@ -1660,6 +1660,8 @@ public class ActionLogger implements WorkflowListener {
                 .map(w -> (Stage) w)
                 .anyMatch(s -> s.isShowing() && isDisplaySettingsTitle(s.getTitle()));
             if (stillOpen) {
+                // What the display was when the dialog opened: closing it untouched records nothing.
+                if (!displaySettingsHooked) displayAtDialogOpen = onFxOrNull(this::readDisplaySettings);
                 displaySettingsHooked = true;
             } else if (displaySettingsHooked) {
                 snapshotDisplaySettingsState("Dialog closed");
@@ -1677,33 +1679,53 @@ public class ActionLogger implements WorkflowListener {
         return t.contains("brightness") && t.contains("contrast");
     }
 
-    /** Reads the current viewer's live {@code ImageDisplay} state and records a snapshot. */
+    private volatile DisplaySettingsRecord displayAtDialogOpen;
+
+    /**
+     * Records the viewer's display as it is now — unless it is what it was when the dialog
+     * opened: looking at Brightness & contrast without touching it is not something to replay.
+     */
     private void snapshotDisplaySettingsState(String reason) {
         try {
-            var viewer = qupath.getViewer();
-            if (viewer == null) return;
-            var display = viewer.getImageDisplay();
-            if (display == null) return;
-
-            List<DisplaySettingsRecord.ChannelSetting> channels = new ArrayList<>();
-            var selected = display.selectedChannels();
-            for (var ci : display.availableChannels()) {
-                channels.add(new DisplaySettingsRecord.ChannelSetting(
-                    ci.getName(), ci.getColor(), ci.getMinDisplay(), ci.getMaxDisplay(),
-                    selected.contains(ci)));
+            DisplaySettingsRecord record = readDisplaySettings();
+            if (record == null) return;
+            DisplaySettingsRecord atOpen = displayAtDialogOpen;
+            displayAtDialogOpen = null;
+            if (record.sameSettings(atOpen)) {
+                ActivityLog.add("[DisplaySettings] " + reason + " — nothing changed, not recorded");
+                return;
             }
-            if (channels.isEmpty()) return; // dialog opened but no channels available (e.g. no image)
-
-            double gamma = viewer.getGamma();
-            DisplaySettingsRecord record = new DisplaySettingsRecord(
-                channels, gamma, display.useGrayscaleLuts(), display.useInvertedBackground(), Instant.now());
             displaySettingsRecords.add(record);
             notifyChanged();
-            ActivityLog.add("[DisplaySettings] " + reason + " — " + channels.size()
-                + " channel(s), gamma " + gamma);
+            ActivityLog.add("[DisplaySettings] " + reason + " — " + record.channels.size()
+                + " channel(s), gamma " + record.gamma);
         } catch (Exception e) {
             ActivityLog.add("[DisplaySettings] WARNING: could not capture state — " + e.getMessage());
         }
+    }
+
+    /** The current viewer's live {@code ImageDisplay} state, or null (no viewer, no channel). */
+    private DisplaySettingsRecord readDisplaySettings() {
+        var viewer = qupath.getViewer();
+        if (viewer == null) return null;
+        var display = viewer.getImageDisplay();
+        if (display == null) return null;
+
+        List<DisplaySettingsRecord.ChannelSetting> channels = new ArrayList<>();
+        var selected = display.selectedChannels();
+        for (var ci : display.availableChannels()) {
+            channels.add(new DisplaySettingsRecord.ChannelSetting(
+                ci.getName(), ci.getColor(), ci.getMinDisplay(), ci.getMaxDisplay(),
+                selected.contains(ci)));
+        }
+        if (channels.isEmpty()) return null; // dialog opened but no channels available (e.g. no image)
+        return new DisplaySettingsRecord(channels, viewer.getGamma(), display.useGrayscaleLuts(),
+            display.useInvertedBackground(), Instant.now());
+    }
+
+    /** A read that may fail (no viewer yet): null then. The watcher already polls on the FX thread. */
+    private static <T> T onFxOrNull(java.util.function.Supplier<T> read) {
+        try { return read.get(); } catch (Exception e) { return null; }
     }
 
     // ── Warpy button hook (v0.5.21) ───────────────────────────────────────────

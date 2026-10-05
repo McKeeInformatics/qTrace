@@ -147,8 +147,9 @@ final class DraftManager {
         imageData = data;
         key       = keyFor(data);
         header    = recoveredHeader != null ? recoveredHeader.deepCopy() : newHeader(data);
-        String fp = fingerprint(CaptureStateCodec.toJson(logger.snapshotState()));
-        baselineFingerprint    = uncommitted ? "" : fp;
+        JsonObject state = CaptureStateCodec.toJson(logger.snapshotState());
+        String fp = fingerprint(state);
+        baselineFingerprint    = uncommitted ? "" : workFingerprint(state);
         lastWrittenFingerprint = recoveredHeader != null ? null : fp;
         draftOnDisk            = recoveredHeader != null;
         keyPending.set(false);
@@ -199,11 +200,14 @@ final class DraftManager {
         return h != null && h.has("session_id") ? h.get("session_id").getAsString() : null;
     }
 
-    /** True when the capture changed since the image was opened or last committed. FX thread. */
+    /**
+     * True when work was captured since the image was opened or last committed — an
+     * instruction, a correction, a classifier, a record. The logger's own bookkeeping moving on
+     * its own is not work: it must not become a session with nothing in it. FX thread.
+     */
     boolean hasUncommittedChanges() {
         if (imageData == null) return false;
-        String fp = fingerprint(CaptureStateCodec.toJson(logger.snapshotState()));
-        return !fp.equals(baselineFingerprint);
+        return !workFingerprint(CaptureStateCodec.toJson(logger.snapshotState())).equals(baselineFingerprint);
     }
 
     /**
@@ -213,10 +217,11 @@ final class DraftManager {
     void markCommitted() {
         var data = imageData;
         if (data == null) return;
-        String fp = fingerprint(CaptureStateCodec.toJson(logger.snapshotState()));
+        JsonObject state = CaptureStateCodec.toJson(logger.snapshotState());
+        String fp = fingerprint(state);
         String committed = sessionId();
         if (committed != null) committedSessionIds.add(committed);
-        baselineFingerprint    = fp;
+        baselineFingerprint    = workFingerprint(state);
         lastWrittenFingerprint = fp;
         header = newHeader(data);
         keyPending.set(false);
@@ -415,9 +420,24 @@ final class DraftManager {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Identity of the capture, ignoring the image hash (it lands asynchronously after open). */
+    /** The whole capture state — what decides whether the draft on disk must be written again. */
     private static String fingerprint(JsonObject stateJson) {
         JsonObject copy = stateJson.deepCopy();
         copy.remove("imageHash");
+        return Hashing.sha256Hex(copy.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** The logger's bookkeeping: it moves without the user doing anything, and records nothing. */
+    private static final java.util.List<String> BOOKKEEPING = java.util.List.of("imageHash", "snapshotAnnotationIds",
+        "annotationStepIndex", "manualAnnotationLatestIndex", "lastKnownStepCount", "preExistingStepCount");
+
+    /**
+     * The captured work alone — what decides whether there is something to commit as a session.
+     * The crash-recovery draft keeps the full {@link #fingerprint}.
+     */
+    static String workFingerprint(JsonObject stateJson) {
+        JsonObject copy = stateJson.deepCopy();
+        BOOKKEEPING.forEach(copy::remove);
         return Hashing.sha256Hex(copy.toString().getBytes(StandardCharsets.UTF_8));
     }
 

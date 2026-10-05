@@ -54,4 +54,10 @@ public class DisplaySettingsRecord {
         this.invertBackground = invertBackground;
         this.timestamp        = timestamp;
     }
+
+    /** True when {@code other} shows the image the same way — whenever each was read. */
+    public boolean sameSettings(DisplaySettingsRecord other) {
+        return other != null && gamma == other.gamma && grayscale == other.grayscale
+            && invertBackground == other.invertBackground && channels.equals(other.channels);
+    }
 }
