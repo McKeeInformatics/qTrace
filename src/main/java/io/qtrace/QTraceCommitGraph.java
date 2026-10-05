@@ -1198,6 +1198,12 @@ public class QTraceCommitGraph {
 
         VersionEditor.Document doc = editing;
         publishBtn.setDisable(true);
+        // A spinner in the button for as long as the workflow and its classifiers travel.
+        javafx.scene.control.ProgressIndicator spinner = new javafx.scene.control.ProgressIndicator();
+        spinner.setPrefSize(14, 14);
+        spinner.setMaxSize(14, 14);
+        publishBtn.setGraphic(spinner);
+        publishBtn.setText(QTraceI18n.t("graph.edit.publishing"));
         editingStatus = QTraceI18n.t("graph.edit.publishing");
         showEditingFooter(timelineList.getItems());
         Thread t = new Thread(() -> {
@@ -1210,6 +1216,8 @@ public class QTraceCommitGraph {
             String ok = published, ko = failure;
             javafx.application.Platform.runLater(() -> {
                 publishBtn.setDisable(false);
+                publishBtn.setGraphic(null);
+                publishBtn.setText(QTraceI18n.t("graph.edit.publish"));
                 if (editing != doc) return;   // the author left the workflow meanwhile
                 if (ok != null) {
                     javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
