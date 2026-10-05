@@ -6,8 +6,11 @@ When updates are waiting, qTrace now shows a single message listing every extens
 ### New — Changes to the class list are captured
 Adding, renaming, recolouring or removing a class in QuPath's class list is now recorded in the trace, and the Player creates the added classes again before anything else when the trace is replayed.
 
-### New — Extensions unfold from the panel's buttons
-When your organization gives you an extension that goes with **Dashboard** or **Version(s)**, the button carries a small chevron: point at it and the extension's entry unfolds beside it, on the mini-panel as on the full panel. Clicking the button itself does what it always did.
+### New — Extensions add their own button to the panel
+When your organization gives you an extension that goes with **Dashboard** or **Version(s)**, it adds a button of its own right after that one — under it on the mini-panel. Like the others, it is a toggle: a second click closes what it opened.
+
+### Changed — Stamp integrity is checked much faster
+On projects holding large certificates, the Dashboard, the panel's integrity alert and the extensions that read every image no longer reopen every certificate of the case for each image.
 
 ### New — Workflows, for the organizations that enabled the Workflow Editor
 A workflow is a sequence of instructions grouped in packets, composed from a record in **⑃ Version(s)** (**Super User**), saved as a `.qtflow` file or published to qtrace.ca. The Player opens a workflow — a local file or a `qtw_…` ID — draws its packets, and plays it whole or packet by packet; playing it records a trace of its own. **Settings › Paths** gains a **Workflows (.qtflow)** folder: `<project>/qTrace/workflow` by default.
