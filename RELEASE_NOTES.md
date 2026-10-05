@@ -1,3 +1,25 @@
+## What's new in v1.2.5
+
+### Changed — One update message at startup
+When updates are waiting, qTrace now shows a single message listing every extension to update — for example "Core 1.2.5 → 1.2.6" — instead of one window per extension. **Install** installs them all in one click, **Later** leaves everything as it is, and **Skip these versions** stays quiet until another version comes out. A single "Update installed" message then offers **Quit QuPath Now**.
+
+### New — Changes to the class list are captured
+Adding, renaming, recolouring or removing a class in QuPath's class list is now recorded in the trace, and the Player creates the added classes again before anything else when the trace is replayed.
+
+### New — Extensions unfold from the panel's buttons
+When your organization gives you an extension that goes with **Dashboard** or **Version(s)**, the button carries a small chevron: point at it and the extension's entry unfolds beside it, on the mini-panel as on the full panel. Clicking the button itself does what it always did.
+
+### New — Workflows, for the organizations that enabled the Workflow Editor
+A workflow is a sequence of instructions grouped in packets, composed from a record in **⑃ Version(s)** (**Super User**), saved as a `.qtflow` file or published to qtrace.ca. The Player opens a workflow — a local file or a `qtw_…` ID — draws its packets, and plays it whole or packet by packet; playing it records a trace of its own. **Settings › Paths** gains a **Workflows (.qtflow)** folder: `<project>/qTrace/workflow` by default.
+
+### Changed
+- In **⑃ Version(s)**, drag the divider to set the width of the detail panel.
+
+### Fixed
+- The mini-player's menus were grey on white; they are dark with light entries.
+
+---
+
 ## What's new in v1.2.4
 
 ### New — A mini-panel on the image
