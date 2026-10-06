@@ -1314,6 +1314,8 @@ public class QTraceController {
                     if (panel != null) panel.setValidated(true, stamp.validator());
                     exportReport();
                     refreshIntegrity();
+                    // The record is on disk: views of the project update this one image.
+                    if (now != null) StampEvents.stamped(now.getServer().getMetadata().getName());
                 },
                 () -> { ActivityLog.add("Record cancelled."); }
             );
