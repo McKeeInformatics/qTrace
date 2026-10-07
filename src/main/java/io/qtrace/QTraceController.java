@@ -780,6 +780,21 @@ public class QTraceController {
         commitGraph.startEditing();
     }
 
+    /**
+     * Opens the Version window directly on a .qtflow or .qtrace file, in plain read mode — no
+     * project, image or stamp needed, and no module required (the window reads for anyone,
+     * `workflow-library.md` § 2). Whoever can edit it already has the Version window's own
+     * Super User toggle once it is open. Used by the Library module's "Open in Version…".
+     */
+    public void showWorkflowFile(File qtflowFile) {
+        if (qtflowFile == null || !qtflowFile.isFile()) return;
+        if (commitGraph == null || !commitGraph.isShowing()) {
+            commitGraph = new QTraceCommitGraph(qupath);
+            commitGraph.setHost(graphHost);
+        }
+        commitGraph.show(qtflowFile);
+    }
+
     /** What the Version window needs from the open image: its capture in progress, and the −/+ of a step. */
     private final QTraceCommitGraph.Host graphHost = new QTraceCommitGraph.Host() {
         @Override public JsonObject liveSession(File qtrace) {
