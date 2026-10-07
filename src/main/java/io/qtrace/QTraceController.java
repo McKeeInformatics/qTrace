@@ -853,11 +853,7 @@ public class QTraceController {
         Thread t = new Thread(() -> {
             try {
                 JsonObject root = JsonParser.parseString(Files.readString(qtrace.toPath())).getAsJsonObject();
-                String sha = null;
-                if (entry != null && entry.getEntryPath() != null) {
-                    Path qpdata = entry.getEntryPath().resolve("data.qpdata");
-                    if (Files.exists(qpdata)) sha = io.qtrace.chain.Hashing.sha256Hex(qpdata);
-                }
+                String sha = ProjectRecords.dataSha(root, entry);
                 Path exportDir = qtrace.toPath().getParent();
                 StampIntegrity.State state = StampIntegrity.check(root, sha,
                     StampIntegrity.findCertPayload(root, exportDir), exportDir,

@@ -127,19 +127,40 @@ public final class ProjectRecords {
     }
 
     /**
+     * The .qpdata hash to check a stamp against: the file's own, except that a file QuPath
+     * merely rewrote since the stamp (same annotations and detections by fingerprint) answers
+     * with the stamped hash, so it is not reported as changed. Null when there is no file.
+     * Hashes, and may read, the .qpdata: off-FX-thread only.
+     */
+    public static String dataSha(JsonObject root, ProjectImageEntry<?> entry) {
+        try {
+            if (entry == null || entry.getEntryPath() == null) return null;
+            Path qpdata = entry.getEntryPath().resolve("data.qpdata");
+            if (!Files.exists(qpdata)) return null;
+            String sha = io.qtrace.chain.Hashing.sha256Hex(qpdata);
+            JsonObject session = StampIntegrity.latestValidatedSession(root);
+            JsonObject val = session != null && session.has("validation") && session.get("validation").isJsonObject()
+                ? session.getAsJsonObject("validation") : null;
+            String stamped = val != null && val.has("qpdata_sha256") && !val.get("qpdata_sha256").isJsonNull()
+                ? val.get("qpdata_sha256").getAsString() : null;
+            if (stamped == null || stamped.equals(sha)) return sha;
+            var data = entry.readImageData();
+            String ann = QTraceExporter.fingerprint(data.getHierarchy().getAnnotationObjects());
+            String det = QTraceExporter.buildDetectionsObject(data).get("fingerprint_sha256").getAsString();
+            return StampIntegrity.contentUnchanged(root, ann, det) ? stamped : sha;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Integrity of a row's latest stamp against the work saved for {@code entry} (null = unknown,
      * then only the stamp itself is checked) — the full {@link StampIntegrity#check}. Hashes the
      * .qpdata: off-FX-thread only.
      */
     public static StampIntegrity.State integrity(Row row, ProjectImageEntry<?> entry) {
         if (row.qtrace() == null) return StampIntegrity.State.NO_STAMP;
-        String sha = null;
-        try {
-            if (entry != null && entry.getEntryPath() != null) {
-                Path qpdata = entry.getEntryPath().resolve("data.qpdata");
-                if (Files.exists(qpdata)) sha = io.qtrace.chain.Hashing.sha256Hex(qpdata);
-            }
-        } catch (Exception ignored) {}
+        String sha = dataSha(row.qtrace(), entry);
         Path exportDir = row.qtraceFile() != null ? row.qtraceFile().toPath().getParent() : null;
         return StampIntegrity.check(row.qtrace(), sha, StampIntegrity.findCertPayload(row.qtrace(), exportDir),
             exportDir, QTraceConfig.get().outputTrainingDir());

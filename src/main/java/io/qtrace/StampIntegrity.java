@@ -283,6 +283,21 @@ public final class StampIntegrity {
     }
 
     /**
+     * Whether the annotations and detections now in the .qpdata are the stamped ones, by the
+     * fingerprints the stamp recorded. QuPath rewrites a .qpdata on every save (measurements,
+     * metadata), so a different file hash alone does not mean the work changed. False when the
+     * stamp recorded no fingerprint: it cannot vouch for the content.
+     */
+    public static boolean contentUnchanged(JsonObject root, String annotationsFingerprint, String detectionsFingerprint) {
+        JsonObject session = latestValidatedSession(root);
+        if (session == null || annotationsFingerprint == null || detectionsFingerprint == null) return false;
+        String ann = str(obj(session, "annotations"), "fingerprint_sha256", "");
+        String det = str(obj(session, "detections"), "fingerprint_sha256", "");
+        return !ann.isEmpty() && !det.isEmpty()
+            && ann.equals(annotationsFingerprint) && det.equals(detectionsFingerprint);
+    }
+
+    /**
      * Verifies one session's validation block. Returns null when it carries no signature.
      * {@code isLatest}: legacy stamps without statusLabel fall back to the root status, which
      * only describes the latest session.

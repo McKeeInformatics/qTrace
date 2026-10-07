@@ -99,6 +99,36 @@ class StampIntegrityTest {
         assertEquals(StampIntegrity.State.NO_STAMP, StampIntegrity.check(root, QPDATA));
     }
 
+    // ── content unchanged although the .qpdata was rewritten ─────────────────
+
+    private void stampedFingerprints(String ann, String det) {
+        JsonObject session = root.getAsJsonArray("sessions").get(0).getAsJsonObject();
+        JsonObject a = new JsonObject();
+        a.addProperty("fingerprint_sha256", ann);
+        session.add("annotations", a);
+        JsonObject d = new JsonObject();
+        d.addProperty("fingerprint_sha256", det);
+        session.add("detections", d);
+    }
+
+    @Test
+    void sameAnnotationsAndDetectionsMeanTheContentIsUnchanged() {
+        stampedFingerprints("ann1", "det1");
+        assertTrue(StampIntegrity.contentUnchanged(root, "ann1", "det1"));
+    }
+
+    @Test
+    void aDifferentFingerprintMeansTheContentChanged() {
+        stampedFingerprints("ann1", "det1");
+        assertFalse(StampIntegrity.contentUnchanged(root, "ann1", "det2"));
+        assertFalse(StampIntegrity.contentUnchanged(root, "ann2", "det1"));
+    }
+
+    @Test
+    void aStampWithoutFingerprintsCannotVouchForTheContent() {
+        assertFalse(StampIntegrity.contentUnchanged(root, "ann1", "det1"));
+    }
+
     // ── unstamped sessions (live autosave) ──────────────────────────────────
 
     private static JsonObject unstamped() {
