@@ -761,6 +761,25 @@ public class QTraceController {
         if (commitGraph != null && commitGraph.isShowing()) commitGraph.startEditing();
     }
 
+    /**
+     * Opens the Version window directly on a .qtflow file, straight into the module's editing
+     * mode — for a caller that already has a specific workflow file chosen (e.g. the Library
+     * module's Edit button), skipping the project/image/stamp checks {@link #showCommitGraph()}
+     * applies for the panel's own button. No-op without a registered {@link VersionEditor}
+     * (workfloweditor not installed/entitled) — callers should check {@link VersionEditors#entitled()}
+     * first to decide whether to show their own Edit button.
+     */
+    public void editWorkflowFile(File qtflowFile) {
+        if (qtflowFile == null || !qtflowFile.isFile()) return;
+        if (VersionEditors.entitled().isEmpty()) return;
+        if (commitGraph == null || !commitGraph.isShowing()) {
+            commitGraph = new QTraceCommitGraph(qupath);
+            commitGraph.setHost(graphHost);
+        }
+        commitGraph.show(qtflowFile);
+        commitGraph.startEditing();
+    }
+
     /** What the Version window needs from the open image: its capture in progress, and the −/+ of a step. */
     private final QTraceCommitGraph.Host graphHost = new QTraceCommitGraph.Host() {
         @Override public JsonObject liveSession(File qtrace) {
