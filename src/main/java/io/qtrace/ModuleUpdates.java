@@ -61,33 +61,46 @@ public final class ModuleUpdates {
     }
 
     /**
-     * A module anyone may install, account or not (GET /api/modules/open): its offer, and what
-     * to say about it — the name and description declared in the BackOffice.
+     * A module with its card, as /api/modules and /api/modules/open describe it: its offer, and
+     * what the workstation shows about it — the name, description, icon and essentials declared
+     * in the BackOffice ({@code features}, its presentation), and what the version being served
+     * brings ({@code whatsNew}).
      */
-    public record OpenModule(Offer offer, String title, String tagline) {}
+    public record Card(Offer offer, String title, String tagline, String icon,
+                       List<String> features, List<String> whatsNew) {}
 
     /**
-     * Entries of the open-modules descriptor; empty when the answer is not one (an older
-     * server, an error page). Without a title, the module name stands in.
+     * Entries of a descriptor with their card; empty when the answer is not a descriptor (an
+     * error page). What the server does not say falls back on the module name, or on nothing.
      */
-    public static List<OpenModule> parseOpen(String json) {
-        List<OpenModule> out = new ArrayList<>();
+    public static List<Card> parseCards(String json, boolean licensed) {
+        List<Card> out = new ArrayList<>();
         try {
             JsonObject o = JsonParser.parseString(json).getAsJsonObject();
             if (!o.has("files")) return out;
-            List<Offer> offers = parse(json, false);
+            List<Offer> offers = parse(json, licensed);
             for (JsonElement el : o.getAsJsonArray("files")) {
                 JsonObject f = el.getAsJsonObject();
                 String module = str(f, "module");
                 Offer offer = offers.stream().filter(x -> x.module().equals(module)).findFirst().orElse(null);
                 if (offer == null) continue;
-                String title = str(f, "title"), tagline = str(f, "tagline");
-                out.add(new OpenModule(offer, title == null || title.isBlank() ? module : title,
-                    tagline == null ? "" : tagline));
+                String title = str(f, "title"), tagline = str(f, "tagline"), icon = str(f, "icon");
+                out.add(new Card(offer, blank(title) ? module : title, tagline == null ? "" : tagline,
+                    blank(icon) ? module : icon, lines(f, "features"), lines(f, "whatsNew")));
             }
         } catch (RuntimeException e) {
             out.clear();
         }
+        return out;
+    }
+
+    private static boolean blank(String s) { return s == null || s.isBlank(); }
+
+    private static List<String> lines(JsonObject o, String key) {
+        List<String> out = new ArrayList<>();
+        if (!o.has(key) || !o.get(key).isJsonArray()) return out;
+        for (JsonElement el : o.getAsJsonArray(key))
+            if (el.isJsonPrimitive() && !el.getAsString().isBlank()) out.add(el.getAsString().trim());
         return out;
     }
 

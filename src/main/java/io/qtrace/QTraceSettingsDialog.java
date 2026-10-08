@@ -338,6 +338,13 @@ public class QTraceSettingsDialog {
         chkPanelAtStartup.setWrapText(true);
         chkPanelAtStartup.setTooltip(hintTooltip(QTraceI18n.t("settings.panel.startup.hint")));
 
+        CheckBox chkModuleNews = new CheckBox(QTraceI18n.t("settings.modulenews.startup"));
+        chkModuleNews.setId("module-news-checkbox"); // looked up by the screenshot harness
+        chkModuleNews.setSelected(cfg.isShowModuleNewsAtStartup());
+        chkModuleNews.setTextFill(Color.web(TEXT_SUB));
+        chkModuleNews.setWrapText(true);
+        chkModuleNews.setTooltip(hintTooltip(QTraceI18n.t("settings.modulenews.startup.hint")));
+
         // ── Security (activity report) — folded into Preferences ────────────────
         CheckBox chkReportConfirm = new CheckBox(QTraceI18n.t("settings.security.confirm"));
         chkReportConfirm.setSelected(cfg.isReportConfirmBeforeSend());
@@ -523,6 +530,7 @@ public class QTraceSettingsDialog {
             cfg.setHideSkippedReplaySteps(chkHideSkipped.isSelected());
             cfg.setAutosaveEnabled(chkAutosave.isSelected());
             cfg.setShowPanelAtStartup(chkPanelAtStartup.isSelected());
+            cfg.setShowModuleNewsAtStartup(chkModuleNews.isSelected());
             if (rbCustom.isSelected())
                 cfg.setSnapshotSettings(true, spThreshold.getValue(), spInterval.getValue(), chkKeyOnly.isSelected());
             else
@@ -551,7 +559,7 @@ public class QTraceSettingsDialog {
         Label appearanceSoon = new Label("Theme customization — coming soon.");
         appearanceSoon.setTextFill(Color.web(TEXT_MUTED));
         appearanceSoon.setFont(Font.font("System", 11));
-        VBox pageAppearance = new VBox(12, chkPanelAtStartup, appearanceSoon);
+        VBox pageAppearance = new VBox(12, chkPanelAtStartup, chkModuleNews, appearanceSoon);
         pageAppearance.setPadding(new Insets(4, 20, 8, 20));
 
         // ── Content area: title bar + scrollable page ────────────────────────────

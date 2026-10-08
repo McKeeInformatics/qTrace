@@ -21,7 +21,8 @@ class TrunkContentTest {
            "actions":[{"label":"Start using qTrace","action":"close","primary":true}]}]}""";
 
     private static final TrunkContent.Module PLAYER =
-        new TrunkContent.Module("player", "qTrace Player", "Replay a recorded analysis.", "1.0.0", true);
+        new TrunkContent.Module("player", "qTrace Player", "Replay a recorded analysis.", "1.0.0", "player",
+            List.of("Step by step", "In batch", "Pre-flight check"), true);
 
     private static JsonArray slides(String json) {
         return JsonParser.parseString(json).getAsJsonObject().getAsJsonArray("slides");
@@ -45,7 +46,7 @@ class TrunkContentTest {
 
     @Test
     void eachOpenModuleGetsItsOwnSlideAfterTheNetworkCheck() {
-        var cohort = new TrunkContent.Module("cohort", "Cohort map", "Your project as a map.", "0.1.0", true);
+        var cohort = new TrunkContent.Module("cohort", "Cohort map", "Your project as a map.", "0.1.0", null, List.of(), true);
         String out = TrunkContent.withOpenModules(TRUNK, List.of(PLAYER, cohort));
         assertEquals(List.of("what", "network", "module-player", "module-cohort", "account", "ready"), ids(out));
         JsonObject s = slide(out, "module-player");
@@ -53,12 +54,18 @@ class TrunkContentTest {
         assertEquals("Replay a recorded analysis.", s.get("text").getAsString());
         assertEquals("module", s.get("visual").getAsString());
         assertEquals("1.0.0", s.getAsJsonObject("module").get("version").getAsString());
+        // Its button, as the panel will show it, and the three essentials it brings.
+        assertEquals("player", s.getAsJsonObject("module").get("icon").getAsString());
+        assertEquals(3, s.getAsJsonObject("module").getAsJsonArray("features").size());
+        assertEquals("In batch", s.getAsJsonObject("module").getAsJsonArray("features").get(1).getAsString());
+        // Without an icon declared, the module's own name stands for it.
+        assertEquals("cohort", slide(out, "module-cohort").getAsJsonObject("module").get("icon").getAsString());
         assertFalse(s.has("hidden"));
     }
 
     @Test
     void aModuleWithoutADescriptionStillSaysSomething() {
-        var bare = new TrunkContent.Module("bare", "Bare", "", "0.1.0", true);
+        var bare = new TrunkContent.Module("bare", "Bare", "", "0.1.0", null, List.of(), true);
         assertFalse(slide(TrunkContent.withOpenModules(TRUNK, List.of(bare)), "module-bare").get("text").getAsString().isBlank());
     }
 
@@ -75,7 +82,7 @@ class TrunkContentTest {
 
     @Test
     void whenEveryOpenModuleIsAlreadyInstalledTheLastSlideIsUnchanged() {
-        var here = new TrunkContent.Module("player", "qTrace Player", "Replay.", "1.0.0", false);
+        var here = new TrunkContent.Module("player", "qTrace Player", "Replay.", "1.0.0", "player", List.of(), false);
         String out = TrunkContent.withOpenModules(TRUNK, List.of(here));
         assertEquals(slide(TRUNK, "ready"), slide(out, "ready"));
         assertNotNull(slide(out, "module-player"));

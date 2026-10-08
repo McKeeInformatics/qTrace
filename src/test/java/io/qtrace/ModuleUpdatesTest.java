@@ -81,31 +81,45 @@ class ModuleUpdatesTest {
         assertFalse(ModuleUpdates.isLoaderMode(Path.of("/x/build/classes/java/main")));
     }
 
-    private static final String OPEN = """
-        {"version":"1.0.0","files":[
-          {"name":"qtrace-player-1.0.0.qtjar","module":"player","version":"1.0.0",
+    private static final String CARDS = """
+        {"version":"1.1.0","files":[
+          {"name":"qtrace-player-1.1.0.qtjar","module":"player","version":"1.1.0",
            "url":"https://www.qtrace.ca/api/modules/player/download","sha256":"ab",
-           "title":"qTrace Player","tagline":"Replay a recorded analysis."},
+           "title":"qTrace Player","tagline":"Replay a recorded analysis.","icon":"player",
+           "features":["Step by step","In batch","Pre-flight check"],
+           "whatsNew":["Sessions as circles","Scripts shown"]},
           {"name":"qtrace-plain-0.2.0.qtjar","module":"plain","version":"0.2.0",
            "url":"https://www.qtrace.ca/api/modules/plain/download","sha256":"cd"}]}""";
 
     @Test
-    void openDescriptor_carriesWhatToSayAboutEachModule() {
-        List<ModuleUpdates.OpenModule> open = ModuleUpdates.parseOpen(OPEN);
-        assertEquals(2, open.size());
-        assertEquals("player", open.get(0).offer().module());
-        assertFalse(open.get(0).offer().licensed(), "an open module downloads without a licence");
-        assertEquals("qTrace Player", open.get(0).title());
-        assertEquals("Replay a recorded analysis.", open.get(0).tagline());
-        // A descriptor without a title (an older server): the module name stands in.
-        assertEquals("plain", open.get(1).title());
-        assertEquals("", open.get(1).tagline());
+    void cards_carryWhatToShowAboutEachModule() {
+        List<ModuleUpdates.Card> cards = ModuleUpdates.parseCards(CARDS, false);
+        assertEquals(2, cards.size());
+        ModuleUpdates.Card player = cards.get(0);
+        assertEquals("player", player.offer().module());
+        assertFalse(player.offer().licensed(), "an open module downloads without a licence");
+        assertEquals("qTrace Player", player.title());
+        assertEquals("Replay a recorded analysis.", player.tagline());
+        assertEquals("player", player.icon());
+        assertEquals(List.of("Step by step", "In batch", "Pre-flight check"), player.features());
+        assertEquals(List.of("Sessions as circles", "Scripts shown"), player.whatsNew());
     }
 
     @Test
-    void openDescriptor_thatIsNotOne_givesNothing() {
-        assertTrue(ModuleUpdates.parseOpen("<html>404</html>").isEmpty());
-        assertTrue(ModuleUpdates.parseOpen("{\"error\":\"x\"}").isEmpty());
+    void cards_fromAServerThatSaysNothingMore_fallBackOnTheModuleName() {
+        ModuleUpdates.Card plain = ModuleUpdates.parseCards(CARDS, true).get(1);
+        assertTrue(plain.offer().licensed());
+        assertEquals("plain", plain.title());
+        assertEquals("", plain.tagline());
+        assertEquals("plain", plain.icon());
+        assertTrue(plain.features().isEmpty());
+        assertTrue(plain.whatsNew().isEmpty());
+    }
+
+    @Test
+    void cards_fromAnAnswerThatIsNotADescriptor_areNone() {
+        assertTrue(ModuleUpdates.parseCards("<html>404</html>", false).isEmpty());
+        assertTrue(ModuleUpdates.parseCards("{\"error\":\"x\"}", false).isEmpty());
     }
 
     @Test

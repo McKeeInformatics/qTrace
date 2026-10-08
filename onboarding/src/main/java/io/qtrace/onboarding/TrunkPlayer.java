@@ -77,11 +77,11 @@ final class TrunkPlayer {
     /** What the server opens to anyone, with whether each is still to be installed here. */
     private static List<TrunkContent.Module> openModules() {
         Map<String, String> local = ModuleUpdates.localVersions(QTraceUpdater.extensionsDir(QTraceUpdater.class));
-        List<ModuleUpdates.OpenModule> open = QTraceUpdater.openModules();
+        List<ModuleUpdates.Card> open = QTraceUpdater.openModules();
         List<ModuleUpdates.Offer> pending = ModuleUpdates.pending(
-            open.stream().map(ModuleUpdates.OpenModule::offer).toList(), local);
+            open.stream().map(ModuleUpdates.Card::offer).toList(), local);
         return open.stream().map(m -> new TrunkContent.Module(m.offer().module(), m.title(), m.tagline(),
-            m.offer().version(), pending.contains(m.offer()))).toList();
+            m.offer().version(), m.icon(), m.features(), pending.contains(m.offer()))).toList();
     }
 
     private void show(List<TrunkContent.Module> modules) {

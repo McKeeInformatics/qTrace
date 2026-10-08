@@ -102,6 +102,7 @@ public class QTraceConfig {
     private Boolean panelLogCollapsed;
     // Panel: opened when QuPath starts — null = yes (on by default)
     private Boolean showPanelAtStartup;
+    private Boolean showModuleNewsAtStartup;
 
     // Image copy in the live draft (Settings › Autosave) — null = auto / defaults
     private String  snapshotMode;             // "auto" | "custom"
@@ -316,6 +317,9 @@ public class QTraceConfig {
     public void    setPanelLogCollapsed(boolean b)       { this.panelLogCollapsed = b; }
     public boolean isShowPanelAtStartup()                { return showPanelAtStartup == null || showPanelAtStartup; }
     public void    setShowPanelAtStartup(boolean b)      { this.showPanelAtStartup = b; }
+    /** After a module was updated: its new version is presented at the next start (default), or only on demand. */
+    public boolean isShowModuleNewsAtStartup()           { return showModuleNewsAtStartup == null || showModuleNewsAtStartup; }
+    public void    setShowModuleNewsAtStartup(boolean b) { this.showModuleNewsAtStartup = b; }
 
     public boolean isAutosaveEnabled()                   { return autosaveEnabled == null || autosaveEnabled; }
     public void    setAutosaveEnabled(boolean b)         { this.autosaveEnabled = b; }

@@ -10,7 +10,8 @@
  *   Preview    qtracePlayer.load / emit / goto   used when opened in a plain browser
  *
  * Slide: { id, eyebrow?, title, text, image?, visual?, hidden?, module?, actions: [{ label, action, url?, primary? }] }
- *        module: { name, version, installing } — the module a 'module' visual presents
+ *        module: { name, label?, version, icon, features: [..3], installing?, news? } — the module a
+ *        'module' visual presents: its panel button and three points (news: what a version brings)
  * A hidden slide is not in the track: it is only reached by goto (e.g. the trunk's 'ready' after
  * Continue) and is shown as a final screen, without the bottom bar.
  * Drawn visuals: network, entry, device, install, module, report, done. Opened without QuPath (plain browser),
@@ -116,18 +117,51 @@
       '</div><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
   }
 
-  // One module open to anyone, installed by Getting started: its name, and where its install is.
+  // The icon of a module's panel button, by id — same 24-unit drawings as the QuPath panel
+  // (QTracePanel.iconReplay / iconVersions, each module's .icon) and the BackOffice (ExtensionIcon.tsx).
+  var S = 'fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"';
+  var MODULE_ICONS = {
+    player: '<path d="M6.6 5.4A8 8 0 1 0 15.3 18.4" ' + S + ' stroke-width="2.2"/>' +
+      '<polygon points="13.4,4.1 16.7,5.6 15.7,9" fill="currentColor"/><polygon points="9.2,9.1 9.2,15.8 14.9,12.45" fill="currentColor"/>',
+    versiongraph: '<line x1="7" y1="7.6" x2="7" y2="16.6" ' + S + ' stroke-width="1.7"/><path d="M17 10.4C17 14.6 7 12.2 7 16.6" ' + S + ' stroke-width="1.7"/>' +
+      '<circle cx="7" cy="5.2" r="2.4" ' + S + ' stroke-width="1.7"/><circle cx="7" cy="19" r="2.4" ' + S + ' stroke-width="1.7"/><circle cx="17" cy="8" r="2.4" ' + S + ' stroke-width="1.7"/>',
+    cohort: '<circle cx="7" cy="7" r="4.2" ' + S + ' stroke-width="1.6"/><circle cx="17" cy="7" r="4.2" ' + S + ' stroke-width="1.6"/>' +
+      '<circle cx="7" cy="17" r="4.2" ' + S + ' stroke-width="1.6"/><circle cx="17" cy="17" r="4.2" ' + S + ' stroke-width="1.6"/>' +
+      '<polyline points="5.2,7 6.5,8.4 8.9,5.6" ' + S + ' stroke-width="1.5"/><circle cx="17" cy="17" r="1.9" fill="currentColor"/>',
+    library: '<path d="M12 8C9 6 5.5 6 3.5 7.2V17.6C5.5 16.4 9 16.4 12 18.4" ' + S + ' stroke-width="1.7"/>' +
+      '<path d="M12 8C15 6 18.5 6 20.5 7.2V17.6C18.5 16.4 15 16.4 12 18.4" ' + S + ' stroke-width="1.7"/><line x1="12" y1="8" x2="12" y2="18.4" ' + S + ' stroke-width="1.7"/>',
+    workfloweditor: '<line x1="6" y1="7.6" x2="6" y2="16.4" ' + S + ' stroke-width="1.7"/><circle cx="6" cy="5.2" r="2.4" ' + S + ' stroke-width="1.7"/>' +
+      '<circle cx="6" cy="18.8" r="2.4" ' + S + ' stroke-width="1.7"/><polygon points="12.2,17.8 13.2,14.2 19.4,8 22,10.6 15.8,16.8" ' + S + ' stroke-width="1.6"/>' +
+      '<line x1="17.9" y1="9.5" x2="20.5" y2="12.1" ' + S + ' stroke-width="1.4"/>',
+    security: '<path d="M12 3L19 6V11C19 15.4 16 19 12 21C8 19 5 15.4 5 11V6Z" ' + S + ' stroke-width="1.7"/>' +
+      '<circle cx="12" cy="10.4" r="1.9" ' + S + ' stroke-width="1.5"/><line x1="12" y1="12.3" x2="12" y2="15.4" ' + S + ' stroke-width="1.5"/>',
+    compliance: '<path d="M12 3L19 6V11C19 15.4 16 19 12 21C8 19 5 15.4 5 11V6Z" ' + S + ' stroke-width="1.7"/>' +
+      '<polyline points="8.8,11.8 11.2,14.2 15.4,9.4" ' + S + ' stroke-width="1.8"/>',
+    training: '<circle cx="12" cy="10" r="4" ' + S + ' stroke-width="1.6"/><path d="M10.4 15H13.6M10.9 17.2H13.1" ' + S + ' stroke-width="1.5"/>' +
+      '<path d="M12 3.2V4.6M5.6 10H7M17 10H18.4M7.4 5.4L8.4 6.4M16.6 5.4L15.6 6.4" ' + S + ' stroke-width="1.4"/>',
+    welcome: '<path d="M7.5 13V8.2M10.4 12V5M13.4 12V4.6M16.3 13V6.2" ' + S + ' stroke-width="2"/>' +
+      '<path d="M7.5 13.5C7.5 12.6 6.5 11.8 5.6 12.4C4.8 13 5 14 5.6 14.9L8.3 19C9.2 20.3 10.4 21 12 21H13.4C15.7 21 17.5 19.3 17.8 17L18.2 13.6C18.3 12.6 17.5 12 16.6 12.4" ' + S + ' stroke-width="1.8"/>'
+  };
+  var GENERIC_ICON = '<circle cx="12" cy="12" r="7" ' + S + ' stroke-width="1.7"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/>';
+
+  // One module: its button as the panel shows it, the (at most) three points to say about it —
+  // the essentials it brings, or what its new version brings — and, when Getting started is
+  // installing it, where its download is.
   function moduleHTML(s) {
     var m = (s && s.module) || {};
     var st = state.modules.state;
-    var here = !m.installing || st === 'done';
-    var line = !m.installing ? 'Installed'
+    var line = m.news ? ''
+      : !m.installing ? 'Installed'
       : st === 'done' ? 'Installed · starts the next time you open QuPath'
       : st === 'failed' ? 'Could not be downloaded — qTrace will offer it again'
       : 'Downloading…';
-    return '<div class="device"><div class="checks"><div class="check ' + (here ? 'ok' : st === 'failed' ? 'ko' : 'wait') +
-      '"><span class="dot">' + (here ? '✓' : st === 'failed' ? '!' : '') + '</span><span>' + esc(m.name || s.title) +
-      '</span><span class="st">' + esc(m.version || '') + '</span></div></div><p class="module-line">' + esc(line) + '</p></div>';
+    var points = (m.features || []).slice(0, 3).map(function (f) {
+      return '<li><span class="tick">✓</span><span>' + esc(f) + '</span></li>';
+    }).join('');
+    return '<div class="module-card"><div class="module-button"><svg viewBox="0 0 24 24" aria-hidden="true">' +
+      (MODULE_ICONS[m.icon] || GENERIC_ICON) + '</svg><span>' + esc(m.label || m.name || s.title) + '</span></div>' +
+      (points ? '<ul class="module-points">' + points + '</ul>' : '') +
+      '<p class="module-line">' + (m.version ? '<span class="module-version">v' + esc(m.version) + '</span>' : '') + esc(line) + '</p></div>';
   }
 
   function reportHTML() {

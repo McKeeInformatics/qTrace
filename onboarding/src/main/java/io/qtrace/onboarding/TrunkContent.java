@@ -37,12 +37,15 @@ final class TrunkContent {
     private TrunkContent() {}
 
     /**
-     * A module anyone may install (GET /api/modules/open).
+     * A module anyone may install (GET /api/modules/open), with its card.
      *
+     * @param icon       id of the icon of its button, drawn by the player (player.js MODULE_ICONS)
+     * @param features   the essentials it brings, three at most
      * @param installing true when it is not on this workstation yet: Getting started installs
      *                   it, and it starts at the next launch
      */
-    record Module(String name, String title, String tagline, String version, boolean installing) {}
+    record Module(String name, String title, String tagline, String version, String icon,
+                  List<String> features, boolean installing) {}
 
     /** The slide after which the modules are presented. */
     private static final String AFTER = "network";
@@ -80,7 +83,12 @@ final class TrunkContent {
         s.addProperty("visual", "module");
         JsonObject module = new JsonObject();
         module.addProperty("name", m.title());
+        module.addProperty("label", m.title().replaceFirst("^qTrace ", "")); // the button's caption
         module.addProperty("version", m.version());
+        module.addProperty("icon", m.icon() == null || m.icon().isBlank() ? m.name() : m.icon());
+        JsonArray features = new JsonArray();
+        if (m.features() != null) m.features().forEach(features::add);
+        module.add("features", features);
         module.addProperty("installing", m.installing());
         s.add("module", module);
         s.add("actions", new JsonArray());

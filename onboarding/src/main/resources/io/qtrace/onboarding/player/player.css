@@ -96,7 +96,15 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .report-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--tx-muted); font-size: 12px; }
 .report-foot strong { color: var(--green); font-weight: 600; }
 .report .send { background: var(--accent); color: var(--navy); font-weight: 700; border-radius: 6px; padding: 4px 12px; }
+.module-card { display: grid; gap: 18px; justify-items: center; width: 100%; max-width: 380px; }
+.module-button { display: grid; justify-items: center; gap: 8px; min-width: 104px; padding: 16px 20px 12px; background: var(--navy); border: 1px solid var(--navy-b); border-radius: 12px; color: var(--blue); }
+.module-button svg { width: 44px; height: 44px; }
+.module-button span { font-size: 13px; font-weight: 600; color: var(--tx-sub); }
+.module-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; width: 100%; text-align: left; }
+.module-points li { display: flex; align-items: flex-start; gap: 10px; background: var(--navy); border: 1px solid var(--navy-b); border-radius: 10px; padding: 10px 14px; font-size: 14px; color: var(--tx-sub); }
+.module-points .tick { color: var(--green); flex: none; }
 .module-line { margin: 0; font-size: 13px; color: var(--tx-muted); }
+.module-version { font-family: var(--mono); margin-right: 8px; color: var(--tx-dim); }
 .done { display: grid; gap: 16px; justify-items: center; text-align: center; color: var(--tx-sub); }
 .done p { margin: 0; }
 .done strong { color: var(--green); font-weight: 600; }

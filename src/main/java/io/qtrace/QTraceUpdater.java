@@ -109,13 +109,34 @@ public final class QTraceUpdater {
      * The modules anyone may install, account or not, as the server lists them now
      * (GET /api/modules/open). Blocking; empty offline or with a server that has no such list.
      */
-    public static List<ModuleUpdates.OpenModule> openModules() {
+    public static List<ModuleUpdates.Card> openModules() {
         try {
-            return ModuleUpdates.parseOpen(new String(httpGetBytes(OPEN_MODULES_URL, null), StandardCharsets.UTF_8));
+            return ModuleUpdates.parseCards(new String(httpGetBytes(OPEN_MODULES_URL, null), StandardCharsets.UTF_8), false);
         } catch (Exception e) {
             log.info(TAG + "open modules descriptor unavailable: {}", e.toString());
             return List.of();
         }
+    }
+
+    /**
+     * Every module this workstation is served, with its card — the open ones and, with a
+     * license, the ones it includes. Blocking; what could not be fetched is simply absent.
+     * Read by the Welcome module to present what an installed module's new version brings.
+     */
+    public static List<ModuleUpdates.Card> moduleCards() {
+        java.util.Map<String, ModuleUpdates.Card> byModule = new java.util.LinkedHashMap<>();
+        for (ModuleUpdates.Card c : openModules()) byModule.putIfAbsent(c.offer().module(), c);
+        String jwt = licenseJwt();
+        if (jwt != null) {
+            try {
+                for (ModuleUpdates.Card c : ModuleUpdates.parseCards(
+                        new String(httpGetBytes(MODULES_URL, jwt), StandardCharsets.UTF_8), true))
+                    byModule.putIfAbsent(c.offer().module(), c);
+            } catch (Exception e) {
+                log.info(TAG + "licensed modules descriptor unavailable: {}", e.toString());
+            }
+        }
+        return new ArrayList<>(byModule.values());
     }
     private static final String COMP_DOWNLOAD_URL = SERVER + "/api/download/compliance/licensed";
 
@@ -220,7 +241,7 @@ public final class QTraceUpdater {
                 }
                 Path dir = extensionsDir(QTraceUpdater.class);
                 var local = ModuleUpdates.localVersions(dir);
-                for (ModuleUpdates.OpenModule m : openModules()) {
+                for (ModuleUpdates.Card m : openModules()) {
                     // Not installed yet and Getting started is about to do it: not asked twice.
                     if (openModulesLeftToOnboarding && !local.containsKey(m.offer().module())) continue;
                     remote.add(m.offer());
@@ -321,7 +342,7 @@ public final class QTraceUpdater {
             int count = 0;
             try {
                 String jwt = licenseJwt();
-                List<ModuleUpdates.Offer> remote = new ArrayList<>(openModules().stream().map(ModuleUpdates.OpenModule::offer).toList());
+                List<ModuleUpdates.Offer> remote = new ArrayList<>(openModules().stream().map(ModuleUpdates.Card::offer).toList());
                 if (jwt != null) {
                     remote = ModuleUpdates.merge(remote, ModuleUpdates.parse(
                         new String(httpGetBytes(MODULES_URL, jwt), StandardCharsets.UTF_8), true));
