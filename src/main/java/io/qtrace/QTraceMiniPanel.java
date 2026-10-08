@@ -96,6 +96,7 @@ public final class QTraceMiniPanel {
         PanelExtensions.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         Players.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         VersionGraphs.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        ToolWelcomes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
         var project = qupath.projectProperty();
@@ -225,14 +226,14 @@ public final class QTraceMiniPanel {
             nodes.add(uploadSlot);
         }
         if (player) {
-            Button replayBtn = button(icon(panel::iconReplay), "btn.replay.caption", workspace);
-            replayBtn.setOnAction(e -> controller.openReplayDialog());
+            Button replayBtn = button(QTracePanel.welcomeMarked("player", icon(panel::iconReplay)), "btn.replay.caption", workspace);
+            replayBtn.setOnAction(e -> QTracePanel.welcomeFirst("player", controller::openReplayDialog));
             nodes.add(replayBtn);
         }
         if (licensed) nodes.add(separator());
         if (versions) {
-            Button versionsBtn = button(icon(panel::iconVersions), "btn.versions.caption", workspace);
-            versionsBtn.setOnAction(e -> controller.showCommitGraph());
+            Button versionsBtn = button(QTracePanel.welcomeMarked("versiongraph", icon(panel::iconVersions)), "btn.versions.caption", workspace);
+            versionsBtn.setOnAction(e -> QTracePanel.welcomeFirst("versiongraph", controller::showCommitGraph));
             nodes.add(versionsBtn);
         }
         if (licensed) {
@@ -279,8 +280,8 @@ public final class QTraceMiniPanel {
     /** The modules' buttons that go with a panel button, under it ({@link PanelExtensions}). */
     private void addModuleButtons(List<Node> nodes, String anchor, Color hover) {
         for (PanelExtensions.Entry entry : PanelExtensions.entitled(anchor)) {
-            Button b = titled(icon(QTracePanel.moduleIcon(entry)), entry.label(), hover);
-            b.setOnAction(e -> QTracePanel.runModuleEntry(entry));
+            Button b = titled(QTracePanel.welcomeMarked(entry.module(), icon(QTracePanel.moduleIcon(entry))), entry.label(), hover);
+            b.setOnAction(e -> QTracePanel.welcomeFirst(entry.module(), () -> QTracePanel.runModuleEntry(entry)));
             nodes.add(b);
         }
     }

@@ -67,7 +67,22 @@ public final class ModuleUpdates {
      * brings ({@code whatsNew}).
      */
     public record Card(Offer offer, String title, String tagline, String icon,
-                       List<String> features, List<String> whatsNew) {}
+                       List<String> features, List<String> whatsNew, Welcome welcome) {
+
+        /** True when something was written to get started with the tool: essentials, or slides. */
+        public boolean hasWelcome() {
+            return !features.isEmpty() || !welcome.slides().isEmpty();
+        }
+    }
+
+    /**
+     * The welcome of a tool — how to get started with it: the slides that follow its first one
+     * (its button and essentials), and the revision the BackOffice raises to have it read again.
+     */
+    public record Welcome(int revision, List<Slide> slides) {}
+
+    /** One slide of a tool's welcome; {@code image} is an https URL or a path of the site, or null. */
+    public record Slide(String title, String text, String image) {}
 
     /**
      * Entries of a descriptor with their card; empty when the answer is not a descriptor (an
@@ -86,7 +101,7 @@ public final class ModuleUpdates {
                 if (offer == null) continue;
                 String title = str(f, "title"), tagline = str(f, "tagline"), icon = str(f, "icon");
                 out.add(new Card(offer, blank(title) ? module : title, tagline == null ? "" : tagline,
-                    blank(icon) ? module : icon, lines(f, "features"), lines(f, "whatsNew")));
+                    blank(icon) ? module : icon, lines(f, "features"), lines(f, "whatsNew"), welcome(f)));
             }
         } catch (RuntimeException e) {
             out.clear();
@@ -95,6 +110,23 @@ public final class ModuleUpdates {
     }
 
     private static boolean blank(String s) { return s == null || s.isBlank(); }
+
+    private static Welcome welcome(JsonObject file) {
+        List<Slide> slides = new ArrayList<>();
+        if (!file.has("welcome") || !file.get("welcome").isJsonObject()) return new Welcome(0, slides);
+        JsonObject w = file.getAsJsonObject("welcome");
+        int revision = w.has("revision") && w.get("revision").isJsonPrimitive() ? w.get("revision").getAsInt() : 0;
+        if (w.has("slides") && w.get("slides").isJsonArray()) {
+            for (JsonElement el : w.getAsJsonArray("slides")) {
+                if (!el.isJsonObject()) continue;
+                JsonObject s = el.getAsJsonObject();
+                String title = str(s, "title"), text = str(s, "text"), image = str(s, "image");
+                if (blank(title)) continue;
+                slides.add(new Slide(title.trim(), text == null ? "" : text, blank(image) ? null : image));
+            }
+        }
+        return new Welcome(revision, slides);
+    }
 
     private static List<String> lines(JsonObject o, String key) {
         List<String> out = new ArrayList<>();

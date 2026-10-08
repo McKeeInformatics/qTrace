@@ -435,6 +435,8 @@ public class QTracePanel {
         });
         Players.onChange(this, hooksChanged);
         VersionGraphs.onChange(this, hooksChanged);
+        // A welcome read, or one more to read: the gold squares follow.
+        ToolWelcomes.onChange(this, hooksChanged);
         return row;
     }
 
@@ -453,17 +455,17 @@ public class QTracePanel {
             slot.getChildren().clear();
             java.util.List<Button> buttons = new java.util.ArrayList<>();
             if (replay && Players.entitled() != null) {
-                Button btnReplay = iconButton(iconFactory(this::iconReplay), QTraceI18n.t("btn.replay.caption"),
+                Button btnReplay = iconButton(welcomeMarked("player", iconFactory(this::iconReplay)), QTraceI18n.t("btn.replay.caption"),
                     QTraceI18n.t("btn.replay.tooltip"), Color.web(GROUP_WORKSPACE));
                 btnReplay.setId("replay-button"); // looked up by the screenshot harness — see ScreenshotHarness
-                btnReplay.setOnAction(e -> controller.openReplayDialog());
+                btnReplay.setOnAction(e -> welcomeFirst("player", controller::openReplayDialog));
                 buttons.add(btnReplay);
             }
             if (versions && VersionGraphs.entitled() != null) {
-                Button btnGraph = iconButton(iconFactory(this::iconVersions), QTraceI18n.t("btn.versions.caption"),
+                Button btnGraph = iconButton(welcomeMarked("versiongraph", iconFactory(this::iconVersions)), QTraceI18n.t("btn.versions.caption"),
                     QTraceI18n.t("btn.versions.tooltip"), Color.web(GROUP_WORKSPACE));
                 btnGraph.setId("versions-button"); // looked up by the screenshot harness — see ScreenshotHarness
-                btnGraph.setOnAction(e -> controller.showCommitGraph());
+                btnGraph.setOnAction(e -> welcomeFirst("versiongraph", controller::showCommitGraph));
                 buttons.add(btnGraph);
             }
             if (ownGroup && !buttons.isEmpty()) slot.getChildren().add(vseparator());
@@ -490,8 +492,8 @@ public class QTracePanel {
             captionedButtons.removeIf(b -> slot.getChildren().contains(b));
             slot.getChildren().clear();
             for (PanelExtensions.Entry entry : PanelExtensions.entitled(anchor)) {
-                Button b = iconButton(iconFactory(moduleIcon(entry)), entry.label(), entry.label(), Color.web(groupColor));
-                b.setOnAction(e -> runModuleEntry(entry));
+                Button b = iconButton(welcomeMarked(entry.module(), iconFactory(moduleIcon(entry))), entry.label(), entry.label(), Color.web(groupColor));
+                b.setOnAction(e -> welcomeFirst(entry.module(), () -> runModuleEntry(entry)));
                 slot.getChildren().add(b);
             }
             slot.setVisible(!slot.getChildren().isEmpty());
@@ -878,6 +880,33 @@ public class QTracePanel {
     /** Wraps a vector icon factory (Color → Group, 24-unit viewBox) into a Node factory at toolbar icon size. */
     Function<Color, Node> iconFactory(Function<Color, Group> vector) {
         return color -> scaledIcon(vector.apply(color), 18);
+    }
+
+    // ── The gold square of a tool whose welcome is still to be read (ToolWelcomes) ─────
+
+    /**
+     * A tool's button icon, with a gold square in its corner while the tool's welcome is to be
+     * read. {@code module}: the Qtrace-Module that brings the tool.
+     */
+    static Function<Color, Node> welcomeMarked(String module, Function<Color, Node> icon) {
+        return color -> {
+            Node drawn = icon.apply(color);
+            if (!ToolWelcomes.isMarked(module)) return drawn;
+            Rectangle mark = new Rectangle(7, 7, Color.web(GOLD));
+            mark.setArcWidth(2);
+            mark.setArcHeight(2);
+            StackPane both = new StackPane(drawn, mark);
+            StackPane.setAlignment(mark, Pos.TOP_RIGHT);
+            mark.setTranslateX(4);
+            mark.setTranslateY(-3);
+            return both;
+        };
+    }
+
+    /** What a marked tool's button does: its welcome first, the tool itself once that was read. */
+    static void welcomeFirst(String module, Runnable tool) {
+        if (ToolWelcomes.isMarked(module) && ToolWelcomes.open(module)) return;
+        tool.run();
     }
 
     /** Adapter for a unicode glyph (Settings ⚙) that doesn't need a redrawn vector icon. */

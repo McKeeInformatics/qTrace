@@ -14,6 +14,7 @@ import java.util.jar.Manifest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -87,7 +88,11 @@ class ModuleUpdatesTest {
            "url":"https://www.qtrace.ca/api/modules/player/download","sha256":"ab",
            "title":"qTrace Player","tagline":"Replay a recorded analysis.","icon":"player",
            "features":["Step by step","In batch","Pre-flight check"],
-           "whatsNew":["Sessions as circles","Scripts shown"]},
+           "whatsNew":["Sessions as circles","Scripts shown"],
+           "welcome":{"revision":3,"slides":[
+             {"title":"Open a record","text":"Paste a qtc_… ID or pick a file.","image":"/docs/bricks/screenshots/player.png"},
+             {"title":"Pick your images","text":""},
+             {"text":"no title: skipped"}]}},
           {"name":"qtrace-plain-0.2.0.qtjar","module":"plain","version":"0.2.0",
            "url":"https://www.qtrace.ca/api/modules/plain/download","sha256":"cd"}]}""";
 
@@ -103,6 +108,13 @@ class ModuleUpdatesTest {
         assertEquals("player", player.icon());
         assertEquals(List.of("Step by step", "In batch", "Pre-flight check"), player.features());
         assertEquals(List.of("Sessions as circles", "Scripts shown"), player.whatsNew());
+        // Its welcome: the slides after the first one, and the revision that makes it play again.
+        assertEquals(3, player.welcome().revision());
+        assertEquals(2, player.welcome().slides().size());
+        assertEquals("Open a record", player.welcome().slides().get(0).title());
+        assertEquals("/docs/bricks/screenshots/player.png", player.welcome().slides().get(0).image());
+        assertNull(player.welcome().slides().get(1).image());
+        assertTrue(player.hasWelcome());
     }
 
     @Test
@@ -114,6 +126,9 @@ class ModuleUpdatesTest {
         assertEquals("plain", plain.icon());
         assertTrue(plain.features().isEmpty());
         assertTrue(plain.whatsNew().isEmpty());
+        assertEquals(0, plain.welcome().revision());
+        assertTrue(plain.welcome().slides().isEmpty());
+        assertFalse(plain.hasWelcome(), "nothing was written about it: no welcome to play");
     }
 
     @Test
