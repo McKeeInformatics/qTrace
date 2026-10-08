@@ -1187,7 +1187,7 @@ public class QTraceController {
         }
     }
 
-    // ── Replay (Compliance) ──────────────────────────────────────────────────
+    // ── Replay (player module) ───────────────────────────────────────────────
 
     public void openReplayDialog() {
         openPlayer(null);
@@ -1195,18 +1195,12 @@ public class QTraceController {
 
     /**
      * Opens the replay player — empty, or on {@code source} — through the module that carries it
-     * ({@link Players}). Until that module is installed, the player Compliance still carries
-     * is used instead.
+     * ({@link Players}).
      *
      * @return false when there is no player
      */
     private boolean openPlayer(String source) {
-        if (source == null ? Players.open() : Players.open(source)) return true;
-        QTracePlugin plugin = QTracePluginManager.getEntitled();
-        if (plugin == null) return false;
-        if (source == null) plugin.replay(qupath, logger);
-        else plugin.replay(qupath, logger, source);
-        return true;
+        return source == null ? Players.open() : Players.open(source);
     }
 
     /**
@@ -1832,7 +1826,7 @@ public class QTraceController {
         }
     }
 
-    // ── Import .qTrace (Compliance stub) ─────────────────────────────────────
+    // ── Import .qTrace (player module) ───────────────────────────────────────
 
     public void importAndReplay() {
         openPlayer(null);

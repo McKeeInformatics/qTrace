@@ -334,10 +334,12 @@ public class QTracePanel {
     /**
      * Width at which every toolbar caption fits: the Compliance toolbar carries 9 buttons
      * (Stamp + Upload/Replay/Versions/Report + Dashboard/Import/Reset) — below 760 captions got
-     * truncated to "St…"/"Up…"; the Core one (Stamp + Dashboard/Import/Reset) fits in 400.
+     * truncated to "St…"/"Up…"; the Core one (Stamp + Dashboard/Import/Reset) fits in 400, and
+     * needs one more button's room when the player module adds Replay.
      */
     private static double captionsWidth() {
-        return QTracePluginManager.isEntitled() ? 760 : 400;
+        if (QTracePluginManager.isEntitled()) return 760;
+        return Players.entitled() != null ? 480 : 400;
     }
 
     /** Captions only when they fit; icons alone (names in tooltips) when the panel is narrowed. */
@@ -380,8 +382,11 @@ public class QTracePanel {
         row.getChildren().add(btnRecord);
 
         // Workspace & Analyse — Compliance only, when licensed & active.
-        // When the license is inactive the panel degrades to the Core button set.
-        if (QTracePluginManager.isEntitled()) {
+        // When the license is inactive the panel degrades to the Core button set, plus Replay
+        // when the player module is there.
+        boolean licensed = QTracePluginManager.isEntitled();
+        if (!licensed) row.getChildren().add(replaySlot(true));
+        if (licensed) {
             row.getChildren().add(vseparator());
 
             btnPush = iconButton(iconFactory(this::iconUpload), QTraceI18n.t("btn.upload.caption"),
@@ -391,12 +396,7 @@ public class QTracePanel {
             btnPush.setOpacity(0.45);
             btnPush.setOnAction(e -> controller.pushToWorkspace());
 
-            Button btnReplay = iconButton(iconFactory(this::iconReplay), QTraceI18n.t("btn.replay.caption"),
-                QTraceI18n.t("btn.replay.tooltip"), Color.web(GROUP_WORKSPACE));
-            btnReplay.setId("replay-button"); // looked up by the screenshot harness — see ScreenshotHarness
-            btnReplay.setOnAction(e -> controller.openReplayDialog());
-
-            row.getChildren().addAll(btnPush, btnReplay);
+            row.getChildren().addAll(btnPush, replaySlot(false));
             row.getChildren().add(vseparator());
 
             Button btnGraph = iconButton(iconFactory(this::iconVersions), QTraceI18n.t("btn.versions.caption"),
@@ -433,7 +433,40 @@ public class QTracePanel {
 
         // A module can load after the panel was drawn: its button comes in then.
         PanelExtensions.onChange(this, () -> Platform.runLater(() -> moduleSlots.forEach(Runnable::run)));
+        Players.onChange(this, () -> Platform.runLater(() -> {
+            moduleSlots.forEach(Runnable::run);
+            applyCompactToolbar();
+        }));
         return row;
+    }
+
+    /**
+     * Where the Replay button stands — empty and taking no room until a module brings the
+     * player ({@link Players}).
+     *
+     * @param ownGroup true when Replay is alone in its group (no licence, so no Upload before
+     *                 it): the slot then carries the group's separator too
+     */
+    private HBox replaySlot(boolean ownGroup) {
+        HBox slot = new HBox(9);
+        slot.setAlignment(Pos.CENTER_LEFT);
+        Runnable fill = () -> {
+            captionedButtons.removeIf(b -> slot.getChildren().contains(b));
+            slot.getChildren().clear();
+            if (Players.entitled() != null) {
+                Button btnReplay = iconButton(iconFactory(this::iconReplay), QTraceI18n.t("btn.replay.caption"),
+                    QTraceI18n.t("btn.replay.tooltip"), Color.web(GROUP_WORKSPACE));
+                btnReplay.setId("replay-button"); // looked up by the screenshot harness — see ScreenshotHarness
+                btnReplay.setOnAction(e -> controller.openReplayDialog());
+                if (ownGroup) slot.getChildren().add(vseparator());
+                slot.getChildren().add(btnReplay);
+            }
+            slot.setVisible(!slot.getChildren().isEmpty());
+            slot.setManaged(!slot.getChildren().isEmpty());
+        };
+        moduleSlots.add(fill);
+        fill.run();
+        return slot;
     }
 
     private final java.util.List<Runnable> moduleSlots = new java.util.ArrayList<>(); // each refills one slot

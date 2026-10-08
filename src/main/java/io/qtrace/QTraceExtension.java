@@ -101,10 +101,10 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         MenuItem dashboard   = new MenuItem("Dashboard");
         dashboard.setOnAction(e -> controller.showDashboard());
 
-        // Compliance-only (no-ops via openReplayDialog() when not entitled — same
-        // safety net as the panel's Replay button, see QTracePanel.java:296).
+        // There only once a module has brought the player (Players) — it can load after this menu.
         MenuItem player      = new MenuItem("Player");
         player.setOnAction(e -> controller.openReplayDialog());
+        showWithPlayer(player, "menu");
 
         MenuItem preferences = new MenuItem("Settings...");
         preferences.setOnAction(e -> controller.showPreferences());
@@ -164,6 +164,13 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
     }
 
     private static String nz(String s) { return s != null ? s : "0"; }
+
+    /** Shows a "Player" entry only while a module brings the player; {@code owner} names the entry. */
+    private static void showWithPlayer(MenuItem item, String owner) {
+        item.setVisible(Players.entitled() != null);
+        Players.onChange(QTraceExtension.class.getName() + "." + owner,
+            () -> Platform.runLater(() -> item.setVisible(Players.entitled() != null)));
+    }
 
     /**
      * Startup trace of what the classloader REALLY loaded: which JAR file each qTrace
@@ -245,10 +252,9 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         MenuItem miDash   = new MenuItem("Dashboard");
         miDash.setOnAction(e -> controller.showDashboard());
 
-        // Compliance-only (no-ops via openReplayDialog() when not entitled — same
-        // safety net as the panel's Replay button, see QTracePanel.java:296).
         MenuItem miPlayer = new MenuItem("Player");
         miPlayer.setOnAction(e -> controller.openReplayDialog());
+        showWithPlayer(miPlayer, "toolbar");
 
         MenuItem miPrefs  = new MenuItem("Settings...");
         miPrefs.setOnAction(e -> controller.showPreferences());

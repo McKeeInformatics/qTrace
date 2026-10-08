@@ -94,6 +94,7 @@ public final class QTraceMiniPanel {
         rebuild();
         // A module can load after the column was drawn: its button comes in then.
         PanelExtensions.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        Players.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
         var project = qupath.projectProperty();
@@ -208,18 +209,25 @@ public final class QTraceMiniPanel {
         stampBtn.setOnAction(e -> controller.recordTrace());
         nodes.add(stampBtn);
 
-        // Workspace & Analyse — same rule as the panel's toolbar: only when licensed & active.
-        if (QTracePluginManager.isEntitled()) {
-            Color workspace = Color.web(QTracePanel.GROUP_WORKSPACE);
-            nodes.add(separator());
+        // Workspace & Analyse — same rule as the panel's toolbar: only when licensed & active,
+        // except Replay, which is there as soon as a module brings the player.
+        Color workspace = Color.web(QTracePanel.GROUP_WORKSPACE);
+        boolean licensed = QTracePluginManager.isEntitled();
+        boolean player = Players.entitled() != null;
+        if (licensed || player) nodes.add(separator());
+        if (licensed) {
             uploadBtn = button(icon(panel::iconUpload), "btn.upload.caption", workspace);
             uploadBtn.setOnAction(e -> controller.pushToWorkspace());
-            Button replayBtn = button(icon(panel::iconReplay), "btn.replay.caption", workspace);
-            replayBtn.setOnAction(e -> controller.openReplayDialog());
             uploadSlot = new StackPane(uploadBtn);
             uploadSpinner = uploadSpinner();
             nodes.add(uploadSlot);
+        }
+        if (player) {
+            Button replayBtn = button(icon(panel::iconReplay), "btn.replay.caption", workspace);
+            replayBtn.setOnAction(e -> controller.openReplayDialog());
             nodes.add(replayBtn);
+        }
+        if (licensed) {
             nodes.add(separator());
             Button versionsBtn = button(icon(panel::iconVersions), "btn.versions.caption", workspace);
             versionsBtn.setOnAction(e -> controller.showCommitGraph());
