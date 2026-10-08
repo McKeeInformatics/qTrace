@@ -75,7 +75,7 @@ public class QTraceController {
     // build time) instead of a hardcoded literal — see the identical fix + rationale on
     // QTraceCompliancePlugin.COMPLIANCE_VERSION: a literal here silently goes stale on every
     // release bump, breaking the auto-updater's version comparison.
-    static final String VERSION = resolveVersion();
+    public static final String VERSION = resolveVersion();
 
     private static String resolveVersion() {
         return JarVersion.of(QTraceController.class);
@@ -894,10 +894,7 @@ public class QTraceController {
         }
 
         @Override public boolean playInPlayer(String source) {
-            QTracePlugin plugin = QTracePluginManager.getEntitled();
-            if (plugin == null) return false;
-            plugin.replay(qupath, logger, source);
-            return true;
+            return openPlayer(source);
         }
 
         @Override public void setReplaySkip(File qtrace, String fragment, boolean skip) throws IOException {
@@ -1193,8 +1190,23 @@ public class QTraceController {
     // ── Replay (Compliance) ──────────────────────────────────────────────────
 
     public void openReplayDialog() {
-        QTracePlugin ep = QTracePluginManager.getEntitled();
-        if (ep != null) ep.replay(qupath, logger);
+        openPlayer(null);
+    }
+
+    /**
+     * Opens the replay player — empty, or on {@code source} — through the module that carries it
+     * ({@link Players}). Until that module is installed, the player Compliance still carries
+     * is used instead.
+     *
+     * @return false when there is no player
+     */
+    private boolean openPlayer(String source) {
+        if (source == null ? Players.open() : Players.open(source)) return true;
+        QTracePlugin plugin = QTracePluginManager.getEntitled();
+        if (plugin == null) return false;
+        if (source == null) plugin.replay(qupath, logger);
+        else plugin.replay(qupath, logger, source);
+        return true;
     }
 
     /**
@@ -1823,8 +1835,7 @@ public class QTraceController {
     // ── Import .qTrace (Compliance stub) ─────────────────────────────────────
 
     public void importAndReplay() {
-        QTracePlugin plugin = QTracePluginManager.getEntitled();
-        if (plugin != null) plugin.replay(qupath, logger);
+        openPlayer(null);
     }
 
     private static Method findMethodWithParam(Class<?> cls, String name, Class<?> paramType) {

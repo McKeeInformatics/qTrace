@@ -39,13 +39,19 @@ import java.util.concurrent.CompletableFuture;
 public interface QTracePlugin {
     default void certifyStamp(ValidationStamp stamp, QuPathGUI qupath) {}
     default void verifyContributor(String contributorId, QuPathGUI qupath) {}
-    default void replay(QuPathGUI qupath, ActionLogger logger) {}
     /**
-     * Opens the replay player on a source — a qtc_… or qtw_… ID, a share link or a local path —
-     * as if the user had given it to the player (e.g. the workflow just published from the
-     * Version window).
+     * Opens the replay player.
+     * @deprecated the player is its own module: use {@link Players#open()}. Kept, going through
+     * {@link Players}, for the modules built when Compliance carried the player.
      */
-    default void replay(QuPathGUI qupath, ActionLogger logger, String source) {}
+    @Deprecated
+    default void replay(QuPathGUI qupath, ActionLogger logger) { Players.open(); }
+    /**
+     * Opens the replay player on a source — a qtc_… or qtw_… ID, a share link or a local path.
+     * @deprecated use {@link Players#open(String)} — see {@link #replay(QuPathGUI, ActionLogger)}.
+     */
+    @Deprecated
+    default void replay(QuPathGUI qupath, ActionLogger logger, String source) { Players.open(source); }
 
     /** Returns the Compliance plugin version string, e.g. "1.0.2". */
     default String getPluginVersion() { return null; }
