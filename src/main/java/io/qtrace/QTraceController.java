@@ -168,7 +168,7 @@ public class QTraceController {
     private QTracePanel     panel;
     private QTraceMiniPanel miniPanel; // null when the panel fell back to its window
     private QTraceDashboard dashboard;
-    private QTraceCommitGraph commitGraph;
+    private VersionGraph.Window commitGraph; // from the module that brings it (VersionGraphs)
     private ActionLogger    logger;
     // Live draft of the open image (autosave, unstamped sessions, crash recovery).
     private DraftManager    drafts;
@@ -807,8 +807,7 @@ public class QTraceController {
             return;
         }
         if (commitGraph == null || !commitGraph.isShowing()) {
-            commitGraph = new QTraceCommitGraph(qupath);
-            commitGraph.setHost(graphHost);
+            if (!newVersionWindow()) return;
             commitGraph.show(preselected);
         } else if (commitGraph.isIconified()) {
             commitGraph.front();
@@ -844,10 +843,7 @@ public class QTraceController {
     public void editWorkflowFile(File qtflowFile) {
         if (qtflowFile == null || !qtflowFile.isFile()) return;
         if (VersionEditors.entitled().isEmpty()) return;
-        if (commitGraph == null || !commitGraph.isShowing()) {
-            commitGraph = new QTraceCommitGraph(qupath);
-            commitGraph.setHost(graphHost);
-        }
+        if ((commitGraph == null || !commitGraph.isShowing()) && !newVersionWindow()) return;
         commitGraph.show(qtflowFile);
         commitGraph.startEditing();
     }
@@ -860,15 +856,26 @@ public class QTraceController {
      */
     public void showWorkflowFile(File qtflowFile) {
         if (qtflowFile == null || !qtflowFile.isFile()) return;
-        if (commitGraph == null || !commitGraph.isShowing()) {
-            commitGraph = new QTraceCommitGraph(qupath);
-            commitGraph.setHost(graphHost);
-        }
+        if ((commitGraph == null || !commitGraph.isShowing()) && !newVersionWindow()) return;
         commitGraph.show(qtflowFile);
     }
 
+    /**
+     * A new Version window from the module that brings it ({@link VersionGraphs}), in
+     * {@link #commitGraph}.
+     *
+     * @return false when no module brings one — nothing is opened
+     */
+    private boolean newVersionWindow() {
+        VersionGraph graph = VersionGraphs.entitled();
+        VersionGraph.Window window = graph == null ? null : graph.create(graphHost);
+        if (window == null) return false;
+        commitGraph = window;
+        return true;
+    }
+
     /** What the Version window needs from the open image: its capture in progress, and the −/+ of a step. */
-    private final QTraceCommitGraph.Host graphHost = new QTraceCommitGraph.Host() {
+    private final VersionGraph.Host graphHost = new VersionGraph.Host() {
         @Override public JsonObject liveSession(File qtrace) {
             if (logger == null || !logger.isAttached() || !logger.hasSteps()) return null;
             if (qtrace != null && !isCurrentQtrace(qtrace)) return null;

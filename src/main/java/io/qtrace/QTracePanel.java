@@ -335,11 +335,12 @@ public class QTracePanel {
      * Width at which every toolbar caption fits: the Compliance toolbar carries 9 buttons
      * (Stamp + Upload/Replay/Versions/Report + Dashboard/Import/Reset) — below 760 captions got
      * truncated to "St…"/"Up…"; the Core one (Stamp + Dashboard/Import/Reset) fits in 400, and
-     * needs one more button's room when the player module adds Replay.
+     * needs one more button's room for each of Replay and Version(s) a module adds.
      */
     private static double captionsWidth() {
         if (QTracePluginManager.isEntitled()) return 760;
-        return Players.entitled() != null ? 480 : 400;
+        int extra = (Players.entitled() != null ? 1 : 0) + (VersionGraphs.entitled() != null ? 1 : 0);
+        return 400 + 80 * extra;
     }
 
     /** Captions only when they fit; icons alone (names in tooltips) when the panel is narrowed. */
@@ -385,7 +386,7 @@ public class QTracePanel {
         // When the license is inactive the panel degrades to the Core button set, plus Replay
         // when the player module is there.
         boolean licensed = QTracePluginManager.isEntitled();
-        if (!licensed) row.getChildren().add(replaySlot(true));
+        if (!licensed) row.getChildren().add(hookSlot(true, true, true));
         if (licensed) {
             row.getChildren().add(vseparator());
 
@@ -396,20 +397,15 @@ public class QTracePanel {
             btnPush.setOpacity(0.45);
             btnPush.setOnAction(e -> controller.pushToWorkspace());
 
-            row.getChildren().addAll(btnPush, replaySlot(false));
+            row.getChildren().addAll(btnPush, hookSlot(true, false, false));
             row.getChildren().add(vseparator());
-
-            Button btnGraph = iconButton(iconFactory(this::iconVersions), QTraceI18n.t("btn.versions.caption"),
-                QTraceI18n.t("btn.versions.tooltip"), Color.web(GROUP_WORKSPACE));
-            btnGraph.setId("versions-button"); // looked up by the screenshot harness — see ScreenshotHarness
-            btnGraph.setOnAction(e -> controller.showCommitGraph());
 
             Button btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),
                 QTraceI18n.t("btn.report.tooltip"), Color.web(GROUP_WORKSPACE));
             btnReport.setId("report-button"); // looked up by the screenshot harness — see ScreenshotHarness
             btnReport.setOnAction(e -> controller.generateActivityReport());
 
-            row.getChildren().addAll(btnGraph, moduleSlot(PanelExtensions.VERSIONS, GROUP_WORKSPACE), btnReport);
+            row.getChildren().addAll(hookSlot(false, true, false), moduleSlot(PanelExtensions.VERSIONS, GROUP_WORKSPACE), btnReport);
         }
 
         // Consultation & Traitement — always available, Core + Compliance.
@@ -433,34 +429,45 @@ public class QTracePanel {
 
         // A module can load after the panel was drawn: its button comes in then.
         PanelExtensions.onChange(this, () -> Platform.runLater(() -> moduleSlots.forEach(Runnable::run)));
-        Players.onChange(this, () -> Platform.runLater(() -> {
+        Runnable hooksChanged = () -> Platform.runLater(() -> {
             moduleSlots.forEach(Runnable::run);
             applyCompactToolbar();
-        }));
+        });
+        Players.onChange(this, hooksChanged);
+        VersionGraphs.onChange(this, hooksChanged);
         return row;
     }
 
     /**
-     * Where the Replay button stands — empty and taking no room until a module brings the
-     * player ({@link Players}).
+     * Where the buttons a module brings a window for stand — Replay ({@link Players}) and
+     * Version(s) ({@link VersionGraphs}) — empty and taking no room until that module is there.
      *
-     * @param ownGroup true when Replay is alone in its group (no licence, so no Upload before
-     *                 it): the slot then carries the group's separator too
+     * @param ownGroup true when these buttons make a group of their own (no licence, so no
+     *                 Upload before them): the slot then carries the group's separator too
      */
-    private HBox replaySlot(boolean ownGroup) {
+    private HBox hookSlot(boolean replay, boolean versions, boolean ownGroup) {
         HBox slot = new HBox(9);
         slot.setAlignment(Pos.CENTER_LEFT);
         Runnable fill = () -> {
             captionedButtons.removeIf(b -> slot.getChildren().contains(b));
             slot.getChildren().clear();
-            if (Players.entitled() != null) {
+            java.util.List<Button> buttons = new java.util.ArrayList<>();
+            if (replay && Players.entitled() != null) {
                 Button btnReplay = iconButton(iconFactory(this::iconReplay), QTraceI18n.t("btn.replay.caption"),
                     QTraceI18n.t("btn.replay.tooltip"), Color.web(GROUP_WORKSPACE));
                 btnReplay.setId("replay-button"); // looked up by the screenshot harness — see ScreenshotHarness
                 btnReplay.setOnAction(e -> controller.openReplayDialog());
-                if (ownGroup) slot.getChildren().add(vseparator());
-                slot.getChildren().add(btnReplay);
+                buttons.add(btnReplay);
             }
+            if (versions && VersionGraphs.entitled() != null) {
+                Button btnGraph = iconButton(iconFactory(this::iconVersions), QTraceI18n.t("btn.versions.caption"),
+                    QTraceI18n.t("btn.versions.tooltip"), Color.web(GROUP_WORKSPACE));
+                btnGraph.setId("versions-button"); // looked up by the screenshot harness — see ScreenshotHarness
+                btnGraph.setOnAction(e -> controller.showCommitGraph());
+                buttons.add(btnGraph);
+            }
+            if (ownGroup && !buttons.isEmpty()) slot.getChildren().add(vseparator());
+            slot.getChildren().addAll(buttons);
             slot.setVisible(!slot.getChildren().isEmpty());
             slot.setManaged(!slot.getChildren().isEmpty());
         };

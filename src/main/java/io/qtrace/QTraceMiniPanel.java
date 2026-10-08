@@ -95,6 +95,7 @@ public final class QTraceMiniPanel {
         // A module can load after the column was drawn: its button comes in then.
         PanelExtensions.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         Players.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        VersionGraphs.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
         var project = qupath.projectProperty();
@@ -214,7 +215,8 @@ public final class QTraceMiniPanel {
         Color workspace = Color.web(QTracePanel.GROUP_WORKSPACE);
         boolean licensed = QTracePluginManager.isEntitled();
         boolean player = Players.entitled() != null;
-        if (licensed || player) nodes.add(separator());
+        boolean versions = VersionGraphs.entitled() != null;
+        if (licensed || player || (versions && !licensed)) nodes.add(separator());
         if (licensed) {
             uploadBtn = button(icon(panel::iconUpload), "btn.upload.caption", workspace);
             uploadBtn.setOnAction(e -> controller.pushToWorkspace());
@@ -227,14 +229,16 @@ public final class QTraceMiniPanel {
             replayBtn.setOnAction(e -> controller.openReplayDialog());
             nodes.add(replayBtn);
         }
-        if (licensed) {
-            nodes.add(separator());
+        if (licensed) nodes.add(separator());
+        if (versions) {
             Button versionsBtn = button(icon(panel::iconVersions), "btn.versions.caption", workspace);
             versionsBtn.setOnAction(e -> controller.showCommitGraph());
+            nodes.add(versionsBtn);
+        }
+        if (licensed) {
+            addModuleButtons(nodes, PanelExtensions.VERSIONS, workspace);
             Button reportBtn = button(icon(panel::iconReport), "btn.report.caption", workspace);
             reportBtn.setOnAction(e -> controller.generateActivityReport());
-            nodes.add(versionsBtn);
-            addModuleButtons(nodes, PanelExtensions.VERSIONS, workspace);
             nodes.add(reportBtn);
         }
 

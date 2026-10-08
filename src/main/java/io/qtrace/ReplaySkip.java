@@ -53,8 +53,8 @@ import java.util.Map;
 public final class ReplaySkip {
 
     static final String FLAG = "replay_skip";
-    static final String BY   = "replay_skip_by";
-    static final String AT   = "replay_skip_at";
+    public static final String BY   = "replay_skip_by";
+    public static final String AT   = "replay_skip_at";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -200,7 +200,7 @@ public final class ReplaySkip {
         return new Summary(last.size(), skipped);
     }
 
-    static List<JsonObject> steps(JsonObject session) {
+    public static List<JsonObject> steps(JsonObject session) {
         List<JsonObject> out = new ArrayList<>();
         if (session != null && session.has("steps") && session.get("steps").isJsonArray())
             for (JsonElement el : session.getAsJsonArray("steps"))
