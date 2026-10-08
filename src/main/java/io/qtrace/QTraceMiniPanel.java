@@ -56,7 +56,8 @@ public final class QTraceMiniPanel {
     private double dragDx, dragDy;
 
     private Circle captureDot;
-    private Node pauseIcon, startIcon;
+    private Node pauseIcon, startIcon, resumeSpinner;
+    private boolean resuming; // ▶ Start was double-clicked: the last project and image are opening
     private StackPane statusBox;
     private Timeline captureBlink;
     private Label integrityBadge;
@@ -169,7 +170,9 @@ public final class QTraceMiniPanel {
         javafx.scene.shape.Polygon play = new javafx.scene.shape.Polygon(0, 0, 13, 7.5, 0, 15);
         play.setFill(Color.web(QTracePanel.GREEN));
         startIcon = play;
-        StackPane dotBox = new StackPane(pauseIcon, captureDot, startIcon);
+        resumeSpinner = spinner(15, QTracePanel.GREEN);
+        resumeSpinner.setVisible(false);
+        StackPane dotBox = new StackPane(pauseIcon, captureDot, startIcon, resumeSpinner);
         statusBox = dotBox;
         // One click: the recent projects. Double-click: straight back to the last project and
         // image — so the single click waits a moment to see whether a second one follows.
@@ -179,11 +182,12 @@ public final class QTraceMiniPanel {
         // With a project open (recording or paused), a double-click closes the project — the
         // counterpart of ▶ Start. QuPath asks about unsaved work, as with its own menu.
         dotBox.setOnMouseClicked(e -> {
+            if (resuming) return;
             if (!startIcon.isVisible()) {
                 if (e.getClickCount() == 2) controller.closeProject();
                 return;
             }
-            if (e.getClickCount() >= 2) { single.stop(); controller.resumeLastWork(); }
+            if (e.getClickCount() >= 2) { single.stop(); resume(); }
             else single.playFromStart();
         });
         dotBox.setPadding(new Insets(3, 0, 12, 0));
@@ -274,11 +278,12 @@ public final class QTraceMiniPanel {
         boolean recording = panel.isRecordingActive();
         // ▶ Start with no project open; then a red dot while recording, grey pause bars otherwise.
         boolean start = !recording && controller.needsProject();
-        startIcon.setVisible(start);
-        captureDot.setVisible(recording);
-        pauseIcon.setVisible(!recording && !start);
-        statusBox.setCursor(start ? Cursor.HAND : null);
-        Tooltip.install(statusBox, tip(start ? "Start — click: recent projects · double-click: last project and image"
+        startIcon.setVisible(start && !resuming);
+        resumeSpinner.setVisible(resuming);
+        captureDot.setVisible(recording && !resuming);
+        pauseIcon.setVisible(!recording && !start && !resuming);
+        statusBox.setCursor(start && !resuming ? Cursor.HAND : null);
+        Tooltip.install(statusBox, tip(resuming ? "Opening the last project and image…" : start ? "Start — click: recent projects · double-click: last project and image"
             : (recording ? "Recording" : "Paused") + " — double-click: close the project"));
         if (recording && captureBlink == null) startBlink();
         else if (!recording) stopBlink();
@@ -355,13 +360,31 @@ public final class QTraceMiniPanel {
         return t;
     }
 
+    /**
+     * ▶ Start, double-clicked: a spinner takes the place of ▶ until the last project and its
+     * image are open. Opening starts on a later pulse, so that the spinner is drawn first.
+     */
+    private void resume() {
+        resuming = true;
+        refresh();
+        javafx.application.Platform.runLater(() -> controller.resumeLastWork(() -> {
+            resuming = false;
+            refresh();
+        }));
+    }
+
+    private static javafx.scene.control.ProgressIndicator spinner(double size, String color) {
+        javafx.scene.control.ProgressIndicator spin = new javafx.scene.control.ProgressIndicator();
+        spin.setPrefSize(size, size);
+        spin.setMaxSize(size, size);
+        spin.setMouseTransparent(true); // the box below takes the hover
+        spin.setStyle("-fx-progress-color: " + color + ";");
+        return spin;
+    }
+
     /** Stands in for the Upload button while a push runs — nothing to click, just what is going on. */
     private static Node uploadSpinner() {
-        javafx.scene.control.ProgressIndicator spin = new javafx.scene.control.ProgressIndicator();
-        spin.setPrefSize(ICON, ICON);
-        spin.setMaxSize(ICON, ICON);
-        spin.setMouseTransparent(true); // the box below takes the hover
-        spin.setStyle("-fx-progress-color: " + QTracePanel.GROUP_WORKSPACE + ";");
+        javafx.scene.control.ProgressIndicator spin = spinner(ICON, QTracePanel.GROUP_WORKSPACE);
         StackPane box = new StackPane(spin);
         box.setPadding(new Insets(3));
         Tooltip.install(box, tip("Upload in progress…"));

@@ -681,19 +681,87 @@ public class QTraceController {
      * was open last. Falls back to the recent-projects list when there is nothing to resume.
      */
     public void resumeLastWork() {
+        resumeLastWork(() -> {});
+    }
+
+    /**
+     * Same, telling {@code done} (FX thread) once the project and its image are open, or it is
+     * known that nothing will be — what the mini-panel's spinner waits for. The project and the
+     * image are read off the FX thread, so that the spinner turns meanwhile.
+     */
+    public void resumeLastWork(Runnable done) {
         ProjectPrompt.closeIfOpen();
         java.net.URI uri = ProjectPrompt.projectToResume(LAST.get(LAST_PROJECT, null), ProjectPrompt.recentUris());
-        if (uri == null) { startWork(); return; }
+        if (uri == null) { done.run(); startWork(); return; }
         boolean lastProject = uri.toString().equals(LAST.get(LAST_PROJECT, null));
-        openRecentProject(uri);
-        var project = qupath.getProject();
-        if (project == null) return;
-        ActivityLog.add("Resumed project " + ProjectPrompt.recents(List.of(uri), 1).get(0).name() + ".");
-        String imageId = lastProject ? LAST.get(LAST_IMAGE, null) : null;
-        if (imageId == null) return;
-        for (var entry : project.getImageList()) {
-            if (imageId.equals(entry.getID())) { openEntryOn(qupath, entry); return; }
+        Thread reader = new Thread(() -> {
+            qupath.lib.projects.Project<BufferedImage> loaded = null;
+            Exception failure = null;
+            try { loaded = ProjectIO.loadProject(uri, BufferedImage.class); } catch (Exception e) { failure = e; }
+            var project = loaded;
+            var error = failure;
+            Platform.runLater(() -> {
+                ProjectImageEntry<BufferedImage> image = null;
+                try {
+                    if (error != null) { projectNotOpened(error); return; }
+                    qupath.setProject(project);
+                    if (qupath.getProject() == null) return;
+                    ActivityLog.add("Resumed project " + ProjectPrompt.recents(List.of(uri), 1).get(0).name() + ".");
+                    String imageId = lastProject ? LAST.get(LAST_IMAGE, null) : null;
+                    if (imageId == null) return;
+                    for (var entry : qupath.getProject().getImageList()) {
+                        if (imageId.equals(entry.getID())) { image = entry; return; }
+                    }
+                } finally {
+                    if (image != null) openEntryInBackground(image, done);
+                    else done.run();
+                }
+            });
+        }, "qtrace-resume");
+        reader.setDaemon(true);
+        reader.start();
+    }
+
+    /**
+     * Opens a project image as {@link #openEntryOn} does, but reads it off the FX thread — the
+     * long part with a large image — so that the window stays alive meanwhile; {@code done}
+     * runs on the FX thread once the image is in the viewer, or could not be opened.
+     * QuPath's own command is used instead whenever it would do more than read and show: an
+     * image already in the viewer (it asks about unsaved changes), an image whose type is not
+     * set yet (it estimates or asks), or a read that failed (it reports the error).
+     */
+    private void openEntryInBackground(ProjectImageEntry<BufferedImage> entry, Runnable done) {
+        var viewer = qupath.getViewer();
+        if (viewer == null || viewer.getImageData() != null) {
+            try { openEntryOn(qupath, entry); } finally { done.run(); }
+            return;
         }
+        Thread reader = new Thread(() -> {
+            ImageData<BufferedImage> read = null;
+            try { read = entry.readImageData(); } catch (Exception | LinkageError ignored) {}
+            var data = read;
+            Platform.runLater(() -> {
+                try {
+                    boolean typed = data != null && data.getImageType() != null
+                        && data.getImageType() != ImageData.ImageType.UNSET;
+                    // Still the project and the empty viewer it was read for.
+                    boolean current = qupath.getProject() != null && qupath.getViewer() == viewer
+                        && viewer.getImageData() == null && qupath.getProject().getImageList().contains(entry);
+                    if (typed && current) {
+                        viewer.setImageData(data);
+                        return;
+                    }
+                    if (data != null) try { data.getServer().close(); } catch (Exception ignored) {}
+                    if (current) openEntryOn(qupath, entry);
+                } catch (Exception e) {
+                    openEntryOn(qupath, entry);
+                } finally {
+                    done.run();
+                }
+            });
+        }, "qtrace-resume-image");
+        reader.setDaemon(true);
+        reader.start();
     }
 
     /** Recent projects / "Open Project…"; false when the user cancelled. */
@@ -710,13 +778,17 @@ public class QTraceController {
         try {
             qupath.setProject(ProjectIO.loadProject(uri, BufferedImage.class));
         } catch (Exception e) {
-            Alert err = new Alert(Alert.AlertType.ERROR);
-            if (qupath.getStage() != null) err.initOwner(qupath.getStage());
-            err.setTitle("qTrace — Dashboard");
-            err.setHeaderText("This project could not be opened");
-            err.setContentText(String.valueOf(e.getMessage()));
-            err.showAndWait();
+            projectNotOpened(e);
         }
+    }
+
+    private void projectNotOpened(Exception e) {
+        Alert err = new Alert(Alert.AlertType.ERROR);
+        if (qupath.getStage() != null) err.initOwner(qupath.getStage());
+        err.setTitle("qTrace — Dashboard");
+        err.setHeaderText("This project could not be opened");
+        err.setContentText(String.valueOf(e.getMessage()));
+        err.showAndWait();
     }
 
     public void showCommitGraph() {
