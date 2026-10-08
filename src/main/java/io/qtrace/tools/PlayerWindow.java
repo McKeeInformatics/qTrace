@@ -79,6 +79,7 @@ public final class PlayerWindow {
         engine.setOnAlert(e -> onMessage(e.getData()));
         engine.getLoadWorker().stateProperty().addListener((obs, old, st) -> {
             if (st == Worker.State.FAILED) log.warn("[qtrace-player] could not load {}", engine.getLocation());
+            if (st == Worker.State.SUCCEEDED || st == Worker.State.FAILED || st == Worker.State.CANCELLED) pageLoaded();
         });
         // The player never navigates by itself: any other page is a link, for the browser.
         engine.locationProperty().addListener((obs, old, loc) -> {
@@ -138,7 +139,26 @@ public final class PlayerWindow {
         });
     }
 
+    // The first load must finish before the fragment changes: loading the page again while it
+    // is still coming in leaves it without its script (an empty window, dead buttons). What is
+    // emitted meanwhile is kept in the state and sent once, when the page is there.
+    private boolean loadStarted, loaded, pushWaiting;
+
+    private void pageLoaded() {
+        if (loaded) return;
+        loaded = true;
+        if (pushWaiting) {
+            pushWaiting = false;
+            push();
+        }
+    }
+
     private void push() {
+        if (loadStarted && !loaded) {
+            pushWaiting = true;
+            return;
+        }
+        loadStarted = true;
         String payload = Base64.getUrlEncoder().withoutPadding()
             .encodeToString(message.toString().getBytes(StandardCharsets.UTF_8));
         engine.load(playerUrl + "#" + payload);
