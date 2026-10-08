@@ -94,7 +94,29 @@ public final class QTraceUpdater {
     private static final String MODULES_URL = SERVER + "/api/modules";
 
     /** GET with the certificate: the licensed modules served to it (also read by ModuleEntitlements). */
+    private static final String OPEN_MODULES_URL = SERVER + "/api/modules/open";
     static String modulesUrl() { return MODULES_URL; }
+    static String openModulesUrl() { return OPEN_MODULES_URL; }
+
+    // Getting started installs the open modules itself (and says what each one is): the startup
+    // check then leaves the ones not installed yet to it, instead of asking over its window.
+    private static volatile boolean openModulesLeftToOnboarding;
+
+    /** Called by the onboarding module, on the FX thread, before it shows Getting started. */
+    public static void leaveOpenModulesToOnboarding() { openModulesLeftToOnboarding = true; }
+
+    /**
+     * The modules anyone may install, account or not, as the server lists them now
+     * (GET /api/modules/open). Blocking; empty offline or with a server that has no such list.
+     */
+    public static List<ModuleUpdates.OpenModule> openModules() {
+        try {
+            return ModuleUpdates.parseOpen(new String(httpGetBytes(OPEN_MODULES_URL, null), StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.info(TAG + "open modules descriptor unavailable: {}", e.toString());
+            return List.of();
+        }
+    }
     private static final String COMP_DOWNLOAD_URL = SERVER + "/api/download/compliance/licensed";
 
     @FunctionalInterface
@@ -175,8 +197,9 @@ public final class QTraceUpdater {
     }
 
     /**
-     * Async, safe. Under the loader: offers every module of the release bootstrap and, with a
-     * license, of /api/modules that is newer than what extensions/qtrace/ already holds
+     * Async, safe. Under the loader: offers every module of the release bootstrap, of the open
+     * list (/api/modules/open, no account needed) and, with a license, of /api/modules that is
+     * newer than what extensions/qtrace/ already holds
      * (a version downloaded but not loaded yet is not offered again). Nothing is deleted —
      * the loader keeps/cleans versions at the next start.
      */
@@ -195,17 +218,22 @@ public final class QTraceUpdater {
                 } catch (Exception e) {
                     log.info(TAG + "bootstrap descriptor unavailable: {}", e.toString());
                 }
+                Path dir = extensionsDir(QTraceUpdater.class);
+                var local = ModuleUpdates.localVersions(dir);
+                for (ModuleUpdates.OpenModule m : openModules()) {
+                    // Not installed yet and Getting started is about to do it: not asked twice.
+                    if (openModulesLeftToOnboarding && !local.containsKey(m.offer().module())) continue;
+                    remote.add(m.offer());
+                }
                 String jwt = licenseJwt();
                 if (jwt != null) {
                     try {
-                        remote.addAll(ModuleUpdates.parse(
+                        remote = ModuleUpdates.merge(remote, ModuleUpdates.parse(
                             new String(httpGetBytes(MODULES_URL, jwt), StandardCharsets.UTF_8), true));
                     } catch (Exception e) {
                         log.info(TAG + "licensed modules descriptor unavailable: {}", e.toString());
                     }
                 }
-                Path dir = extensionsDir(QTraceUpdater.class);
-                var local = ModuleUpdates.localVersions(dir);
                 log.info(TAG + "modules check: local={} remote={}", local,
                     remote.stream().map(o -> o.module() + " " + o.version()).toList());
                 for (ModuleUpdates.Offer o : ModuleUpdates.pending(remote, local)) {
@@ -271,11 +299,12 @@ public final class QTraceUpdater {
     }
 
     /**
-     * Async. Under the loader, right after a license was obtained (onboarding "Sign in",
-     * loader.md § 17): downloads every module of /api/modules not yet in extensions/qtrace/,
+     * Async. Under the loader, from Getting started and right after a license was obtained
+     * (onboarding "Sign in", loader.md § 17): downloads every module of the open list
+     * (/api/modules/open) and, with a license, of /api/modules not yet in extensions/qtrace/,
      * without asking — the user just asked for it. Ends with the usual single "installed —
      * Quit QuPath Now" dialog. Completes with the number of modules it tried to install (0: nothing to
-     * install, offline or no license — the caller tells the user).
+     * install or offline — the caller tells the user).
      */
     public static CompletableFuture<Integer> installModulesNow(QuPathGUI qupath) {
         return installModulesNow(qupath, true);
@@ -292,16 +321,19 @@ public final class QTraceUpdater {
             int count = 0;
             try {
                 String jwt = licenseJwt();
-                if (jwt == null) return 0;
-                List<ModuleUpdates.Offer> remote = ModuleUpdates.parse(
-                    new String(httpGetBytes(MODULES_URL, jwt), StandardCharsets.UTF_8), true);
+                List<ModuleUpdates.Offer> remote = new ArrayList<>(openModules().stream().map(ModuleUpdates.OpenModule::offer).toList());
+                if (jwt != null) {
+                    remote = ModuleUpdates.merge(remote, ModuleUpdates.parse(
+                        new String(httpGetBytes(MODULES_URL, jwt), StandardCharsets.UTF_8), true));
+                }
                 Path dir = extensionsDir(QTraceUpdater.class);
                 for (ModuleUpdates.Offer o : ModuleUpdates.pending(remote, ModuleUpdates.localVersions(dir))) {
                     openTasks.incrementAndGet();
-                    downloadAndInstall(qupath, o.module(), o.version(), o.sha256(), () -> httpGetBytes(o.url(), jwt));
+                    final String bearer = o.licensed() ? jwt : null;
+                    downloadAndInstall(qupath, o.module(), o.version(), o.sha256(), () -> httpGetBytes(o.url(), bearer));
                     count++;
                 }
-                log.info(TAG + "install now: {} module(s) from /api/modules", count);
+                log.info(TAG + "install now: {} module(s) from /api/modules{}", count, jwt == null ? "/open" : " and /api/modules/open");
             } catch (Exception e) {
                 log.info(TAG + "install now failed: {}", e.toString());
             } finally {

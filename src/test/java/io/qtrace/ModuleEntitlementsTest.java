@@ -51,7 +51,7 @@ class ModuleEntitlementsTest {
 
     @Test
     void thePublicModulesAreNeverTakenAway() {
-        for (String m : new String[] {"core", "onboarding", "loader", "player"})
+        for (String m : new String[] {"core", "onboarding", "loader"})
             assertTrue(ModuleEntitlements.entitled(m, Set.of(), Set.of()));
     }
 
@@ -81,5 +81,29 @@ class ModuleEntitlementsTest {
         Files.writeString(f, "security\n# a comment\n\n  standardbio  \n");
         assertEquals(Set.of("security", "standardbio"), ModuleEntitlements.readOverride(f));
         assertEquals(Set.of(), ModuleEntitlements.readOverride(dir.resolve("absent")));
+    }
+
+    @Test
+    void whatIsServedIsWhatIsOpenToAnyonePlusWhatTheLicenceIncludes() {
+        assertEquals(Set.of("player", "compliance"),
+            ModuleEntitlements.combine(Set.of("player"), Set.of("compliance"), true));
+    }
+
+    @Test
+    void withoutALicenceOnlyTheOpenModulesAreServed() {
+        assertEquals(Set.of("player"), ModuleEntitlements.combine(Set.of("player"), null, false));
+    }
+
+    @Test
+    void anAnswerThatDidNotComeLeavesTheLastOneStanding() {
+        // The open list did not come, or the licence's did while there is a licence: unknown.
+        assertNull(ModuleEntitlements.combine(null, Set.of("compliance"), true));
+        assertNull(ModuleEntitlements.combine(Set.of("player"), null, true));
+    }
+
+    @Test
+    void aModuleNoLongerDeclaredOpenIsSwitchedOff() {
+        assertFalse(ModuleEntitlements.entitled("player", Set.of("compliance"), Set.of()));
+        assertTrue(ModuleEntitlements.entitled("player", Set.of("compliance", "player"), Set.of()));
     }
 }

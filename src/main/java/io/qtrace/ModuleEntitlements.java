@@ -49,7 +49,7 @@ public final class ModuleEntitlements {
     private static final String TAG = "[qtrace-modules] ";
 
     /** Public modules (release bootstrap): never served by /api/modules, never taken away. */
-    private static final Set<String> FREE = Set.of("core", "onboarding", "loader", "player");
+    private static final Set<String> FREE = Set.of("core", "onboarding", "loader");
 
     private static final Path DIR      = Path.of(System.getProperty("user.home"), ".qTrace");
     private static final Path FILE     = DIR.resolve("modules-entitled.json");
@@ -78,6 +78,18 @@ public final class ModuleEntitlements {
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    /**
+     * What this workstation is served: the modules open to anyone (/api/modules/open) plus the
+     * ones its licence includes (/api/modules). Null — nothing known, the last answer stands —
+     * when the open list did not come, or the licence's did not while there is a licence.
+     */
+    static Set<String> combine(Set<String> open, Set<String> licensed, boolean hasLicence) {
+        if (open == null || (hasLicence && licensed == null)) return null;
+        Set<String> out = new TreeSet<>(open);
+        if (licensed != null) out.addAll(licensed);
+        return out;
     }
 
     static boolean entitled(String module, Set<String> served, Set<String> override) {
@@ -141,25 +153,36 @@ public final class ModuleEntitlements {
     }
 
     /**
-     * Async, safe: asks the server what this certificate is served and remembers the answer.
-     * Offline, no certificate or a refused one: the last answer stands.
+     * Async, safe: asks the server what this workstation is served — the modules open to anyone,
+     * and with a certificate the ones it includes — and remembers the answer. Offline, or a
+     * refused certificate: the last answer stands.
      */
     public static void refresh() {
         load();
         String jwt = QTraceUpdater.licenseJwt();
-        if (jwt == null) return;
         CompletableFuture.runAsync(() -> {
             try {
-                Set<String> now = names(new String(
-                    QTraceUpdater.httpGetBytes(QTraceUpdater.modulesUrl(), jwt), StandardCharsets.UTF_8));
+                Set<String> open = fetchNames(QTraceUpdater.openModulesUrl(), null);
+                Set<String> licensed = jwt == null ? null : fetchNames(QTraceUpdater.modulesUrl(), jwt);
+                Set<String> now = combine(open, licensed, jwt != null);
                 if (now == null) return;
-                if (!now.equals(served)) log.info(TAG + "modules included in this licence: {}", now);
+                if (!now.equals(served)) log.info(TAG + "modules served to this workstation: {}", now);
                 served = now;
                 write(FILE, now);
             } catch (Exception e) {
                 log.info(TAG + "entitlement check skipped: {}", e.toString());
             }
         });
+    }
+
+    /** Module names of a descriptor URL; null when it could not be read. */
+    private static Set<String> fetchNames(String url, String jwt) {
+        try {
+            return names(new String(QTraceUpdater.httpGetBytes(url, jwt), StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.info(TAG + "{} unavailable: {}", url, e.toString());
+            return null;
+        }
     }
 
     static void setForTest(Set<String> servedModules) {

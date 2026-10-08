@@ -35,7 +35,7 @@ import java.util.jar.JarFile;
 /**
  * Decision half of Core's updater when running under the qTrace loader
  * (docs/architecture/loader.md § 7): offers read from the loader's descriptors
- * (release qtrace-bootstrap.json + per-license /api/modules), compared with the modules
+ * (release qtrace-bootstrap.json + open /api/modules/open + per-license /api/modules), compared with the modules
  * already in extensions/qtrace/. No JavaFX, no QuPath: unit-tested.
  */
 public final class ModuleUpdates {
@@ -58,6 +58,45 @@ public final class ModuleUpdates {
             out.add(new Offer(module, version, name, url, sha, licensed));
         }
         return out;
+    }
+
+    /**
+     * A module anyone may install, account or not (GET /api/modules/open): its offer, and what
+     * to say about it — the name and description declared in the BackOffice.
+     */
+    public record OpenModule(Offer offer, String title, String tagline) {}
+
+    /**
+     * Entries of the open-modules descriptor; empty when the answer is not one (an older
+     * server, an error page). Without a title, the module name stands in.
+     */
+    public static List<OpenModule> parseOpen(String json) {
+        List<OpenModule> out = new ArrayList<>();
+        try {
+            JsonObject o = JsonParser.parseString(json).getAsJsonObject();
+            if (!o.has("files")) return out;
+            List<Offer> offers = parse(json, false);
+            for (JsonElement el : o.getAsJsonArray("files")) {
+                JsonObject f = el.getAsJsonObject();
+                String module = str(f, "module");
+                Offer offer = offers.stream().filter(x -> x.module().equals(module)).findFirst().orElse(null);
+                if (offer == null) continue;
+                String title = str(f, "title"), tagline = str(f, "tagline");
+                out.add(new OpenModule(offer, title == null || title.isBlank() ? module : title,
+                    tagline == null ? "" : tagline));
+            }
+        } catch (RuntimeException e) {
+            out.clear();
+        }
+        return out;
+    }
+
+    /** Both lists as one, a single offer per module: the one of {@code first} when both have it. */
+    public static List<Offer> merge(List<Offer> first, List<Offer> second) {
+        Map<String, Offer> byModule = new LinkedHashMap<>();
+        for (Offer o : first) byModule.putIfAbsent(o.module(), o);
+        for (Offer o : second) byModule.putIfAbsent(o.module(), o);
+        return new ArrayList<>(byModule.values());
     }
 
     /** Highest Qtrace-Version per Qtrace-Module among the .qtjar files of {@code dir} (manifest only). */

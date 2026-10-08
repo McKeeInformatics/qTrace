@@ -26,6 +26,7 @@ class PlayersTest {
 
     @Test
     void noPlayerWithoutAModule() {
+        ModuleEntitlements.setForTest(Set.of("player"));
         assertNull(Players.entitled());
         assertFalse(Players.open());
         assertFalse(Players.open("qtc_abc"));
@@ -33,6 +34,7 @@ class PlayersTest {
 
     @Test
     void theRegisteredPlayerOpensEmptyOrOnASource() {
+        ModuleEntitlements.setForTest(Set.of("player"));
         Recording player = new Recording();
         Players.register("player", player);
         assertSame(player, Players.entitled());
@@ -42,11 +44,13 @@ class PlayersTest {
     }
 
     @Test
-    void thePlayerModuleIsNeverTakenAwayByALicence() {
+    void thePlayerIsOfferedWhileItsModuleIsServed() {
         Players.register("player", new Recording());
-        ModuleEntitlements.setForTest(Set.of("compliance"));
+        ModuleEntitlements.setForTest(Set.of("compliance", "player"));
         assertNotNull(Players.entitled());
-        assertTrue(ModuleEntitlements.entitled("player", Set.of(), Set.of()));
+        // No longer declared open in the BackOffice, nor included in the licence: switched off.
+        ModuleEntitlements.setForTest(Set.of("compliance"));
+        assertNull(Players.entitled());
     }
 
     @Test
@@ -61,6 +65,7 @@ class PlayersTest {
 
     @Test
     void aModuleRegisteringTwiceKeepsItsLastPlayer() {
+        ModuleEntitlements.setForTest(Set.of("player"));
         Recording first = new Recording(), again = new Recording();
         Players.register("player", first);
         Players.register("player", again);
@@ -69,6 +74,7 @@ class PlayersTest {
 
     @Test
     void nullsAreIgnored() {
+        ModuleEntitlements.setForTest(Set.of("player"));
         Players.register(null, new Recording());
         Players.register("player", null);
         assertNull(Players.entitled());
@@ -76,6 +82,7 @@ class PlayersTest {
 
     @Test
     void listenersAreToldWhenAPlayerRegisters() {
+        ModuleEntitlements.setForTest(Set.of("player"));
         int[] told = {0};
         Players.onChange(this, () -> told[0]++);
         Players.register("player", new Recording());
