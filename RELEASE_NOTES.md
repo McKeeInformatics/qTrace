@@ -1,3 +1,28 @@
+## What's new in v1.2.6
+
+### Changed — qTrace is now made of extensions
+The replay player and the **Version(s)** window are no longer part of Core or Compliance: each is its own extension, **qTrace Player** and **qTrace Version Graph**, installed and updated like the others. Nothing changes in how they work. Your organization decides which extensions you receive; an extension that is no longer included is switched off at the next start.
+
+### New — Replay without a licence
+**↻ Replay** is there as soon as the Player extension is installed, with or without a licence: a record can be replayed on your own images by anyone. Signing the replay log with your certified identity still needs Compliance.
+
+### New — Getting started presents and installs the extensions open to everyone
+On a new workstation, **Getting started** shows one slide per open extension — its button, the three essentials it brings, and where its download is — and installs it without an account. The last screen offers to restart QuPath once.
+
+### New — What's new after an update
+When an extension was updated, the next start of QuPath opens **What's new in qTrace** once: one slide per updated extension, with what its new version brings. Read it again from **Extensions > QTrace > What's new…**, and choose in **Settings > Appearance** whether it shows by itself.
+
+### Changed
+- The mini-panel shows a spinner while **▶ Start** reopens the last project and image; QuPath stays responsive meanwhile.
+- In the Player, each instruction carries the name of its step, and an eye button shows its script exactly as it will run.
+- Opening a record in the Player draws its sessions as circles: click one to replay that session alone, **All** for the whole history.
+
+### Fixed
+- An image that QuPath merely saved again after its stamp is no longer reported as "Changed after stamp" when its annotations and detections are identical.
+- A replayed script keeps its imports as written.
+
+---
+
 ## What's new in v1.2.5
 
 ### Changed — One update message at startup
