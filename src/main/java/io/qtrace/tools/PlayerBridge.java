@@ -17,7 +17,7 @@
  *
  */
 
-package io.qtrace.player;
+package io.qtrace.tools;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

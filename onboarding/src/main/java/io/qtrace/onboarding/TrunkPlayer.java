@@ -21,8 +21,8 @@ package io.qtrace.onboarding;
 
 import io.qtrace.BrowserOpener;
 import io.qtrace.QTraceUpdater;
-import io.qtrace.player.PlayerBridge;
-import io.qtrace.player.PlayerWindow;
+import io.qtrace.tools.PlayerBridge;
+import io.qtrace.tools.PlayerWindow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;

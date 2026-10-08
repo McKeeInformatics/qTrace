@@ -1,4 +1,4 @@
-package io.qtrace.player;
+package io.qtrace.tools;
 
 import org.junit.jupiter.api.Test;
 
