@@ -63,7 +63,8 @@ final class TrunkPlayer {
     /**
      * Opens the player, or the plain dialog when this QuPath has no WebView. The modules open
      * to anyone (GET /api/modules/open) are asked for first — a few seconds at most, nothing
-     * offline: each gets its slide, and the ones not on this workstation yet are installed.
+     * offline: the ones not on this workstation yet are installed, and the last slide offers
+     * the restart. Each tool's own welcome plays after it, when the tool shows in the panel.
      */
     void show() {
         CompletableFuture.supplyAsync(TrunkPlayer::openModules)
@@ -80,16 +81,15 @@ final class TrunkPlayer {
         List<ModuleUpdates.Card> open = QTraceUpdater.openModules();
         List<ModuleUpdates.Offer> pending = ModuleUpdates.pending(
             open.stream().map(ModuleUpdates.Card::offer).toList(), local);
-        return open.stream().map(m -> new TrunkContent.Module(m.offer().module(), m.title(), m.tagline(),
-            m.offer().version(), m.icon(), m.features(), pending.contains(m.offer()))).toList();
+        return open.stream().map(m -> new TrunkContent.Module(m.offer().module(), m.title(),
+            pending.contains(m.offer()))).toList();
     }
 
     private void show(List<TrunkContent.Module> modules) {
         boolean installing = modules.stream().anyMatch(TrunkContent.Module::installing);
         // Asked for by opening Getting started: installed without another question, and no
         // dialog of its own — the last slide offers the restart.
-        CompletableFuture<Integer> install = installing
-            ? QTraceUpdater.installModulesNow(qupath, false) : CompletableFuture.completedFuture(0);
+        if (installing) QTraceUpdater.installModulesNow(qupath, false);
         if (!PlayerBridge.webViewAvailable()) {
             new OnboardingDialog(qupath, qtraceDir).show();
             return;
@@ -126,11 +126,6 @@ final class TrunkPlayer {
 
         w.stage().setOnHidden(e -> cancelled.set(true));
         w.show();
-        if (installing) {
-            w.emit("modules", Map.of("state", "running"));
-            install.whenComplete((count, error) -> Platform.runLater(() ->
-                w.emit("modules", Map.of("state", error == null && count > 0 ? "done" : "failed"))));
-        }
     }
 
     private static void checkNetwork(PlayerWindow w) {

@@ -28,77 +28,39 @@ import java.util.stream.Collectors;
 
 /**
  * Getting started's content once the modules open to anyone are known: the trunk
- * (player/trunk.json) plus one slide per module — its own short welcome, from the name and
- * description declared for it — and a last slide that offers to restart when one of them is
- * being installed. Pure JSON, no JavaFX: unit-tested.
+ * (player/trunk.json), whose last slide offers to restart when one of them is being installed.
+ * The modules themselves are not presented here: each tool's welcome plays when the tool first
+ * shows in the panel, after the restart (module welcome, docs/architecture/welcome-tour.md).
+ * Pure JSON, no JavaFX: unit-tested.
  */
 final class TrunkContent {
 
     private TrunkContent() {}
 
     /**
-     * A module anyone may install (GET /api/modules/open), with its card.
+     * A module anyone may install (GET /api/modules/open).
      *
-     * @param icon       id of the icon of its button, drawn by the player (player.js MODULE_ICONS)
-     * @param features   the essentials it brings, three at most
      * @param installing true when it is not on this workstation yet: Getting started installs
      *                   it, and it starts at the next launch
      */
-    record Module(String name, String title, String tagline, String version, String icon,
-                  List<String> features, boolean installing) {}
+    record Module(String name, String title, boolean installing) {}
 
-    /** The slide after which the modules are presented. */
-    private static final String AFTER = "network";
     /** The slide the user ends on without signing in. */
     private static final String LAST = "ready";
 
     static String withOpenModules(String trunkJson, List<Module> modules) {
-        if (modules.isEmpty()) return trunkJson;
+        if (modules.stream().noneMatch(Module::installing)) return trunkJson;
         JsonObject root = JsonParser.parseString(trunkJson).getAsJsonObject();
-        JsonArray in = root.getAsJsonArray("slides");
-        JsonArray out = new JsonArray();
-        boolean placed = false;
-        for (JsonElement el : in) {
+        for (JsonElement el : root.getAsJsonArray("slides")) {
             JsonObject slide = el.getAsJsonObject();
             if (LAST.equals(id(slide))) restartOffer(slide, modules);
-            out.add(slide);
-            if (AFTER.equals(id(slide))) {
-                modules.forEach(m -> out.add(slide(m)));
-                placed = true;
-            }
         }
-        if (!placed) modules.forEach(m -> out.add(slide(m)));
-        root.add("slides", out);
         return root.toString();
-    }
-
-    private static JsonObject slide(Module m) {
-        JsonObject s = new JsonObject();
-        s.addProperty("id", "module-" + m.name());
-        s.addProperty("eyebrow", "Comes with qTrace");
-        s.addProperty("title", m.title());
-        s.addProperty("text", m.tagline() == null || m.tagline().isBlank()
-            ? m.title() + " is installed with qTrace. No account needed."
-            : m.tagline());
-        s.addProperty("visual", "module");
-        JsonObject module = new JsonObject();
-        module.addProperty("name", m.title());
-        module.addProperty("label", m.title().replaceFirst("^qTrace ", "")); // the button's caption
-        module.addProperty("version", m.version());
-        module.addProperty("icon", m.icon() == null || m.icon().isBlank() ? m.name() : m.icon());
-        JsonArray features = new JsonArray();
-        if (m.features() != null) m.features().forEach(features::add);
-        module.add("features", features);
-        module.addProperty("installing", m.installing());
-        s.add("module", module);
-        s.add("actions", new JsonArray());
-        return s;
     }
 
     /** Modules being installed load at the next start: the last slide says so and offers it. */
     private static void restartOffer(JsonObject last, List<Module> modules) {
         List<Module> installing = modules.stream().filter(Module::installing).toList();
-        if (installing.isEmpty()) return;
         String names = installing.stream().map(Module::title).collect(Collectors.joining(", "));
         last.addProperty("text", last.get("text").getAsString() + " " + names
             + (installing.size() == 1 ? " starts" : " start") + " the next time you open QuPath.");
