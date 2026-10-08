@@ -53,6 +53,9 @@ public class OnboardingExtension implements QuPathExtension {
 
         if (!OnboardingState.load(QTRACE_DIR).shouldShowTrunk(QTraceConfig.get().getLicensePath())) return;
         log.info("[qtrace-onboarding] no license yet: showing Getting started");
+        // Getting started installs the modules open to anyone and presents each of them:
+        // Core's startup check does not ask for them over its window.
+        QTraceUpdater.leaveOpenModulesToOnboarding();
         // After QuPath's own Welcome window, like Core's update prompts.
         Platform.runLater(() -> QTraceUpdater.whenNoModalOpen("onboarding",
             () -> new TrunkPlayer(qupath, QTRACE_DIR).show()));

@@ -9,10 +9,11 @@
  *   JS → Java  alert('qtrace:' + {action, arg})  caught by PlayerWindow, whitelisted in PlayerBridge
  *   Preview    qtracePlayer.load / emit / goto   used when opened in a plain browser
  *
- * Slide: { id, eyebrow?, title, text, image?, visual?, hidden?, actions: [{ label, action, url?, primary? }] }
+ * Slide: { id, eyebrow?, title, text, image?, visual?, hidden?, module?, actions: [{ label, action, url?, primary? }] }
+ *        module: { name, version, installing } — the module a 'module' visual presents
  * A hidden slide is not in the track: it is only reached by goto (e.g. the trunk's 'ready' after
  * Continue) and is shown as a final screen, without the bottom bar.
- * Drawn visuals: network, entry, device, install, report, done. Opened without QuPath (plain browser),
+ * Drawn visuals: network, entry, device, install, module, report, done. Opened without QuPath (plain browser),
  * the player plays trunk.json and shows what QuPath would do.
  */
 (function () {
@@ -33,7 +34,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var content = null, cur = 0, seen = {};
-  var state = { network: {}, device: { state: 'idle' }, install: { state: 'idle' } };
+  var state = { network: {}, device: { state: 'idle' }, install: { state: 'idle' }, modules: { state: 'idle' } };
   var networkAsked = false;
 
   function esc(s) {
@@ -115,6 +116,20 @@
       '</div><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
   }
 
+  // One module open to anyone, installed by Getting started: its name, and where its install is.
+  function moduleHTML(s) {
+    var m = (s && s.module) || {};
+    var st = state.modules.state;
+    var here = !m.installing || st === 'done';
+    var line = !m.installing ? 'Installed'
+      : st === 'done' ? 'Installed · starts the next time you open QuPath'
+      : st === 'failed' ? 'Could not be downloaded — qTrace will offer it again'
+      : 'Downloading…';
+    return '<div class="device"><div class="checks"><div class="check ' + (here ? 'ok' : st === 'failed' ? 'ko' : 'wait') +
+      '"><span class="dot">' + (here ? '✓' : st === 'failed' ? '!' : '') + '</span><span>' + esc(m.name || s.title) +
+      '</span><span class="st">' + esc(m.version || '') + '</span></div></div><p class="module-line">' + esc(line) + '</p></div>';
+  }
+
   function reportHTML() {
     return '<div class="report"><div class="report-head"><span>Bug or Feature Request</span><span class="pill">Bug</span></div>' +
       '<div class="field">Replay stops on the second image</div>' +
@@ -128,11 +143,11 @@
       (content && content.who ? '<p>Certified for <strong>' + esc(content.who) + '</strong></p>' : '') + '</div>';
   }
 
-  var VISUALS = { network: networkHTML, entry: entryHTML, device: deviceHTML, install: installHTML, report: reportHTML, done: doneHTML };
+  var VISUALS = { network: networkHTML, entry: entryHTML, device: deviceHTML, install: installHTML, module: moduleHTML, report: reportHTML, done: doneHTML };
 
   function visualHTML(s) {
     if (s.image) return '<img src="' + esc(s.image) + '" alt="' + esc(s.title) + '">';
-    return VISUALS[s.visual] ? VISUALS[s.visual]() : '';
+    return VISUALS[s.visual] ? VISUALS[s.visual](s) : '';
   }
 
   function actionsHTML(s) {
@@ -217,6 +232,7 @@
     if (event === 'network') { state.network[data.name] = !!data.ok; refreshVisual('network'); }
     if (event === 'device') { state.device = data; refreshVisual('device'); }
     if (event === 'install') { state.install = data; refreshVisual('install'); }
+    if (event === 'modules') { state.modules = data; refreshVisual('module'); }
   }
 
   function gotoId(id) {
@@ -311,6 +327,7 @@
     state.network = st.network || {};
     state.device = st.device || { state: 'idle' };
     state.install = st.install || { state: 'idle' };
+    state.modules = st.modules || { state: 'idle' };
     var cs = JSON.stringify(m.content);
     if (cs !== lastContent) {
       lastContent = cs;
@@ -319,7 +336,7 @@
       build();
       if (keep) go(keep);
     } else {
-      ['network', 'device', 'install'].forEach(refreshVisual);
+      ['network', 'device', 'install', 'module'].forEach(refreshVisual);
     }
     if (m.goto && m.goto.seq > lastGoto) { lastGoto = m.goto.seq; gotoId(m.goto.id); }
   }

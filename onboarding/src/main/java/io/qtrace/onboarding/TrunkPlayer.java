@@ -20,9 +20,11 @@
 package io.qtrace.onboarding;
 
 import io.qtrace.BrowserOpener;
+import io.qtrace.ModuleUpdates;
 import io.qtrace.QTraceUpdater;
 import io.qtrace.tools.PlayerBridge;
 import io.qtrace.tools.PlayerWindow;
+import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
@@ -31,8 +33,10 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -56,15 +60,43 @@ final class TrunkPlayer {
         this.qtraceDir = qtraceDir;
     }
 
-    /** Opens the player, or the plain dialog when this QuPath has no WebView. */
+    /**
+     * Opens the player, or the plain dialog when this QuPath has no WebView. The modules open
+     * to anyone (GET /api/modules/open) are asked for first — a few seconds at most, nothing
+     * offline: each gets its slide, and the ones not on this workstation yet are installed.
+     */
     void show() {
+        CompletableFuture.supplyAsync(TrunkPlayer::openModules)
+            .completeOnTimeout(List.of(), OPEN_MODULES_WAIT_S, TimeUnit.SECONDS)
+            .exceptionally(e -> List.of())
+            .thenAccept(modules -> Platform.runLater(() -> show(modules)));
+    }
+
+    private static final int OPEN_MODULES_WAIT_S = 4;
+
+    /** What the server opens to anyone, with whether each is still to be installed here. */
+    private static List<TrunkContent.Module> openModules() {
+        Map<String, String> local = ModuleUpdates.localVersions(QTraceUpdater.extensionsDir(QTraceUpdater.class));
+        List<ModuleUpdates.OpenModule> open = QTraceUpdater.openModules();
+        List<ModuleUpdates.Offer> pending = ModuleUpdates.pending(
+            open.stream().map(ModuleUpdates.OpenModule::offer).toList(), local);
+        return open.stream().map(m -> new TrunkContent.Module(m.offer().module(), m.title(), m.tagline(),
+            m.offer().version(), pending.contains(m.offer()))).toList();
+    }
+
+    private void show(List<TrunkContent.Module> modules) {
+        boolean installing = modules.stream().anyMatch(TrunkContent.Module::installing);
+        // Asked for by opening Getting started: installed without another question, and no
+        // dialog of its own — the last slide offers the restart.
+        CompletableFuture<Integer> install = installing
+            ? QTraceUpdater.installModulesNow(qupath, false) : CompletableFuture.completedFuture(0);
         if (!PlayerBridge.webViewAvailable()) {
             new OnboardingDialog(qupath, qtraceDir).show();
             return;
         }
         String content;
         try (InputStream in = TrunkPlayer.class.getResourceAsStream("player/trunk.json")) {
-            content = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            content = TrunkContent.withOpenModules(new String(in.readAllBytes(), StandardCharsets.UTF_8), modules);
         } catch (Exception e) {
             log.warn("[qtrace-onboarding] trunk content missing, plain dialog instead", e);
             new OnboardingDialog(qupath, qtraceDir).show();
@@ -94,6 +126,11 @@ final class TrunkPlayer {
 
         w.stage().setOnHidden(e -> cancelled.set(true));
         w.show();
+        if (installing) {
+            w.emit("modules", Map.of("state", "running"));
+            install.whenComplete((count, error) -> Platform.runLater(() ->
+                w.emit("modules", Map.of("state", error == null && count > 0 ? "done" : "failed"))));
+        }
     }
 
     private static void checkNetwork(PlayerWindow w) {
