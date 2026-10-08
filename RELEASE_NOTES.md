@@ -6,11 +6,14 @@ The replay player and the **Version(s)** window are no longer part of Core or Co
 ### New — Replay without a licence
 **↻ Replay** is there as soon as the Player extension is installed, with or without a licence: a record can be replayed on your own images by anyone. Signing the replay log with your certified identity still needs Compliance.
 
-### New — Getting started presents and installs the extensions open to everyone
-On a new workstation, **Getting started** shows one slide per open extension — its button, the three essentials it brings, and where its download is — and installs it without an account. The last screen offers to restart QuPath once.
+### New — Getting started installs the extensions open to everyone
+On a new workstation, **Getting started** installs the extensions open to everyone without an account, and its last screen offers to restart QuPath once.
+
+### New — Each tool introduces itself
+When a tool is new in your panel, the next start of QuPath opens its welcome once: its button and the three essentials it brings, then a few slides to get started. Until you have read it, a **gold square** marks the tool's button in the panel — the first click plays the welcome, the next ones open the tool. Read them again from **Extensions > QTrace > Your tools…**.
 
 ### New — What's new after an update
-When an extension was updated, the next start of QuPath opens **What's new in qTrace** once: one slide per updated extension, with what its new version brings. Read it again from **Extensions > QTrace > What's new…**, and choose in **Settings > Appearance** whether it shows by itself.
+When an extension was updated, the next start of QuPath opens **What's new in qTrace** once: one slide per updated extension, with what its new version brings. Read it again from **Extensions > QTrace > What's new…**. **Settings > Appearance** lets you choose whether welcomes and news show by themselves.
 
 ### Changed
 - The mini-panel shows a spinner while **▶ Start** reopens the last project and image; QuPath stays responsive meanwhile.
