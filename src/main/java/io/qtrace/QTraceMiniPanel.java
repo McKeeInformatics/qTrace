@@ -101,6 +101,7 @@ public final class QTraceMiniPanel {
         PanelProfile.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         WorkspacePushes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         Dashboards.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        ModuleEntitlements.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         UploadInvite.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.

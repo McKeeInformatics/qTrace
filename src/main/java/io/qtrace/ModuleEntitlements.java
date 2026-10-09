@@ -57,6 +57,7 @@ public final class ModuleEntitlements {
     private static volatile Set<String> served;      // null = no answer known
     private static volatile Set<String> override;
     private static volatile boolean loaded;
+    private static final java.util.Map<Object, Runnable> LISTENERS = new java.util.concurrent.ConcurrentHashMap<>();
 
     private ModuleEntitlements() {}
 
@@ -169,10 +170,26 @@ public final class ModuleEntitlements {
         // The organization's panel comes with the licence's modules; no certificate, no organization.
         if (!hasLicence || names(licensedDescriptor) != null) PanelProfile.accept(licensedDescriptor);
         Set<String> now = answer(openDescriptor, licensedDescriptor, hasLicence);
-        if (now == null) return;
-        if (!now.equals(served)) log.info(TAG + "modules served to this workstation: {}", now);
+        if (now != null) apply(now, FILE);
+    }
+
+    /** @param file where to keep the answer; null keeps nothing (tests) */
+    static void apply(Set<String> now, Path file) {
+        boolean changed = !now.equals(served);
         served = now;
-        write(FILE, now);
+        if (file != null) write(file, now);
+        if (!changed) return;
+        log.info(TAG + "modules served to this workstation: {}", now);
+        // The panels were drawn with the last answer: a module served since then shows now.
+        for (Runnable l : LISTENERS.values()) l.run();
+    }
+
+    /**
+     * Called (on the thread that brings the answer) when what this workstation is served
+     * changes. One listener per {@code owner}: registering again replaces it.
+     */
+    public static void onChange(Object owner, Runnable listener) {
+        LISTENERS.put(owner, listener);
     }
 
     static void setForTest(Set<String> servedModules) {

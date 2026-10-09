@@ -166,6 +166,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         apply.run();
         String key = QTraceExtension.class.getName() + "." + owner;
         Players.onChange(key, () -> Platform.runLater(apply));
+        ModuleEntitlements.onChange(key, () -> Platform.runLater(apply));
         PanelProfile.onChange(key, () -> Platform.runLater(apply));
     }
 
@@ -175,6 +176,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         apply.run();
         String key = QTraceExtension.class.getName() + "." + owner + ".dashboard";
         Dashboards.onChange(key, () -> Platform.runLater(apply));
+        ModuleEntitlements.onChange(key, () -> Platform.runLater(apply));
         PanelProfile.onChange(key, () -> Platform.runLater(apply));
     }
 

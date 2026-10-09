@@ -66,6 +66,22 @@ class ModuleEntitlementsTest {
     }
 
     @Test
+    void thePanelsAreToldWhenWhatIsServedChanges_soAModuleServedSinceLastStartShowsAtOnce() {
+        ModuleEntitlements.setForTest(Set.of("compliance"));
+        int[] told = {0};
+        ModuleEntitlements.onChange(this, () -> told[0]++);
+        try {
+            ModuleEntitlements.apply(Set.of("compliance", "upload"), null);
+            assertEquals(1, told[0]);
+            assertTrue(ModuleEntitlements.isEntitled("upload"));
+            ModuleEntitlements.apply(Set.of("compliance", "upload"), null);
+            assertEquals(1, told[0], "the same answer again changes nothing");
+        } finally {
+            ModuleEntitlements.setForTest(null);
+        }
+    }
+
+    @Test
     void thePublicModulesAreNeverTakenAway() {
         for (String m : new String[] {"core", "provisioning", "welcome", "loader"})
             assertTrue(ModuleEntitlements.entitled(m, Set.of(), Set.of()));

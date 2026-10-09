@@ -383,6 +383,9 @@ public class QTracePanel {
         PanelProfile.onChange(this, redraw);
         WorkspacePushes.onChange(this, redraw);
         Dashboards.onChange(this, redraw);
+        // What the workstation is served is confirmed after the panel is drawn: a module served
+        // since the last start (or no longer served) is taken into account at once.
+        ModuleEntitlements.onChange(this, redraw);
         UploadInvite.onChange(this, redraw);
         return row;
     }
