@@ -83,4 +83,29 @@ class PanelExtensionsTest {
         assertEquals(drawn, PanelExtensions.entitled(PanelExtensions.DASHBOARD).get(0).icon()
             .apply(javafx.scene.paint.Color.WHITE));
     }
+
+    @Test
+    void aModuleButtonsAreFoundByModuleWhateverTheyGoWith() {
+        ModuleEntitlements.setForTest(Set.of("library", "training"));
+        PanelExtensions.register("library", PanelExtensions.VERSIONS, "Library", NOTHING);
+        PanelExtensions.register("training", PanelExtensions.PROFILE, "Training", NOTHING);
+        assertEquals(List.of("Library"), PanelExtensions.ofModule("library").stream().map(PanelExtensions.Entry::label).toList());
+        assertEquals(List.of("Training"), PanelExtensions.ofModule("training").stream().map(PanelExtensions.Entry::label).toList());
+        assertTrue(PanelExtensions.ofModule("cohort").isEmpty());
+    }
+
+    @Test
+    void aButtonForAnOrganizationPanelFollowsNoButtonOfQTraceOwnPanel() {
+        ModuleEntitlements.setForTest(Set.of("training"));
+        PanelExtensions.register("training", PanelExtensions.PROFILE, "Training", NOTHING);
+        assertTrue(PanelExtensions.entitled(PanelExtensions.DASHBOARD).isEmpty());
+        assertTrue(PanelExtensions.entitled(PanelExtensions.VERSIONS).isEmpty());
+    }
+
+    @Test
+    void aModuleTheLicenceDoesNotIncludeHasNoButtonByModuleEither() {
+        PanelExtensions.register("library", PanelExtensions.VERSIONS, "Library", NOTHING);
+        ModuleEntitlements.setForTest(Set.of("compliance"));
+        assertTrue(PanelExtensions.ofModule("library").isEmpty());
+    }
 }

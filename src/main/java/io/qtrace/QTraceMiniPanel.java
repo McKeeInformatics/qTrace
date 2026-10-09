@@ -97,6 +97,7 @@ public final class QTraceMiniPanel {
         Players.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         VersionGraphs.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         ToolWelcomes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        PanelProfile.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
         var project = qupath.projectProperty();
@@ -209,7 +210,6 @@ public final class QTraceMiniPanel {
         Color teal = Color.web(QTracePanel.CTA_TEAL);
         stampBtn = button(c -> panel.scaledIcon(panel.iconStamp(teal), ICON), "btn.stamp.caption", teal);
         stampBtn.setOnAction(e -> controller.recordTrace());
-        nodes.add(stampBtn);
 
         // Workspace & Analyse — same rule as the panel's toolbar: only when licensed & active,
         // except Replay, which is there as soon as a module brings the player.
@@ -217,44 +217,67 @@ public final class QTraceMiniPanel {
         boolean licensed = QTracePluginManager.isEntitled();
         boolean player = Players.entitled() != null;
         boolean versions = VersionGraphs.entitled() != null;
-        if (licensed || player || (versions && !licensed)) nodes.add(separator());
+        Button reportBtn = null, replayBtn = null, versionsBtn = null;
         if (licensed) {
             uploadBtn = button(icon(panel::iconUpload), "btn.upload.caption", workspace);
             uploadBtn.setOnAction(e -> controller.pushToWorkspace());
             uploadSlot = new StackPane(uploadBtn);
             uploadSpinner = uploadSpinner();
-            nodes.add(uploadSlot);
+            reportBtn = button(icon(panel::iconReport), "btn.report.caption", workspace);
+            reportBtn.setOnAction(e -> controller.generateActivityReport());
         }
         if (player) {
-            Button replayBtn = button(QTracePanel.welcomeMarked("player", icon(panel::iconReplay)), "btn.replay.caption", workspace);
+            replayBtn = button(QTracePanel.welcomeMarked("player", icon(panel::iconReplay)), "btn.replay.caption", workspace);
             replayBtn.setOnAction(e -> QTracePanel.welcomeFirst("player", controller::openReplayDialog));
-            nodes.add(replayBtn);
         }
-        if (licensed) nodes.add(separator());
         if (versions) {
-            Button versionsBtn = button(QTracePanel.welcomeMarked("versiongraph", icon(panel::iconVersions)), "btn.versions.caption", workspace);
+            versionsBtn = button(QTracePanel.welcomeMarked("versiongraph", icon(panel::iconVersions)), "btn.versions.caption", workspace);
             versionsBtn.setOnAction(e -> QTracePanel.welcomeFirst("versiongraph", controller::showCommitGraph));
-            nodes.add(versionsBtn);
-        }
-        if (licensed) {
-            addModuleButtons(nodes, PanelExtensions.VERSIONS, workspace);
-            Button reportBtn = button(icon(panel::iconReport), "btn.report.caption", workspace);
-            reportBtn.setOnAction(e -> controller.generateActivityReport());
-            nodes.add(reportBtn);
         }
 
         Color tools = Color.web(QTracePanel.GROUP_TOOLS);
-        nodes.add(separator());
         Button dashboardBtn = button(icon(panel::iconDashboard), "btn.dashboard.caption", tools);
         dashboardBtn.setOnAction(e -> controller.showDashboard());
         Button importBtn = button(icon(panel::iconImport), "btn.import.caption", tools);
         importBtn.setOnAction(e -> controller.startBatchExport());
         resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
         resetBtn.setOnAction(e -> panel.confirmReset());
-        nodes.add(dashboardBtn);
-        addModuleButtons(nodes, PanelExtensions.DASHBOARD, tools);
-        nodes.add(importBtn);
-        nodes.add(resetBtn);
+
+        // The organization chose its panel (PanelProfile): its tools, in its order, and nothing else.
+        List<String> profile = PanelProfile.tools();
+        if (profile != null) {
+            for (String tool : profile) {
+                Node node = switch (tool) {
+                    case PanelProfile.STAMP     -> stampBtn;
+                    case PanelProfile.UPLOAD    -> uploadSlot;
+                    case PanelProfile.REPORT    -> reportBtn;
+                    case PanelProfile.DASHBOARD -> dashboardBtn;
+                    case PanelProfile.IMPORT    -> importBtn;
+                    case PanelProfile.RESET     -> resetBtn;
+                    case PanelProfile.PLAYER    -> replayBtn;
+                    case PanelProfile.VERSIONS  -> versionsBtn;
+                    default                     -> null;
+                };
+                if (node != null) nodes.add(node);
+                else addModuleButtons(nodes, PanelExtensions.ofModule(tool));
+            }
+        } else {
+            nodes.add(stampBtn);
+            if (licensed || player || (versions && !licensed)) nodes.add(separator());
+            if (licensed) nodes.add(uploadSlot);
+            if (player) nodes.add(replayBtn);
+            if (licensed) nodes.add(separator());
+            if (versions) nodes.add(versionsBtn);
+            if (licensed) {
+                addModuleButtons(nodes, PanelExtensions.entitled(PanelExtensions.VERSIONS));
+                nodes.add(reportBtn);
+            }
+            nodes.add(separator());
+            nodes.add(dashboardBtn);
+            addModuleButtons(nodes, PanelExtensions.entitled(PanelExtensions.DASHBOARD));
+            nodes.add(importBtn);
+            nodes.add(resetBtn);
+        }
 
         Color admin = Color.web(QTracePanel.GROUP_ADMIN);
         nodes.add(separator());
@@ -264,11 +287,11 @@ public final class QTraceMiniPanel {
         Button expandBtn = boxed("⤢", "Full panel");
         expandBtn.setOnAction(e -> controller.switchToFullPanel());
         // Smaller than the rest: not part of the daily workflow, but always one click away.
-        Button reportBtn = titled(QTraceMiniPanel::reportIcon,
+        Button issueBtn = titled(QTraceMiniPanel::reportIcon,
             QTraceI18n.t("report.menu").replace("...", ""), admin);
-        reportBtn.setOnAction(e -> IssueReportDialog.show(qupath));
+        issueBtn.setOnAction(e -> IssueReportDialog.show(qupath));
         nodes.add(settingsBtn);
-        nodes.add(reportBtn);
+        nodes.add(issueBtn);
         // The reduce / enlarge button is always the last one, at the very bottom.
         VBox.setMargin(expandBtn, new Insets(4, 0, 0, 0));
         nodes.add(expandBtn);
@@ -277,9 +300,10 @@ public final class QTraceMiniPanel {
         refresh();
     }
 
-    /** The modules' buttons that go with a panel button, under it ({@link PanelExtensions}). */
-    private void addModuleButtons(List<Node> nodes, String anchor, Color hover) {
-        for (PanelExtensions.Entry entry : PanelExtensions.entitled(anchor)) {
+    /** Modules' buttons ({@link PanelExtensions}): under the button they go with, or where the organization's panel puts them. */
+    private void addModuleButtons(List<Node> nodes, List<PanelExtensions.Entry> entries) {
+        for (PanelExtensions.Entry entry : entries) {
+            Color hover = Color.web(PanelExtensions.DASHBOARD.equals(entry.anchor()) ? QTracePanel.GROUP_TOOLS : QTracePanel.GROUP_WORKSPACE);
             Button b = titled(QTracePanel.welcomeMarked(entry.module(), icon(QTracePanel.moduleIcon(entry))), entry.label(), hover);
             b.setOnAction(e -> QTracePanel.welcomeFirst(entry.module(), () -> QTracePanel.runModuleEntry(entry)));
             nodes.add(b);

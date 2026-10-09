@@ -100,6 +100,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
 
         MenuItem dashboard   = new MenuItem("Dashboard");
         dashboard.setOnAction(e -> controller.showDashboard());
+        showWithProfile(dashboard, PanelProfile.DASHBOARD, "menu");
 
         // There only once a module has brought the player (Players) — it can load after this menu.
         MenuItem player      = new MenuItem("Player");
@@ -165,11 +166,23 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
 
     private static String nz(String s) { return s != null ? s : "0"; }
 
-    /** Shows a "Player" entry only while a module brings the player; {@code owner} names the entry. */
+    /**
+     * Shows a "Player" entry only while a module brings the player and the organization's panel
+     * shows it ({@link PanelProfile}); {@code owner} names the entry.
+     */
     private static void showWithPlayer(MenuItem item, String owner) {
-        item.setVisible(Players.entitled() != null);
-        Players.onChange(QTraceExtension.class.getName() + "." + owner,
-            () -> Platform.runLater(() -> item.setVisible(Players.entitled() != null)));
+        Runnable apply = () -> item.setVisible(Players.entitled() != null && PanelProfile.shows(PanelProfile.PLAYER));
+        apply.run();
+        String key = QTraceExtension.class.getName() + "." + owner;
+        Players.onChange(key, () -> Platform.runLater(apply));
+        PanelProfile.onChange(key, () -> Platform.runLater(apply));
+    }
+
+    /** Shows a Core tool's entry only while the organization's panel shows that tool. */
+    private static void showWithProfile(MenuItem item, String tool, String owner) {
+        item.setVisible(PanelProfile.shows(tool));
+        PanelProfile.onChange(QTraceExtension.class.getName() + "." + owner + "." + tool,
+            () -> Platform.runLater(() -> item.setVisible(PanelProfile.shows(tool))));
     }
 
     /**
@@ -251,6 +264,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
 
         MenuItem miDash   = new MenuItem("Dashboard");
         miDash.setOnAction(e -> controller.showDashboard());
+        showWithProfile(miDash, PanelProfile.DASHBOARD, "toolbar");
 
         MenuItem miPlayer = new MenuItem("Player");
         miPlayer.setOnAction(e -> controller.openReplayDialog());

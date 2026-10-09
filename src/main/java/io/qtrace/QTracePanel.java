@@ -338,6 +338,10 @@ public class QTracePanel {
      * needs one more button's room for each of Replay and Version(s) a module adds.
      */
     private static double captionsWidth() {
+        // An organization's panel: Stamp's room, and one button's for each other tool.
+        java.util.List<String> profile = PanelProfile.tools();
+        if (profile != null)
+            return Math.max(MIN_WIDTH, 80 * profile.size() + (profile.contains(PanelProfile.STAMP) ? 80 : 0));
         if (QTracePluginManager.isEntitled()) return 760;
         int extra = (Players.entitled() != null ? 1 : 0) + (VersionGraphs.entitled() != null ? 1 : 0);
         return 400 + 80 * extra;
@@ -350,12 +354,39 @@ public class QTracePanel {
             b.setContentDisplay(compact ? ContentDisplay.GRAPHIC_ONLY : ContentDisplay.TOP);
     }
 
+    private FlowPane toolbarRow;
+
     private FlowPane buildToolbarRow() {
-        captionedButtons.clear();
         // Wraps onto a second line once even the caption-less buttons don't fit on one.
-        FlowPane row = new FlowPane(9, 6);
+        FlowPane row = toolbarRow = new FlowPane(9, 6);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(6, 0, 0, 0));
+        fillToolbarRow();
+
+        // A module can load after the panel was drawn: its button comes in then.
+        PanelExtensions.onChange(this, () -> Platform.runLater(() -> moduleSlots.forEach(Runnable::run)));
+        Runnable hooksChanged = () -> Platform.runLater(() -> {
+            moduleSlots.forEach(Runnable::run);
+            applyCompactToolbar();
+        });
+        Players.onChange(this, hooksChanged);
+        VersionGraphs.onChange(this, hooksChanged);
+        // A welcome read, or one more to read: the gold squares follow.
+        ToolWelcomes.onChange(this, hooksChanged);
+        // The organization's panel comes with the server's answer, after the panel was drawn.
+        PanelProfile.onChange(this, () -> Platform.runLater(() -> {
+            fillToolbarRow();
+            applyCompactToolbar();
+        }));
+        return row;
+    }
+
+    /** (Re)draws the toolbar: qTrace's own, or the organization's ({@link PanelProfile}). */
+    private void fillToolbarRow() {
+        FlowPane row = toolbarRow;
+        captionedButtons.clear();
+        moduleSlots.clear();
+        row.getChildren().clear();
 
         // ⚡ Stamp — CTA. Validates & stamps the current trace (capture itself is passive).
         btnRecord = new Button(QTraceI18n.t("btn.stamp.caption"));
@@ -369,8 +400,6 @@ public class QTracePanel {
         recordTip.setWrapText(true);
         recordTip.setMaxWidth(260);
         btnRecord.setTooltip(recordTip);
-        btnRecord.setDisable(true);
-        btnRecord.setOpacity(0.45);
         btnRecord.setStyle(
             "-fx-background-color: " + CTA_TEAL_SOFT + ";"
           + "-fx-background-radius: 7;"
@@ -380,36 +409,29 @@ public class QTracePanel {
           + "-fx-padding: 6 12 6 10;"
         );
         btnRecord.setOnAction(e -> controller.recordTrace());
-        row.getChildren().add(btnRecord);
+        applyStampEnabled();
 
         // Workspace & Analyse — Compliance only, when licensed & active.
         // When the license is inactive the panel degrades to the Core button set, plus Replay
         // when the player module is there.
         boolean licensed = QTracePluginManager.isEntitled();
-        if (!licensed) row.getChildren().add(hookSlot(true, true, true));
+        btnPush = null;
+        Button btnReport = null;
         if (licensed) {
-            row.getChildren().add(vseparator());
-
             btnPush = iconButton(iconFactory(this::iconUpload), QTraceI18n.t("btn.upload.caption"),
                 QTraceI18n.t("btn.upload.tooltip"), Color.web(GROUP_WORKSPACE));
             btnPush.setId("upload-button"); // looked up by the screenshot harness — see ScreenshotHarness
-            btnPush.setDisable(true);
-            btnPush.setOpacity(0.45);
+            btnPush.setDisable(!pushEnabled);
+            btnPush.setOpacity(pushEnabled ? 1.0 : 0.45);
             btnPush.setOnAction(e -> controller.pushToWorkspace());
 
-            row.getChildren().addAll(btnPush, hookSlot(true, false, false));
-            row.getChildren().add(vseparator());
-
-            Button btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),
+            btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),
                 QTraceI18n.t("btn.report.tooltip"), Color.web(GROUP_WORKSPACE));
             btnReport.setId("report-button"); // looked up by the screenshot harness — see ScreenshotHarness
             btnReport.setOnAction(e -> controller.generateActivityReport());
-
-            row.getChildren().addAll(hookSlot(false, true, false), moduleSlot(PanelExtensions.VERSIONS, GROUP_WORKSPACE), btnReport);
         }
 
         // Consultation & Traitement — always available, Core + Compliance.
-        row.getChildren().add(vseparator());
         Button dashboardBtn = iconButton(iconFactory(this::iconDashboard), QTraceI18n.t("btn.dashboard.caption"),
             QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
         Button importBtn = iconButton(iconFactory(this::iconImport), QTraceI18n.t("btn.import.caption"),
@@ -425,19 +447,37 @@ public class QTracePanel {
         resetBtn.setOnAction(e -> confirmReset());
         resetBtn.setDisable(!controller.hasActiveImage());
         resetBtn.setOpacity(controller.hasActiveImage() ? 1.0 : 0.45);
-        row.getChildren().addAll(dashboardBtn, moduleSlot(PanelExtensions.DASHBOARD, GROUP_TOOLS), importBtn, resetBtn);
 
-        // A module can load after the panel was drawn: its button comes in then.
-        PanelExtensions.onChange(this, () -> Platform.runLater(() -> moduleSlots.forEach(Runnable::run)));
-        Runnable hooksChanged = () -> Platform.runLater(() -> {
-            moduleSlots.forEach(Runnable::run);
-            applyCompactToolbar();
-        });
-        Players.onChange(this, hooksChanged);
-        VersionGraphs.onChange(this, hooksChanged);
-        // A welcome read, or one more to read: the gold squares follow.
-        ToolWelcomes.onChange(this, hooksChanged);
-        return row;
+        // The organization chose its panel: its tools, in its order, and nothing else.
+        java.util.List<String> profile = PanelProfile.tools();
+        if (profile != null) {
+            for (String tool : profile) {
+                Node node = switch (tool) {
+                    case PanelProfile.STAMP     -> btnRecord;
+                    case PanelProfile.UPLOAD    -> btnPush;
+                    case PanelProfile.REPORT    -> btnReport;
+                    case PanelProfile.DASHBOARD -> dashboardBtn;
+                    case PanelProfile.IMPORT    -> importBtn;
+                    case PanelProfile.RESET     -> resetBtn;
+                    case PanelProfile.PLAYER    -> hookSlot(true, false, false);
+                    case PanelProfile.VERSIONS  -> hookSlot(false, true, false);
+                    default                     -> profileSlot(tool);
+                };
+                if (node != null) row.getChildren().add(node); // Upload, Report: with the licence only
+            }
+            return;
+        }
+
+        row.getChildren().add(btnRecord);
+        if (!licensed) row.getChildren().add(hookSlot(true, true, true));
+        if (licensed) {
+            row.getChildren().add(vseparator());
+            row.getChildren().addAll(btnPush, hookSlot(true, false, false));
+            row.getChildren().add(vseparator());
+            row.getChildren().addAll(hookSlot(false, true, false), moduleSlot(PanelExtensions.VERSIONS, GROUP_WORKSPACE), btnReport);
+        }
+        row.getChildren().add(vseparator());
+        row.getChildren().addAll(dashboardBtn, moduleSlot(PanelExtensions.DASHBOARD, GROUP_TOOLS), importBtn, resetBtn);
     }
 
     /**
@@ -485,14 +525,29 @@ public class QTracePanel {
      * ({@link PanelExtensions}) — empty and taking no room without a module.
      */
     private HBox moduleSlot(String anchor, String groupColor) {
+        return entrySlot(() -> PanelExtensions.entitled(anchor), e -> groupColor);
+    }
+
+    /**
+     * Where a module's buttons stand in an organization's panel ({@link PanelProfile}): where
+     * the profile names the module, whatever button they go with in qTrace's own panel.
+     */
+    private HBox profileSlot(String module) {
+        return entrySlot(() -> PanelExtensions.ofModule(module),
+            e -> PanelExtensions.DASHBOARD.equals(e.anchor()) ? GROUP_TOOLS : GROUP_WORKSPACE);
+    }
+
+    private HBox entrySlot(java.util.function.Supplier<java.util.List<PanelExtensions.Entry>> entries,
+                           Function<PanelExtensions.Entry, String> groupColor) {
         HBox slot = new HBox(9);
         slot.setAlignment(Pos.CENTER_LEFT);
         Runnable fill = () -> {
             // Captions are tracked for the compact toolbar: forget this slot's previous buttons.
             captionedButtons.removeIf(b -> slot.getChildren().contains(b));
             slot.getChildren().clear();
-            for (PanelExtensions.Entry entry : PanelExtensions.entitled(anchor)) {
-                Button b = iconButton(welcomeMarked(entry.module(), iconFactory(moduleIcon(entry))), entry.label(), entry.label(), Color.web(groupColor));
+            for (PanelExtensions.Entry entry : entries.get()) {
+                Button b = iconButton(welcomeMarked(entry.module(), iconFactory(moduleIcon(entry))), entry.label(), entry.label(),
+                    Color.web(groupColor.apply(entry)));
                 b.setOnAction(e -> welcomeFirst(entry.module(), () -> runModuleEntry(entry)));
                 slot.getChildren().add(b);
             }

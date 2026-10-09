@@ -162,8 +162,11 @@ public final class ModuleEntitlements {
         String jwt = QTraceUpdater.licenseJwt();
         CompletableFuture.runAsync(() -> {
             try {
-                Set<String> open = fetchNames(QTraceUpdater.openModulesUrl(), null);
-                Set<String> licensed = jwt == null ? null : fetchNames(QTraceUpdater.modulesUrl(), jwt);
+                Set<String> open = names(fetch(QTraceUpdater.openModulesUrl(), null));
+                String descriptor = jwt == null ? null : fetch(QTraceUpdater.modulesUrl(), jwt);
+                Set<String> licensed = names(descriptor);
+                // The organization's panel comes with the licence's modules; no certificate, no organization.
+                if (jwt == null || licensed != null) PanelProfile.accept(descriptor);
                 Set<String> now = combine(open, licensed, jwt != null);
                 if (now == null) return;
                 if (!now.equals(served)) log.info(TAG + "modules served to this workstation: {}", now);
@@ -175,10 +178,10 @@ public final class ModuleEntitlements {
         });
     }
 
-    /** Module names of a descriptor URL; null when it could not be read. */
-    private static Set<String> fetchNames(String url, String jwt) {
+    /** A descriptor URL's answer; null when it could not be read. */
+    private static String fetch(String url, String jwt) {
         try {
-            return names(new String(QTraceUpdater.httpGetBytes(url, jwt), StandardCharsets.UTF_8));
+            return new String(QTraceUpdater.httpGetBytes(url, jwt), StandardCharsets.UTF_8);
         } catch (Exception e) {
             log.info(TAG + "{} unavailable: {}", url, e.toString());
             return null;
