@@ -434,12 +434,12 @@ public class QTracePanel {
             btnPush.setOnAction(e -> UploadInvite.open());
         }
         if (upload == UploadInvite.State.UPLOAD) {
-            btnPush = iconButton(welcomeMarked("push", iconFactory(this::iconUpload)), QTraceI18n.t("btn.upload.caption"),
+            btnPush = iconButton(welcomeMarked("upload", iconFactory(this::iconUpload)), QTraceI18n.t("btn.upload.caption"),
                 QTraceI18n.t("btn.upload.tooltip"), Color.web(GROUP_WORKSPACE));
             btnPush.setId("upload-button"); // looked up by the screenshot harness — see ScreenshotHarness
             btnPush.setDisable(!pushEnabled);
             btnPush.setOpacity(pushEnabled ? 1.0 : 0.45);
-            btnPush.setOnAction(e -> welcomeFirst("push", controller::pushToWorkspace));
+            btnPush.setOnAction(e -> welcomeFirst("upload", controller::pushToWorkspace));
         }
         if (licensed) {
             btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),

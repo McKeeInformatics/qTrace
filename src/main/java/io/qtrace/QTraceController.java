@@ -1691,7 +1691,7 @@ public class QTraceController {
         return null;
     }
 
-    // ── Cloud workspace push (module push, through WorkspacePushes) ──────────
+    // ── Cloud workspace push (module upload, through WorkspacePushes) ──────────
 
     public void pushToWorkspace() {
         // A record goes to the workspace with its certificate: certified accounts only for now.

@@ -30,7 +30,7 @@ public final class UploadInvite {
 
     /** What the panels draw at Upload's place. */
     public enum State {
-        /** The upload itself: an active licence and the push module. */
+        /** The upload itself: an active licence and the upload module. */
         UPLOAD,
         /** Greyed, and a click opens Getting started: no account on this workstation yet. */
         SIGN_IN,

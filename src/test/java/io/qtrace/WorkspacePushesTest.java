@@ -22,21 +22,21 @@ class WorkspacePushesTest {
 
     @Test
     void noPushWithoutAModule() {
-        ModuleEntitlements.setForTest(Set.of("push"));
+        ModuleEntitlements.setForTest(Set.of("upload"));
         assertNull(WorkspacePushes.entitled());
     }
 
     @Test
     void theRegisteredPushIsTheOneOffered() {
-        ModuleEntitlements.setForTest(Set.of("push"));
-        WorkspacePushes.register("push", SENT);
+        ModuleEntitlements.setForTest(Set.of("upload"));
+        WorkspacePushes.register("upload", SENT);
         assertSame(SENT, WorkspacePushes.entitled());
     }
 
     @Test
     void thePushIsOfferedWhileItsModuleIsServed() {
-        WorkspacePushes.register("push", SENT);
-        ModuleEntitlements.setForTest(Set.of("compliance", "push"));
+        WorkspacePushes.register("upload", SENT);
+        ModuleEntitlements.setForTest(Set.of("compliance", "upload"));
         assertNotNull(WorkspacePushes.entitled());
         ModuleEntitlements.setForTest(Set.of("compliance"));
         assertNull(WorkspacePushes.entitled());
@@ -44,18 +44,18 @@ class WorkspacePushesTest {
 
     @Test
     void aModuleRegisteringTwiceKeepsItsLastPush() {
-        ModuleEntitlements.setForTest(Set.of("push"));
+        ModuleEntitlements.setForTest(Set.of("upload"));
         WorkspacePush again = request -> CompletableFuture.completedFuture(null);
-        WorkspacePushes.register("push", SENT);
-        WorkspacePushes.register("push", again);
+        WorkspacePushes.register("upload", SENT);
+        WorkspacePushes.register("upload", again);
         assertSame(again, WorkspacePushes.entitled());
     }
 
     @Test
     void nullsAreIgnored() {
-        ModuleEntitlements.setForTest(Set.of("push"));
+        ModuleEntitlements.setForTest(Set.of("upload"));
         WorkspacePushes.register(null, SENT);
-        WorkspacePushes.register("push", null);
+        WorkspacePushes.register("upload", null);
         assertNull(WorkspacePushes.entitled());
     }
 
@@ -64,7 +64,7 @@ class WorkspacePushesTest {
         List<String> heard = new ArrayList<>();
         WorkspacePushes.onChange("panel", () -> heard.add("panel"));
         WorkspacePushes.onChange("panel", () -> heard.add("panel again")); // one listener per owner
-        WorkspacePushes.register("push", SENT);
+        WorkspacePushes.register("upload", SENT);
         assertEquals(List.of("panel again"), heard);
     }
 }

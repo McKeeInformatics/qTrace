@@ -50,12 +50,12 @@ class ModuleEntitlementsTest {
     }
 
     private static final String OPEN = "{\"files\":[{\"module\":\"player\"}]}";
-    private static final String LICENSED = "{\"files\":[{\"module\":\"compliance\"},{\"module\":\"push\"}]}";
+    private static final String LICENSED = "{\"files\":[{\"module\":\"compliance\"},{\"module\":\"upload\"}]}";
 
     @Test
     void theAnswerHandedByTheProvisioningModuleIsTheOpenModulesPlusTheLicences() {
         assertEquals(Set.of("player"), ModuleEntitlements.answer(OPEN, null, false));
-        assertEquals(Set.of("compliance", "player", "push"), ModuleEntitlements.answer(OPEN, LICENSED, true));
+        assertEquals(Set.of("compliance", "player", "upload"), ModuleEntitlements.answer(OPEN, LICENSED, true));
     }
 
     @Test

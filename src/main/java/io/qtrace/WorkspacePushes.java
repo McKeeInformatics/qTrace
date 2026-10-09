@@ -34,7 +34,7 @@ public final class WorkspacePushes {
 
     private WorkspacePushes() {}
 
-    /** @param module the registering module's Qtrace-Module name, e.g. "push" — one each */
+    /** @param module the registering module's Qtrace-Module name, e.g. "upload" — one each */
     public static void register(String module, WorkspacePush push) {
         if (module == null || push == null) return;
         synchronized (PUSHES) {

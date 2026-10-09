@@ -24,7 +24,7 @@ class UploadInviteTest {
     @Test
     void aWorkstationWithoutAnAccountIsInvitedToSignIn() {
         assertEquals(SIGN_IN, UploadInvite.state(false, false, false, true));
-        // The push module may be there already (a developer's build): still no account, still the invitation.
+        // The upload module may be there already (a developer's build): still no account, still the invitation.
         assertEquals(SIGN_IN, UploadInvite.state(false, true, false, true));
     }
 
@@ -36,7 +36,7 @@ class UploadInviteTest {
     @Test
     void aCertificateThatDoesNotGiveUploadIsNotInvitedToCreateAnAccount() {
         assertEquals(NONE, UploadInvite.state(false, true, true, true), "inactive or expired licence");
-        assertEquals(NONE, UploadInvite.state(true, false, true, true), "licence without the push module");
+        assertEquals(NONE, UploadInvite.state(true, false, true, true), "licence without the upload module");
     }
 
     @Test

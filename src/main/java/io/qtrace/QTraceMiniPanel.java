@@ -233,8 +233,8 @@ public final class QTraceMiniPanel {
             uploadSlot = new StackPane(uploadBtn);
         }
         if (upload == UploadInvite.State.UPLOAD) {
-            uploadBtn = button(QTracePanel.welcomeMarked("push", icon(panel::iconUpload)), "btn.upload.caption", workspace);
-            uploadBtn.setOnAction(e -> QTracePanel.welcomeFirst("push", controller::pushToWorkspace));
+            uploadBtn = button(QTracePanel.welcomeMarked("upload", icon(panel::iconUpload)), "btn.upload.caption", workspace);
+            uploadBtn.setOnAction(e -> QTracePanel.welcomeFirst("upload", controller::pushToWorkspace));
             uploadSlot = new StackPane(uploadBtn);
             uploadSpinner = uploadSpinner();
         }
