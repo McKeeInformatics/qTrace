@@ -100,6 +100,7 @@ public final class QTraceMiniPanel {
         ToolWelcomes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         PanelProfile.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         WorkspacePushes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        Dashboards.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         UploadInvite.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
@@ -252,8 +253,10 @@ public final class QTraceMiniPanel {
         }
 
         Color tools = Color.web(QTracePanel.GROUP_TOOLS);
-        Button dashboardBtn = button(icon(panel::iconDashboard), "btn.dashboard.caption", tools);
-        dashboardBtn.setOnAction(e -> controller.showDashboard());
+        // Dashboard: there once a module has brought it (Dashboards).
+        Button dashboardBtn = Dashboards.entitled() == null ? null
+            : button(QTracePanel.welcomeMarked("dashboard", icon(panel::iconDashboard)), "btn.dashboard.caption", tools);
+        if (dashboardBtn != null) dashboardBtn.setOnAction(e -> QTracePanel.welcomeFirst("dashboard", controller::showDashboard));
         Button importBtn = button(icon(panel::iconImport), "btn.import.caption", tools);
         importBtn.setOnAction(e -> controller.startBatchExport());
         resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
@@ -289,7 +292,7 @@ public final class QTraceMiniPanel {
                 nodes.add(reportBtn);
             }
             nodes.add(separator());
-            nodes.add(dashboardBtn);
+            if (dashboardBtn != null) nodes.add(dashboardBtn);
             addModuleButtons(nodes, PanelExtensions.entitled(PanelExtensions.DASHBOARD));
             nodes.add(importBtn);
             nodes.add(resetBtn);

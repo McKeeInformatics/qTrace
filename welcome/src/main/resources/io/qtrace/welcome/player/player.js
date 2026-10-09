@@ -139,6 +139,11 @@
       '<polyline points="8.8,11.8 11.2,14.2 15.4,9.4" ' + S + ' stroke-width="1.8"/>',
     training: '<circle cx="12" cy="10" r="4" ' + S + ' stroke-width="1.6"/><path d="M10.4 15H13.6M10.9 17.2H13.1" ' + S + ' stroke-width="1.5"/>' +
       '<path d="M12 3.2V4.6M5.6 10H7M17 10H18.4M7.4 5.4L8.4 6.4M16.6 5.4L15.6 6.4" ' + S + ' stroke-width="1.4"/>',
+    dashboard: '<rect x="2" y="3" width="16" height="14" rx="1.5" ' + S + ' stroke-width="1.5"/>' +
+      '<path d="M5.2 6.4H9.6M5.2 9H8.4M5.2 11.6H9.1M5.6 13.6V15M8 12.4V15M10.4 13.1V15" ' + S + ' stroke-width="1.5"/>' +
+      '<polyline points="12,10.6 13.8,8.9 15.3,10.1 17.3,7.9" ' + S + ' stroke-width="1.5"/><circle cx="17.2" cy="6.1" r="1.15" fill="currentColor"/>' +
+      '<circle cx="16.5" cy="16.5" r="5" ' + S + ' stroke-width="1.4"/><circle cx="16.5" cy="16.5" r="2.7" ' + S + ' stroke-width="1.4"/>' +
+      '<circle cx="16.5" cy="16.5" r="0.9" fill="currentColor"/>',
     upload: '<path d="M7 17.3A4 4 0 0 1 6.5 9.33A5.5 5.5 0 0 1 17.2 7.9A4.25 4.25 0 0 1 16.5 17.3Z" ' + S + ' stroke-width="1.7"/>' +
       '<line x1="12" y1="15" x2="12" y2="9" ' + S + ' stroke-width="1.7"/><polyline points="9.3,11.3 12,8.6 14.7,11.3" ' + S + ' stroke-width="1.7"/>',
     welcome: '<path d="M7.5 13V8.2M10.4 12V5M13.4 12V4.6M16.3 13V6.2" ' + S + ' stroke-width="2"/>' +

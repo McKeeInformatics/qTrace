@@ -167,7 +167,7 @@ public class QTraceController {
     private final QuPathGUI qupath;
     private QTracePanel     panel;
     private QTraceMiniPanel miniPanel; // null when the panel fell back to its window
-    private QTraceDashboard dashboard;
+    private Dashboard.Window dashboard; // the module's window (Dashboards), once opened
     private VersionGraph.Window commitGraph; // from the module that brings it (VersionGraphs)
     private ActionLogger    logger;
     // Live draft of the open image (autosave, unstamped sessions, crash recovery).
@@ -625,19 +625,16 @@ public class QTraceController {
             if (!promptForProject("qTrace — Dashboard", QTraceI18n.t("dashboard.project.content"))) return;
             if (QTraceConfig.get().readExportDir().isEmpty()) return; // still no project
         }
+        Dashboard module = Dashboards.entitled();
+        if (module == null) return; // no module brings the Dashboard: nothing shows a way to it
         if (dashboard == null || !dashboard.isShowing()) {
-            dashboard = new QTraceDashboard(qupath);
+            dashboard = module.create();
             dashboard.show();
         } else if (dashboard.isIconified()) {
             dashboard.show();
         } else {
             dashboard.minimize();
         }
-    }
-
-    /** Exports every .qtrace file's Dashboard data to a user-chosen CSV file. */
-    public void exportDashboardCsv() {
-        QTraceDashboard.runCsvExport(qupath);
     }
 
     /** Opens the commit-graph window for the current image's .qtrace (Compliance feature). */

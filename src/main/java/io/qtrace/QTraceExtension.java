@@ -100,7 +100,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
 
         MenuItem dashboard   = new MenuItem("Dashboard");
         dashboard.setOnAction(e -> controller.showDashboard());
-        showWithProfile(dashboard, PanelProfile.DASHBOARD, "menu");
+        showWithDashboard(dashboard, "menu");
 
         // There only once a module has brought the player (Players) — it can load after this menu.
         MenuItem player      = new MenuItem("Player");
@@ -169,11 +169,13 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         PanelProfile.onChange(key, () -> Platform.runLater(apply));
     }
 
-    /** Shows a Core tool's entry only while the organization's panel shows that tool. */
-    private static void showWithProfile(MenuItem item, String tool, String owner) {
-        item.setVisible(PanelProfile.shows(tool));
-        PanelProfile.onChange(QTraceExtension.class.getName() + "." + owner + "." + tool,
-            () -> Platform.runLater(() -> item.setVisible(PanelProfile.shows(tool))));
+    /** Shows the Dashboard's entry only once a module has brought it, and while the organization's panel shows it. */
+    private static void showWithDashboard(MenuItem item, String owner) {
+        Runnable apply = () -> item.setVisible(Dashboards.entitled() != null && PanelProfile.shows(PanelProfile.DASHBOARD));
+        apply.run();
+        String key = QTraceExtension.class.getName() + "." + owner + ".dashboard";
+        Dashboards.onChange(key, () -> Platform.runLater(apply));
+        PanelProfile.onChange(key, () -> Platform.runLater(apply));
     }
 
     /**
@@ -255,7 +257,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
 
         MenuItem miDash   = new MenuItem("Dashboard");
         miDash.setOnAction(e -> controller.showDashboard());
-        showWithProfile(miDash, PanelProfile.DASHBOARD, "toolbar");
+        showWithDashboard(miDash, "toolbar");
 
         MenuItem miPlayer = new MenuItem("Player");
         miPlayer.setOnAction(e -> controller.openReplayDialog());

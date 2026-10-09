@@ -16,31 +16,23 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
  */
-
 package io.qtrace;
 
-import java.util.List;
+/**
+ * The Dashboard, as the module that carries it offers it to Core ({@link Dashboards}). Core
+ * creates a window when the user asks for it, from the panel, the mini-panel or the menus.
+ */
+@FunctionalInterface
+public interface Dashboard {
 
-/** Minimal RFC 4180 CSV formatting — no external dependency for a handful of columns. */
-public final class CsvWriter {
+    /** A new Dashboard window on the open project's records, not shown yet. Called on the FX thread. */
+    Window create();
 
-    private CsvWriter() {}
-
-    static String escape(String value) {
-        if (value == null) return "";
-        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
-    }
-
-    public static String row(List<String> values) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < values.size(); i++) {
-            if (i > 0) sb.append(',');
-            sb.append(escape(values.get(i)));
-        }
-        sb.append('\n');
-        return sb.toString();
+    /** One Dashboard window. Every method is called on the FX thread. */
+    interface Window {
+        void show();
+        boolean isShowing();
+        boolean isIconified();
+        void minimize();
     }
 }

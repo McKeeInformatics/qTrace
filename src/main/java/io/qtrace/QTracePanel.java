@@ -382,6 +382,7 @@ public class QTracePanel {
         });
         PanelProfile.onChange(this, redraw);
         WorkspacePushes.onChange(this, redraw);
+        Dashboards.onChange(this, redraw);
         UploadInvite.onChange(this, redraw);
         return row;
     }
@@ -448,18 +449,22 @@ public class QTracePanel {
             btnReport.setOnAction(e -> controller.generateActivityReport());
         }
 
-        // Consultation & Traitement — always available, Core + Compliance.
-        Button dashboardBtn = iconButton(iconFactory(this::iconDashboard), QTraceI18n.t("btn.dashboard.caption"),
-            QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
+        // Consultation & Traitement — Core + Compliance. Dashboard: there once a module has
+        // brought it (Dashboards).
+        Button dashboardBtn = Dashboards.entitled() == null ? null
+            : iconButton(welcomeMarked("dashboard", iconFactory(this::iconDashboard)), QTraceI18n.t("btn.dashboard.caption"),
+                QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
         Button importBtn = iconButton(iconFactory(this::iconImport), QTraceI18n.t("btn.import.caption"),
             QTraceI18n.t("btn.import.tooltip"), Color.web(GROUP_TOOLS));
         Button resetBtn = btnReset = iconButton(iconFactory(this::iconReset), QTraceI18n.t("btn.reset.caption"),
             QTraceI18n.t("btn.reset.tooltip"), Color.web(RED));
         // looked up by the screenshot harness — see ScreenshotHarness
-        dashboardBtn.setId("dashboard-button");
+        if (dashboardBtn != null) {
+            dashboardBtn.setId("dashboard-button");
+            dashboardBtn.setOnAction(e -> welcomeFirst("dashboard", controller::showDashboard));
+        }
         importBtn.setId("import-button");
         resetBtn.setId("reset-button");
-        dashboardBtn.setOnAction(e -> controller.showDashboard());
         importBtn.setOnAction(e -> controller.startBatchExport());
         resetBtn.setOnAction(e -> confirmReset());
         resetBtn.setDisable(!controller.hasActiveImage());
@@ -499,7 +504,8 @@ public class QTracePanel {
             row.getChildren().addAll(hookSlot(false, true, false), moduleSlot(PanelExtensions.VERSIONS, GROUP_WORKSPACE), btnReport);
         }
         row.getChildren().add(vseparator());
-        row.getChildren().addAll(dashboardBtn, moduleSlot(PanelExtensions.DASHBOARD, GROUP_TOOLS), importBtn, resetBtn);
+        if (dashboardBtn != null) row.getChildren().add(dashboardBtn);
+        row.getChildren().addAll(moduleSlot(PanelExtensions.DASHBOARD, GROUP_TOOLS), importBtn, resetBtn);
     }
 
     /**
@@ -1254,14 +1260,14 @@ public class QTracePanel {
 
     // ── Logo helpers ─────────────────────────────────────────────────────────
 
-    static Image loadLogo() {
+    public static Image loadLogo() {
         try (var is = QTracePanel.class.getResourceAsStream("/io/qtrace/logo.png")) {
             if (is != null) return new Image(is);
         } catch (Exception ignored) {}
         return null;
     }
 
-    static ImageView logoView(int size) {
+    public static ImageView logoView(int size) {
         Image img = loadLogo();
         if (img == null) return new ImageView();
         ImageView iv = new ImageView(img);
