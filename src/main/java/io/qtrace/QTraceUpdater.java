@@ -105,10 +105,6 @@ public final class QTraceUpdater {
     /** Called by the provisioning module, on the FX thread, before it shows Getting started. */
     public static void leaveOpenModulesToProvisioning() { openModulesLeftToProvisioning = true; }
 
-    /** The same, under the name the module had until 2026-10: the old file may still be installed. */
-    @Deprecated
-    public static void leaveOpenModulesToOnboarding() { leaveOpenModulesToProvisioning(); }
-
     /**
      * The modules anyone may install, account or not, as the server lists them now
      * (GET /api/modules/open). Blocking; empty offline or with a server that has no such list.

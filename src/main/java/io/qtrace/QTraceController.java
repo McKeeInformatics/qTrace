@@ -209,7 +209,7 @@ public class QTraceController {
     }
 
     // The one controller of this QuPath session, for the modules loaded next to Core
-    // (onboarding / welcome, loader.md § 17) — they have no reference to QTraceExtension.
+    // (provisioning / welcome, loader.md § 17) — they have no reference to QTraceExtension.
     private static volatile QTraceController current;
 
     /** The controller created by QTraceExtension, or null before Core is installed. */

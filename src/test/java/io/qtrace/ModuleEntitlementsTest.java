@@ -51,7 +51,7 @@ class ModuleEntitlementsTest {
 
     @Test
     void thePublicModulesAreNeverTakenAway() {
-        for (String m : new String[] {"core", "provisioning", "onboarding", "loader"})
+        for (String m : new String[] {"core", "provisioning", "loader"})
             assertTrue(ModuleEntitlements.entitled(m, Set.of(), Set.of()));
     }
 

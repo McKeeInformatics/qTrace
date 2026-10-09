@@ -27,15 +27,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * State of the onboarding trunk, in ~/.qTrace/provisioning.json (loader.md § 17;
- * the file of the module before its rename, onboarding.json, is still read). Unknown keys are
+ * State of the provisioning trunk, in ~/.qTrace/provisioning.json (loader.md § 17). Unknown keys are
  * kept, so a newer version's keys survive a downgrade. (The welcome module keeps its own file.)
  */
 public final class ProvisioningState {
 
     public static final String FILE = "provisioning.json";
-    /** The module was called onboarding until 2026-10: its state is picked up, once. */
-    static final String LEGACY_FILE = "onboarding.json";
 
     private final Path file;
     private final JsonObject json;
@@ -45,14 +42,12 @@ public final class ProvisioningState {
         this.json = json;
     }
 
-    /** Reads {@code qtraceDir}/provisioning.json (else the legacy onboarding.json); a missing or corrupt file is a fresh start. */
+    /** Reads {@code qtraceDir}/provisioning.json ; a missing or corrupt file is a fresh start. */
     public static ProvisioningState load(Path qtraceDir) {
         Path f = qtraceDir.resolve(FILE);
-        Path legacy = qtraceDir.resolve(LEGACY_FILE);
         JsonObject o = new JsonObject();
         try {
-            Path read = Files.isRegularFile(f) ? f : legacy;
-            if (Files.isRegularFile(read)) o = JsonParser.parseString(Files.readString(read)).getAsJsonObject();
+            if (Files.isRegularFile(f)) o = JsonParser.parseString(Files.readString(f)).getAsJsonObject();
         } catch (Exception ignored) {}
         return new ProvisioningState(f, o);
     }

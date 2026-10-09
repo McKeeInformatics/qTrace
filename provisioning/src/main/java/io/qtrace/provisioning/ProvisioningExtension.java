@@ -31,7 +31,7 @@ import qupath.lib.gui.extensions.QuPathExtension;
 import java.nio.file.Path;
 
 /**
- * Entry point of the provisioning module (called onboarding until 2026-10), started by the qTrace loader after Core
+ * Entry point of the provisioning module, started by the qTrace loader after Core
  * (Qtrace-Load-Order 30, loader.md § 17). Shows the trunk on a machine with no license until
  * the user signed in or chose Core only; always adds Extensions > QTrace > Getting started….
  */
@@ -46,12 +46,6 @@ public class ProvisioningExtension implements QuPathExtension {
     public void installExtension(QuPathGUI qupath) {
         if (installed) return;
         installed = true;
-        if (legacyModuleStillLoaded()) {
-            // A workstation updated from the module's old name: both are loaded this session and
-            // the old one already adds the menu and the window. Remove its file; next start is ours.
-            retireLegacyModule();
-            return;
-        }
 
         MenuItem item = new MenuItem("Getting started…");
         item.setOnAction(e -> new TrunkPlayer(qupath, QTRACE_DIR).show());
@@ -65,31 +59,6 @@ public class ProvisioningExtension implements QuPathExtension {
         // After QuPath's own Welcome window, like Core's update prompts.
         Platform.runLater(() -> QTraceUpdater.whenNoModalOpen("provisioning",
             () -> new TrunkPlayer(qupath, QTRACE_DIR).show()));
-    }
-
-    /** The module under its old name (same window, same menu entry), loaded by the same loader. */
-    private static boolean legacyModuleStillLoaded() {
-        try {
-            Class.forName("io.qtrace.onboarding.OnboardingExtension", false, ProvisioningExtension.class.getClassLoader());
-            return true;
-        } catch (ClassNotFoundException | LinkageError e) {
-            return false;
-        }
-    }
-
-    /** Deletes qtrace-onboarding-*.qtjar next to this module's own file; best effort (Windows may hold it). */
-    private static void retireLegacyModule() {
-        try {
-            Path self = Path.of(ProvisioningExtension.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            try (var files = java.nio.file.Files.newDirectoryStream(self.getParent(), "qtrace-onboarding-*.qtjar")) {
-                for (Path f : files) {
-                    try { java.nio.file.Files.deleteIfExists(f); log.info("[qtrace-provisioning] retired {}", f.getFileName()); }
-                    catch (Exception e) { log.warn("[qtrace-provisioning] could not delete {}", f, e); }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("[qtrace-provisioning] could not look for the old onboarding file", e);
-        }
     }
 
     @Override

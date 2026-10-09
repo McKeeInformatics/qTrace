@@ -43,14 +43,4 @@ class ProvisioningStateTest {
         String json = Files.readString(home.resolve("provisioning.json"));
         assertTrue(json.contains("welcomeSeen"), "keys written by a newer version survive");
     }
-
-    @Test
-    void readsTheStateOfTheModuleBeforeItsRename() throws Exception {
-        Files.writeString(home.resolve("onboarding.json"), "{\"trunkDone\":true}");
-        assertFalse(ProvisioningState.load(home).shouldShowTrunk(""));
-        // The old file is read, never rewritten: the next save goes to the new one.
-        ProvisioningState.load(home).setFlag("x", true);
-        assertTrue(Files.isRegularFile(home.resolve("provisioning.json")));
-        assertEquals("{\"trunkDone\":true}", Files.readString(home.resolve("onboarding.json")));
-    }
 }
