@@ -1,0 +1,20 @@
+{
+    "name": "qTrace catalog",
+    "description": "qTrace — analysis provenance for QuPath",
+    "extensions": [{
+        "name": "qTrace",
+        "description": "Captures the complete provenance of a QuPath analysis. This small loader installs and keeps up to date the signed qTrace modules (Core, Getting started, Player, ...) on first start.",
+        "author": "qTrace",
+        "homepage": "https://qtrace.ca",
+        "starred": false,
+        "releases": [
+            {
+                "name": "v1.0.0",
+                "main_url": "https://github.com/RomainTourte/qTrace-core/releases/download/v1.2.6/qtrace-loader.jar",
+                "version_range": {
+                    "min": "v0.6.0"
+                }
+            }
+        ]
+    }]
+}
