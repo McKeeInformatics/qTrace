@@ -1,4 +1,4 @@
-package io.qtrace;
+package io.qtrace.provisioning;
 
 import org.junit.jupiter.api.Test;
 

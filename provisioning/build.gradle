@@ -9,8 +9,8 @@ plugins {
 group = 'io.qtrace'
 version = '1.0.2'
 
-// Built against the Core of the same commit: it needs that Core (BrowserOpener,
-// QTraceUpdater.installModulesNow) and says so to the loader (Qtrace-Requires).
+// Built against the Core of the same commit: it needs that Core (Provisioners,
+// ModuleEntitlements.accept, JarInstaller) and says so to the loader (Qtrace-Requires).
 def coreVersion = (file('../build.gradle').text =~ /(?m)^version = '([^']+)'/)[0][1]
 
 java {
@@ -41,6 +41,8 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'com.google.code.gson:gson:2.10.1'
+    // UpdateBatch compares versions with Core's QTraceUpdater.
+    testImplementation fileTree('../build/libs') { include "qtrace-core-${coreVersion}.jar" }
 }
 
 test {

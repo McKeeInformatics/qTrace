@@ -37,7 +37,8 @@ import java.util.function.BooleanSupplier;
 
 /**
  * What this module does for the welcome windows ({@link Provisioner}, loader.md § 17): it
- * installs the modules open to anyone, checks the network and signs in. No window of its own.
+ * installs the modules open to anyone, says what each module served here is, checks the
+ * network and signs in. No window of its own.
  */
 final class ProvisioningService implements Provisioner {
 
@@ -77,7 +78,7 @@ final class ProvisioningService implements Provisioner {
             .completeOnTimeout(List.of(), OPEN_MODULES_WAIT_S, TimeUnit.SECONDS)
             .exceptionally(e -> List.of())
             .thenAccept(modules -> Platform.runLater(() -> {
-                if (modules.stream().anyMatch(OpenModule::installing)) QTraceUpdater.installModulesNow(qupath, false);
+                if (modules.stream().anyMatch(OpenModule::installing)) ModuleInstaller.installModulesNow(qupath, false);
                 done.complete(modules);
             }));
         return done;
@@ -86,11 +87,16 @@ final class ProvisioningService implements Provisioner {
     /** What the server opens to anyone, with whether each is still to be installed here. */
     private static List<OpenModule> openModules() {
         Map<String, String> local = ModuleUpdates.localVersions(QTraceUpdater.extensionsDir(QTraceUpdater.class));
-        List<ModuleUpdates.Card> open = QTraceUpdater.openModules();
+        List<ModuleUpdates.Card> open = ModuleInstaller.openModules();
         List<ModuleUpdates.Offer> pending = ModuleUpdates.pending(
             open.stream().map(ModuleUpdates.Card::offer).toList(), local);
         return open.stream().map(m -> new OpenModule(m.offer().module(), m.title(),
             pending.contains(m.offer()))).toList();
+    }
+
+    @Override
+    public List<ModuleUpdates.Card> moduleCards() {
+        return ModuleInstaller.moduleCards();
     }
 
     @Override

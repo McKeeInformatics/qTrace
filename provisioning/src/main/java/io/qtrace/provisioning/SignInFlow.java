@@ -22,7 +22,6 @@ package io.qtrace.provisioning;
 import io.qtrace.BrowserOpener;
 import io.qtrace.Provisioner;
 import io.qtrace.QTraceConfig;
-import io.qtrace.QTraceUpdater;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
@@ -71,7 +70,7 @@ final class SignInFlow {
                 log.info(TAG + "certificate received and saved to {}", certificate);
                 l.approved(certificate);
                 l.installing();
-                QTraceUpdater.installModulesNow(qupath, quitDialog).thenAccept(l::installed);
+                ModuleInstaller.installModulesNow(qupath, quitDialog).thenAccept(l::installed);
             } catch (DeviceFlowClient.DeviceFlowException e) {
                 if (e.outcome() == DeviceFlowClient.Outcome.CANCELLED) return;
                 log.info(TAG + "sign in ended: {} ({})", e.outcome(), e.getMessage());

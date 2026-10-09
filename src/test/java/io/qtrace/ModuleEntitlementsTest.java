@@ -49,6 +49,22 @@ class ModuleEntitlementsTest {
         assertTrue(ModuleEntitlements.entitled("security", null, Set.of()));
     }
 
+    private static final String OPEN = "{\"files\":[{\"module\":\"player\"}]}";
+    private static final String LICENSED = "{\"files\":[{\"module\":\"compliance\"},{\"module\":\"push\"}]}";
+
+    @Test
+    void theAnswerHandedByTheProvisioningModuleIsTheOpenModulesPlusTheLicences() {
+        assertEquals(Set.of("player"), ModuleEntitlements.answer(OPEN, null, false));
+        assertEquals(Set.of("compliance", "player", "push"), ModuleEntitlements.answer(OPEN, LICENSED, true));
+    }
+
+    @Test
+    void aDescriptorThatDidNotComeLeavesTheLastAnswerStanding() {
+        assertNull(ModuleEntitlements.answer(null, LICENSED, true), "the open list did not come");
+        assertNull(ModuleEntitlements.answer(OPEN, null, true), "the licence's list did not come");
+        assertNull(ModuleEntitlements.answer(OPEN, "<html>503</html>", true));
+    }
+
     @Test
     void thePublicModulesAreNeverTakenAway() {
         for (String m : new String[] {"core", "provisioning", "welcome", "loader"})

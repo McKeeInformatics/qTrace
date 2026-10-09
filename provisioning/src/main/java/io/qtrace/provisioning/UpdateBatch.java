@@ -17,7 +17,9 @@
  *
  */
 
-package io.qtrace;
+package io.qtrace.provisioning;
+
+import io.qtrace.QTraceUpdater;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,12 +29,12 @@ import java.util.Map;
 /**
  * Every qTrace update found by one startup check, shown as one message instead of one per
  * extension: what it lists and what "skip" remembers. No JavaFX, no network: unit-tested;
- * {@link QTraceUpdater} collects the items and shows the message.
+ * {@link ModuleInstaller} collects the items and shows the message.
  */
 final class UpdateBatch {
 
     /** One extension to update. {@code currentVer} "0" (or blank): not installed yet. */
-    record Item(String module, String currentVer, String remoteVer, String sha256, QTraceUpdater.Downloader downloader) {}
+    record Item(String module, String currentVer, String remoteVer, String sha256, ModuleInstaller.Downloader downloader) {}
 
     private static final List<String> FIRST = List.of("core", "compliance");
 
@@ -47,7 +49,7 @@ final class UpdateBatch {
         Map<String, Item> byModule = new LinkedHashMap<>();
         for (Item it : offered) {
             Item known = byModule.get(it.module());
-            if (known == null || JarInstaller.compareSemver(it.remoteVer(), known.remoteVer()) > 0) byModule.put(it.module(), it);
+            if (known == null || QTraceUpdater.compareSemver(it.remoteVer(), known.remoteVer()) > 0) byModule.put(it.module(), it);
         }
         List<Item> sorted = new ArrayList<>(byModule.values());
         sorted.sort((a, b) -> {

@@ -44,6 +44,13 @@ public interface Provisioner {
      */
     CompletableFuture<List<OpenModule>> provisionOpenModules();
 
+    /**
+     * Every module this workstation is served, with its card — the open ones and, with a
+     * certificate, the ones it includes. Blocking; what could not be fetched is simply absent.
+     * Read by the welcome module to present a tool, and what a new version brings.
+     */
+    List<ModuleUpdates.Card> moduleCards();
+
     /** Tells, one target at a time and from background threads, whether it could be reached. */
     void checkNetwork(BiConsumer<String, Boolean> reached);
 

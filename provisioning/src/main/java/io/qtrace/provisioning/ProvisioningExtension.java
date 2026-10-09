@@ -20,7 +20,6 @@
 package io.qtrace.provisioning;
 
 import io.qtrace.Provisioners;
-import io.qtrace.QTraceUpdater;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
@@ -30,8 +29,9 @@ import java.nio.file.Path;
 
 /**
  * Entry point of the provisioning module, started by the qTrace loader after Core
- * (Qtrace-Load-Order 30, loader.md § 17). It puts on the workstation the modules it may have
- * and signs the user in; it shows nothing: Getting started is the welcome module's window,
+ * (Qtrace-Load-Order 30, loader.md § 7, § 17). It decides which modules are on the workstation
+ * — the ones it is served, their updates, the ones to switch off — and signs the user in. Its
+ * only dialogs are the update prompt and the restart offer; it has no welcome window: Getting started is the welcome module's window,
  * which asks this one through Core ({@link Provisioners}).
  */
 public class ProvisioningExtension implements QuPathExtension {
@@ -48,11 +48,16 @@ public class ProvisioningExtension implements QuPathExtension {
 
         ProvisioningService service = new ProvisioningService(qupath, QTRACE_DIR);
         Provisioners.register(service);
-        if (!service.gettingStartedPending()) return;
-        log.info("[qtrace-provisioning] no license yet: Getting started is to be shown");
-        // Getting started has the modules open to anyone installed: Core's startup check does
-        // not ask for them over its window.
-        QTraceUpdater.leaveOpenModulesToProvisioning();
+        if (service.gettingStartedPending()) {
+            log.info("[qtrace-provisioning] no license yet: Getting started is to be shown");
+            // Getting started has the modules open to anyone installed: the startup check
+            // does not ask for them over its window.
+            ModuleInstaller.leaveOpenModulesToGettingStarted();
+        }
+        // What this workstation is served: Core switches off the modules that no longer are.
+        ModuleInstaller.refreshServed();
+        // Startup update check (async; the user validates, applied at the next start).
+        ModuleInstaller.checkModules(qupath);
     }
 
     @Override

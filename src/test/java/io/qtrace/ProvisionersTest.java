@@ -20,6 +20,7 @@ class ProvisionersTest {
         @Override public CompletableFuture<List<OpenModule>> provisionOpenModules() {
             return CompletableFuture.completedFuture(List.of(new OpenModule("player", "qTrace Player", true)));
         }
+        @Override public List<ModuleUpdates.Card> moduleCards() { return List.of(); }
         @Override public void checkNetwork(BiConsumer<String, Boolean> reached) { reached.accept("qtrace.ca", true); }
         @Override public void signIn(SignIn listener, BooleanSupplier cancelled,
                                      boolean quitDialog, String invite) { listener.starting(); }

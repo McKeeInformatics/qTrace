@@ -26,12 +26,10 @@ import com.google.gson.JsonParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Which installed modules the licence still includes. The server decides (GET /api/modules
@@ -153,39 +151,28 @@ public final class ModuleEntitlements {
     }
 
     /**
-     * Async, safe: asks the server what this workstation is served — the modules open to anyone,
-     * and with a certificate the ones it includes — and remembers the answer. Offline, or a
-     * refused certificate: the last answer stands.
+     * What this workstation is served, from the two descriptors the provisioning module
+     * fetched: /api/modules/open and, with a certificate, /api/modules. Null — nothing known,
+     * the last answer stands — when one that was expected did not come or is not a descriptor.
      */
-    public static void refresh() {
-        load();
-        String jwt = QTraceUpdater.licenseJwt();
-        CompletableFuture.runAsync(() -> {
-            try {
-                Set<String> open = names(fetch(QTraceUpdater.openModulesUrl(), null));
-                String descriptor = jwt == null ? null : fetch(QTraceUpdater.modulesUrl(), jwt);
-                Set<String> licensed = names(descriptor);
-                // The organization's panel comes with the licence's modules; no certificate, no organization.
-                if (jwt == null || licensed != null) PanelProfile.accept(descriptor);
-                Set<String> now = combine(open, licensed, jwt != null);
-                if (now == null) return;
-                if (!now.equals(served)) log.info(TAG + "modules served to this workstation: {}", now);
-                served = now;
-                write(FILE, now);
-            } catch (Exception e) {
-                log.info(TAG + "entitlement check skipped: {}", e.toString());
-            }
-        });
+    static Set<String> answer(String openDescriptor, String licensedDescriptor, boolean hasLicence) {
+        return combine(names(openDescriptor), names(licensedDescriptor), hasLicence);
     }
 
-    /** A descriptor URL's answer; null when it could not be read. */
-    private static String fetch(String url, String jwt) {
-        try {
-            return new String(QTraceUpdater.httpGetBytes(url, jwt), StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            log.info(TAG + "{} unavailable: {}", url, e.toString());
-            return null;
-        }
+    /**
+     * The server's answer, handed over by the provisioning module (it does the asking; Core
+     * only remembers and switches off what is no longer served). Also carries the panel the
+     * licence holder's organization chose. Offline, or a refused certificate: nothing changes.
+     */
+    public static void accept(String openDescriptor, String licensedDescriptor, boolean hasLicence) {
+        load();
+        // The organization's panel comes with the licence's modules; no certificate, no organization.
+        if (!hasLicence || names(licensedDescriptor) != null) PanelProfile.accept(licensedDescriptor);
+        Set<String> now = answer(openDescriptor, licensedDescriptor, hasLicence);
+        if (now == null) return;
+        if (!now.equals(served)) log.info(TAG + "modules served to this workstation: {}", now);
+        served = now;
+        write(FILE, now);
     }
 
     static void setForTest(Set<String> servedModules) {
