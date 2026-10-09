@@ -49,7 +49,7 @@ public final class ModuleEntitlements {
     private static final String TAG = "[qtrace-modules] ";
 
     /** Public modules (release bootstrap): never served by /api/modules, never taken away. */
-    private static final Set<String> FREE = Set.of("core", "provisioning", "loader");
+    private static final Set<String> FREE = Set.of("core", "provisioning", "welcome", "loader");
 
     private static final Path DIR      = Path.of(System.getProperty("user.home"), ".qTrace");
     private static final Path FILE     = DIR.resolve("modules-entitled.json");

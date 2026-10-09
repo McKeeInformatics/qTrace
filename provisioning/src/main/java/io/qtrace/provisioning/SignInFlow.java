@@ -20,6 +20,7 @@
 package io.qtrace.provisioning;
 
 import io.qtrace.BrowserOpener;
+import io.qtrace.Provisioner;
 import io.qtrace.QTraceConfig;
 import io.qtrace.QTraceUpdater;
 import org.slf4j.Logger;
@@ -31,23 +32,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 
 /**
- * "Sign in to qtrace.ca", start to end, for either window (the HTML player or the plain
- * fallback dialog): device code → browser → certificate saved → licensed modules installed.
- * Reports each stage to a {@link Listener}, from a background thread.
+ * "Sign in to qtrace.ca", start to end, for whichever window asks (module welcome): device code → browser → certificate saved → licensed modules installed.
+ * Reports each stage to a {@link Provisioner.SignIn}, from a background thread.
  */
 final class SignInFlow {
 
     private static final Logger log = LoggerFactory.getLogger(SignInFlow.class);
     private static final String TAG = "[qtrace-provisioning] ";
-
-    interface Listener {
-        void starting();
-        void waiting(String userCode, String verificationUrl);
-        void approved(Path certificate);
-        void installing();
-        void installed(int modules);
-        void failed(String message);
-    }
 
     private final QuPathGUI qupath;
     private final Path qtraceDir;
@@ -64,7 +55,7 @@ final class SignInFlow {
      * {@code invite}: the invitation code typed in QuPath (the browser then creates the account
      * for the email it was issued for), or null for an existing account.
      */
-    void start(Listener l, BooleanSupplier cancelled, boolean quitDialog, String invite) {
+    void start(Provisioner.SignIn l, BooleanSupplier cancelled, boolean quitDialog, String invite) {
         l.starting();
         DeviceFlowClient client = new DeviceFlowClient(server, Thread::sleep);
         CompletableFuture.runAsync(() -> {

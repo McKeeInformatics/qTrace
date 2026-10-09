@@ -19,10 +19,8 @@
 
 package io.qtrace.provisioning;
 
-import io.qtrace.QTraceConfig;
+import io.qtrace.Provisioners;
 import io.qtrace.QTraceUpdater;
-import javafx.application.Platform;
-import javafx.scene.control.MenuItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.lib.gui.QuPathGUI;
@@ -32,8 +30,9 @@ import java.nio.file.Path;
 
 /**
  * Entry point of the provisioning module, started by the qTrace loader after Core
- * (Qtrace-Load-Order 30, loader.md § 17). Shows the trunk on a machine with no license until
- * the user signed in or chose Core only; always adds Extensions > QTrace > Getting started….
+ * (Qtrace-Load-Order 30, loader.md § 17). It puts on the workstation the modules it may have
+ * and signs the user in; it shows nothing: Getting started is the welcome module's window,
+ * which asks this one through Core ({@link Provisioners}).
  */
 public class ProvisioningExtension implements QuPathExtension {
 
@@ -47,18 +46,13 @@ public class ProvisioningExtension implements QuPathExtension {
         if (installed) return;
         installed = true;
 
-        MenuItem item = new MenuItem("Getting started…");
-        item.setOnAction(e -> new TrunkPlayer(qupath, QTRACE_DIR).show());
-        qupath.getMenu("Extensions>QTrace", true).getItems().add(0, item);
-
-        if (!ProvisioningState.load(QTRACE_DIR).shouldShowTrunk(QTraceConfig.get().getLicensePath())) return;
-        log.info("[qtrace-provisioning] no license yet: showing Getting started");
-        // Getting started installs the modules open to anyone and presents each of them:
-        // Core's startup check does not ask for them over its window.
+        ProvisioningService service = new ProvisioningService(qupath, QTRACE_DIR);
+        Provisioners.register(service);
+        if (!service.gettingStartedPending()) return;
+        log.info("[qtrace-provisioning] no license yet: Getting started is to be shown");
+        // Getting started has the modules open to anyone installed: Core's startup check does
+        // not ask for them over its window.
         QTraceUpdater.leaveOpenModulesToProvisioning();
-        // After QuPath's own Welcome window, like Core's update prompts.
-        Platform.runLater(() -> QTraceUpdater.whenNoModalOpen("provisioning",
-            () -> new TrunkPlayer(qupath, QTRACE_DIR).show()));
     }
 
     @Override
@@ -68,6 +62,6 @@ public class ProvisioningExtension implements QuPathExtension {
 
     @Override
     public String getDescription() {
-        return "Getting started with qTrace: sign in to qtrace.ca and install your modules.";
+        return "Installs the qTrace modules of this workstation and signs in to qtrace.ca.";
     }
 }
