@@ -100,10 +100,14 @@ public final class QTraceUpdater {
 
     // Getting started installs the open modules itself (and says what each one is): the startup
     // check then leaves the ones not installed yet to it, instead of asking over its window.
-    private static volatile boolean openModulesLeftToOnboarding;
+    private static volatile boolean openModulesLeftToProvisioning;
 
-    /** Called by the onboarding module, on the FX thread, before it shows Getting started. */
-    public static void leaveOpenModulesToOnboarding() { openModulesLeftToOnboarding = true; }
+    /** Called by the provisioning module, on the FX thread, before it shows Getting started. */
+    public static void leaveOpenModulesToProvisioning() { openModulesLeftToProvisioning = true; }
+
+    /** The same, under the name the module had until 2026-10: the old file may still be installed. */
+    @Deprecated
+    public static void leaveOpenModulesToOnboarding() { leaveOpenModulesToProvisioning(); }
 
     /**
      * The modules anyone may install, account or not, as the server lists them now
@@ -243,7 +247,7 @@ public final class QTraceUpdater {
                 var local = ModuleUpdates.localVersions(dir);
                 for (ModuleUpdates.Card m : openModules()) {
                     // Not installed yet and Getting started is about to do it: not asked twice.
-                    if (openModulesLeftToOnboarding && !local.containsKey(m.offer().module())) continue;
+                    if (openModulesLeftToProvisioning && !local.containsKey(m.offer().module())) continue;
                     remote.add(m.offer());
                 }
                 String jwt = licenseJwt();
@@ -321,7 +325,7 @@ public final class QTraceUpdater {
 
     /**
      * Async. Under the loader, from Getting started and right after a license was obtained
-     * (onboarding "Sign in", loader.md § 17): downloads every module of the open list
+     * (provisioning "Sign in", loader.md § 17): downloads every module of the open list
      * (/api/modules/open) and, with a license, of /api/modules not yet in extensions/qtrace/,
      * without asking — the user just asked for it. Ends with the usual single "installed —
      * Quit QuPath Now" dialog. Completes with the number of modules it tried to install (0: nothing to
@@ -333,7 +337,7 @@ public final class QTraceUpdater {
 
     /**
      * Same, with {@code quitDialog=false} for a caller that offers the restart itself (the
-     * onboarding player's "Quit QuPath now"): no post-install dialog for this session's installs.
+     * provisioning player's "Quit QuPath now"): no post-install dialog for this session's installs.
      */
     public static CompletableFuture<Integer> installModulesNow(QuPathGUI qupath, boolean quitDialog) {
         if (!quitDialog) quietInstall = true;
@@ -632,7 +636,7 @@ public final class QTraceUpdater {
      * modal dialog is open (typically QuPath's own Welcome window at startup). QuPath
      * silently discards a close request issued from a nested loop ("Close request from
      * nested loop - will be discarded"), so both the update prompt and the post-install
-     * quit wait for it. Public: the onboarding and welcome modules wait the same way.
+     * quit wait for it. Public: the provisioning and welcome modules wait the same way.
      */
     public static void whenNoModalOpen(String what, Runnable action) {
         whenNoModalOpen(what, action, true);

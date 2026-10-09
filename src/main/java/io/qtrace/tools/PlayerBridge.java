@@ -29,7 +29,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * What the HTML onboarding player may ask QuPath to do (docs/architecture/loader.md § 17): a
+ * What the HTML provisioning player may ask QuPath to do (docs/architecture/loader.md § 17): a
  * whitelist of named actions, each with one string argument. Anything else is refused. No
  * JavaFX: unit-tested; {@link PlayerWindow} exposes it to the page as {@code window.qtrace}.
  */

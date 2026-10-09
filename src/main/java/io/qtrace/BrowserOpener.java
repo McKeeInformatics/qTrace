@@ -26,7 +26,7 @@ import java.util.Locale;
  * Opens a URL (or a folder) with the operating system's default handler.
  *
  * Never use java.awt.Desktop here: initializing AWT inside the JavaFX/GTK process can crash the
- * JVM on Linux. xdg-open / open / cmd start don't touch AWT. Public: the onboarding and welcome
+ * JVM on Linux. xdg-open / open / cmd start don't touch AWT. Public: the provisioning and welcome
  * modules use it too.
  */
 public final class BrowserOpener {

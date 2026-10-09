@@ -39,7 +39,7 @@ import java.util.Base64;
 import java.util.Map;
 
 /**
- * The wide onboarding window (loader.md § 17): a WebView playing the HTML player, driving
+ * The wide provisioning window (Getting started) (loader.md § 17): a WebView playing the HTML player, driving
  * QuPath only through {@link PlayerBridge}, and only while the page is the player. Links
  * elsewhere open in the user's browser. Check {@link PlayerBridge#webViewAvailable()} before
  * creating one.

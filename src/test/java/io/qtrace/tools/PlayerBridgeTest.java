@@ -42,8 +42,8 @@ class PlayerBridgeTest {
 
     @Test
     void onlyThePlayerOriginGetsTheBridge() {
-        assertTrue(PlayerBridge.trustedLocation("jar:file:/x/qtrace-onboarding-1.0.0.qtjar!/io/qtrace/onboarding/player/player.html",
-            "jar:file:/x/qtrace-onboarding-1.0.0.qtjar!/io/qtrace/onboarding/player/player.html"));
+        assertTrue(PlayerBridge.trustedLocation("jar:file:/x/qtrace-provisioning-1.0.0.qtjar!/io/qtrace/provisioning/player/player.html",
+            "jar:file:/x/qtrace-provisioning-1.0.0.qtjar!/io/qtrace/provisioning/player/player.html"));
         assertTrue(PlayerBridge.trustedLocation("https://www.qtrace.ca/player/player.html",
             "https://www.qtrace.ca/player/player.html#step"));
         assertFalse(PlayerBridge.trustedLocation("https://www.qtrace.ca/player/player.html",
