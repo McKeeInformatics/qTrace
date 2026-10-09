@@ -139,6 +139,8 @@
       '<polyline points="8.8,11.8 11.2,14.2 15.4,9.4" ' + S + ' stroke-width="1.8"/>',
     training: '<circle cx="12" cy="10" r="4" ' + S + ' stroke-width="1.6"/><path d="M10.4 15H13.6M10.9 17.2H13.1" ' + S + ' stroke-width="1.5"/>' +
       '<path d="M12 3.2V4.6M5.6 10H7M17 10H18.4M7.4 5.4L8.4 6.4M16.6 5.4L15.6 6.4" ' + S + ' stroke-width="1.4"/>',
+    upload: '<path d="M7 17.3A4 4 0 0 1 6.5 9.33A5.5 5.5 0 0 1 17.2 7.9A4.25 4.25 0 0 1 16.5 17.3Z" ' + S + ' stroke-width="1.7"/>' +
+      '<line x1="12" y1="15" x2="12" y2="9" ' + S + ' stroke-width="1.7"/><polyline points="9.3,11.3 12,8.6 14.7,11.3" ' + S + ' stroke-width="1.7"/>',
     welcome: '<path d="M7.5 13V8.2M10.4 12V5M13.4 12V4.6M16.3 13V6.2" ' + S + ' stroke-width="2"/>' +
       '<path d="M7.5 13.5C7.5 12.6 6.5 11.8 5.6 12.4C4.8 13 5 14 5.6 14.9L8.3 19C9.2 20.3 10.4 21 12 21H13.4C15.7 21 17.5 19.3 17.8 17L18.2 13.6C18.3 12.6 17.5 12 16.6 12.4" ' + S + ' stroke-width="1.8"/>'
   };
