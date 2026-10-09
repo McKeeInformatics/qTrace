@@ -1,0 +1,68 @@
+// qTrace welcome — every welcome window of qTrace (docs/architecture/loader.md § 17,
+// docs/architecture/welcome-tour.md): Getting started, the organization's welcome
+// (GET /api/onboarding), the welcome of each tool and what an update brings.
+// Open source like Core and provisioning, and shipped with them in qtrace-bootstrap.json:
+// every install has it.
+// Build: cd qtrace-core && ./gradlew jar && ./gradlew -p welcome qtjar
+plugins {
+    id 'java-library'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group = 'io.qtrace'
+version = '1.0.1'
+
+def coreVersion = (file('../build.gradle').text =~ /(?m)^version = '([^']+)'/)[0][1]
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://maven.scijava.org/content/repositories/public' }
+}
+
+ext.qupathVersion = '0.5.1'
+
+javafx {
+    version       = '21'
+    modules       = ['javafx.controls', 'javafx.graphics', 'javafx.base', 'javafx.web']
+    configuration = 'compileOnly'
+}
+
+dependencies {
+    compileOnly fileTree('../build/libs') { include "qtrace-core-${coreVersion}.jar" }
+    compileOnly "io.github.qupath:qupath-gui-fx:${qupathVersion}"
+    compileOnly "io.github.qupath:qupath-core:${qupathVersion}"
+    compileOnly 'com.google.code.gson:gson:2.10.1'
+    compileOnly 'org.slf4j:slf4j-api:2.0.9'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'com.google.code.gson:gson:2.10.1'
+    // Provisioner.OpenModule, the record Getting started's content is built from.
+    testImplementation fileTree('../build/libs') { include "qtrace-core-${coreVersion}.jar" }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+jar {
+    archiveBaseName = 'qtrace-welcome'
+    manifest {
+        attributes 'Implementation-Title':   'qTrace Welcome',
+                   'Implementation-Version': version,
+                   // Self-description read by the qTrace loader (loader.md § 14, § 17).
+                   'Qtrace-Module':          'welcome',
+                   'Qtrace-Version':         version,
+                   'Qtrace-Requires':        "core>=${coreVersion}",
+                   'Qtrace-Load-Order':      '40',
+                   'Qtrace-Entry-Point':     'io.qtrace.welcome.WelcomeExtension',
+                   'Qtrace-Packages':        'io.qtrace'
+    }
+}
+
+apply from: '../gradle/qtjar.gradle'
