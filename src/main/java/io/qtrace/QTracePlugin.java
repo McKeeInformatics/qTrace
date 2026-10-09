@@ -80,20 +80,6 @@ public interface QTracePlugin {
                                    JsonObject imageRoot, Path exportDir) { return null; }
 
     /**
-     * Pushes a bundle (.qtrace + .qtcert + chain.jsonl + classifiers + imported files +
-     * thumbnail + manual annotations GeoJSON) to the user's qtrace.ca workspace.
-     * {@code thumbnailPath}/{@code geojsonPath} may be null — the rest of the bundle still pushes.
-     * Returns a CompletableFuture resolving to the workspace URL, or null on failure / not supported.
-     * Auth: reads the .qtlicense JWT from QTraceConfig and sends it as a bearer token.
-     */
-    default CompletableFuture<String> pushToWorkspace(
-            ValidationStamp stamp, Path certPath, Path chainLogPath, Path qtraceFile,
-            Collection<ClassifierRecord> classifiers, Path thumbnailPath,
-            Collection<ImportedObjectFileRecord> importedFiles, Path geojsonPath) {
-        return CompletableFuture.completedFuture(null);
-    }
-
-    /**
      * Builds the compact digest that would be sent to the report endpoint, as a
      * pretty-printed JSON string. Split from {@link #sendReportDigest} so the Core
      * can show the user exactly what leaves their machine (audit/transparency)

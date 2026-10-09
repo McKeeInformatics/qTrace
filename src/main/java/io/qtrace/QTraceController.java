@@ -1691,10 +1691,12 @@ public class QTraceController {
         return null;
     }
 
-    // ── Cloud workspace push (Compliance) ────────────────────────────────────
+    // ── Cloud workspace push (module push, through WorkspacePushes) ──────────
 
     public void pushToWorkspace() {
-        QTracePlugin ep = QTracePluginManager.getEntitled();
+        // A record goes to the workspace with its certificate: certified accounts only for now.
+        if (QTracePluginManager.getEntitled() == null) return;
+        WorkspacePush ep = WorkspacePushes.entitled();
         if (ep == null) return;
         if (lastCertPath == null || lastQtracePath == null) {
             ActivityLog.add("☁ Nothing to push — export first.");
@@ -1722,7 +1724,7 @@ public class QTraceController {
             panel.setPushEnabled(false);
             panel.startPushProgress();
         }
-        ep.pushToWorkspace(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers, lastThumbnailPath, importedFiles, lastGeojsonPath)
+        ep.push(new WorkspacePush.Request(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers, lastThumbnailPath, importedFiles, lastGeojsonPath))
           .thenAccept(url -> {
               if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {

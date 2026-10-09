@@ -98,6 +98,7 @@ public final class QTraceMiniPanel {
         VersionGraphs.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         ToolWelcomes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         PanelProfile.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        WorkspacePushes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
         var project = qupath.projectProperty();
@@ -218,11 +219,14 @@ public final class QTraceMiniPanel {
         boolean player = Players.entitled() != null;
         boolean versions = VersionGraphs.entitled() != null;
         Button reportBtn = null, replayBtn = null, versionsBtn = null;
-        if (licensed) {
-            uploadBtn = button(icon(panel::iconUpload), "btn.upload.caption", workspace);
-            uploadBtn.setOnAction(e -> controller.pushToWorkspace());
+        // Upload: there once a module has brought the upload (WorkspacePushes).
+        if (licensed && WorkspacePushes.entitled() != null) {
+            uploadBtn = button(QTracePanel.welcomeMarked("push", icon(panel::iconUpload)), "btn.upload.caption", workspace);
+            uploadBtn.setOnAction(e -> QTracePanel.welcomeFirst("push", controller::pushToWorkspace));
             uploadSlot = new StackPane(uploadBtn);
             uploadSpinner = uploadSpinner();
+        }
+        if (licensed) {
             reportBtn = button(icon(panel::iconReport), "btn.report.caption", workspace);
             reportBtn.setOnAction(e -> controller.generateActivityReport());
         }
@@ -264,7 +268,7 @@ public final class QTraceMiniPanel {
         } else {
             nodes.add(stampBtn);
             if (licensed || player || (versions && !licensed)) nodes.add(separator());
-            if (licensed) nodes.add(uploadSlot);
+            if (uploadSlot != null) nodes.add(uploadSlot);
             if (player) nodes.add(replayBtn);
             if (licensed) nodes.add(separator());
             if (versions) nodes.add(versionsBtn);

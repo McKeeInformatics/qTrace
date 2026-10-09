@@ -373,11 +373,14 @@ public class QTracePanel {
         VersionGraphs.onChange(this, hooksChanged);
         // A welcome read, or one more to read: the gold squares follow.
         ToolWelcomes.onChange(this, hooksChanged);
-        // The organization's panel comes with the server's answer, after the panel was drawn.
-        PanelProfile.onChange(this, () -> Platform.runLater(() -> {
+        // The organization's panel comes with the server's answer, after the panel was drawn;
+        // so can the module that brings Upload.
+        Runnable redraw = () -> Platform.runLater(() -> {
             fillToolbarRow();
             applyCompactToolbar();
-        }));
+        });
+        PanelProfile.onChange(this, redraw);
+        WorkspacePushes.onChange(this, redraw);
         return row;
     }
 
@@ -417,14 +420,16 @@ public class QTracePanel {
         boolean licensed = QTracePluginManager.isEntitled();
         btnPush = null;
         Button btnReport = null;
-        if (licensed) {
-            btnPush = iconButton(iconFactory(this::iconUpload), QTraceI18n.t("btn.upload.caption"),
+        // Upload: there once a module has brought the upload (WorkspacePushes).
+        if (licensed && WorkspacePushes.entitled() != null) {
+            btnPush = iconButton(welcomeMarked("push", iconFactory(this::iconUpload)), QTraceI18n.t("btn.upload.caption"),
                 QTraceI18n.t("btn.upload.tooltip"), Color.web(GROUP_WORKSPACE));
             btnPush.setId("upload-button"); // looked up by the screenshot harness — see ScreenshotHarness
             btnPush.setDisable(!pushEnabled);
             btnPush.setOpacity(pushEnabled ? 1.0 : 0.45);
-            btnPush.setOnAction(e -> controller.pushToWorkspace());
-
+            btnPush.setOnAction(e -> welcomeFirst("push", controller::pushToWorkspace));
+        }
+        if (licensed) {
             btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),
                 QTraceI18n.t("btn.report.tooltip"), Color.web(GROUP_WORKSPACE));
             btnReport.setId("report-button"); // looked up by the screenshot harness — see ScreenshotHarness
@@ -472,7 +477,8 @@ public class QTracePanel {
         if (!licensed) row.getChildren().add(hookSlot(true, true, true));
         if (licensed) {
             row.getChildren().add(vseparator());
-            row.getChildren().addAll(btnPush, hookSlot(true, false, false));
+            if (btnPush != null) row.getChildren().add(btnPush);
+            row.getChildren().add(hookSlot(true, false, false));
             row.getChildren().add(vseparator());
             row.getChildren().addAll(hookSlot(false, true, false), moduleSlot(PanelExtensions.VERSIONS, GROUP_WORKSPACE), btnReport);
         }
@@ -1339,13 +1345,15 @@ public class QTracePanel {
         });
     }
 
-    /** Enable/disable the ☁ push button (Compliance only — no-op in Core). */
+    /** Enable/disable the ☁ push button, there with the push module and an active licence. */
     public void setPushEnabled(boolean enabled) {
-        if (btnPush == null) return;
         Platform.runLater(() -> {
+            // Remembered even without the button: the module that brings Upload can load later.
             pushEnabled = enabled;
-            btnPush.setDisable(!enabled);
-            btnPush.setOpacity(enabled ? 1.0 : 0.45);
+            if (btnPush != null) {
+                btnPush.setDisable(!enabled);
+                btnPush.setOpacity(enabled ? 1.0 : 0.45);
+            }
             fireState();
         });
     }
