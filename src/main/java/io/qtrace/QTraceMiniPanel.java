@@ -62,6 +62,7 @@ public final class QTraceMiniPanel {
     private Timeline captureBlink;
     private Label integrityBadge;
     private Button stampBtn, uploadBtn, resetBtn;
+    private boolean uploadInvite; // Upload stands greyed for "sign in first", not for the upload
     private StackPane uploadSlot; // the Upload button, or a spinner while a push is running
     private Node uploadSpinner;
 
@@ -99,6 +100,7 @@ public final class QTraceMiniPanel {
         ToolWelcomes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         PanelProfile.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         WorkspacePushes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        UploadInvite.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
         var project = qupath.projectProperty();
@@ -219,8 +221,18 @@ public final class QTraceMiniPanel {
         boolean player = Players.entitled() != null;
         boolean versions = VersionGraphs.entitled() != null;
         Button reportBtn = null, replayBtn = null, versionsBtn = null;
-        // Upload: there once a module has brought the upload (WorkspacePushes).
-        if (licensed && WorkspacePushes.entitled() != null) {
+        // Upload: there once a module has brought the upload (WorkspacePushes). On a workstation
+        // without an account it is greyed, and a click opens Getting started (UploadInvite).
+        UploadInvite.State upload = UploadInvite.state();
+        uploadInvite = upload == UploadInvite.State.SIGN_IN;
+        if (uploadInvite) {
+            uploadBtn = button(icon(panel::iconUpload), "btn.upload.caption", workspace);
+            uploadBtn.setTooltip(tip(QTraceI18n.t("btn.upload.signin.tooltip")));
+            uploadBtn.setOpacity(0.45); // greyed, yet clickable: a disabled button could not say why
+            uploadBtn.setOnAction(e -> UploadInvite.open());
+            uploadSlot = new StackPane(uploadBtn);
+        }
+        if (upload == UploadInvite.State.UPLOAD) {
             uploadBtn = button(QTracePanel.welcomeMarked("push", icon(panel::iconUpload)), "btn.upload.caption", workspace);
             uploadBtn.setOnAction(e -> QTracePanel.welcomeFirst("push", controller::pushToWorkspace));
             uploadSlot = new StackPane(uploadBtn);
@@ -267,7 +279,7 @@ public final class QTraceMiniPanel {
             }
         } else {
             nodes.add(stampBtn);
-            if (licensed || player || (versions && !licensed)) nodes.add(separator());
+            if (licensed || player || uploadInvite || (versions && !licensed)) nodes.add(separator());
             if (uploadSlot != null) nodes.add(uploadSlot);
             if (player) nodes.add(replayBtn);
             if (licensed) nodes.add(separator());
@@ -346,8 +358,8 @@ public final class QTraceMiniPanel {
             stampBtn.setGraphic(panel.scaledIcon(panel.iconStamp(
                 Color.web(canStamp ? QTracePanel.CTA_TEAL : QTracePanel.TEXT_MUTED)), ICON));
         enable(stampBtn, canStamp);
-        enable(uploadBtn, panel.isPushEnabled());
-        if (uploadSlot != null) {
+        if (!uploadInvite) enable(uploadBtn, panel.isPushEnabled());
+        if (uploadSlot != null && !uploadInvite) {
             Node shown = panel.isPushInProgress() ? uploadSpinner : uploadBtn;
             if (uploadSlot.getChildren().get(0) != shown) uploadSlot.getChildren().setAll(shown);
         }

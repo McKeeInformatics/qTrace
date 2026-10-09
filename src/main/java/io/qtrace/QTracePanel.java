@@ -118,6 +118,7 @@ public class QTracePanel {
 
     // What the controller last pushed — read by the mini-panel (QTraceMiniPanel), a view over this panel.
     private boolean recordingActive, recordReady, pushEnabled, pushInProgress;
+    private boolean pushInvite; // Upload stands greyed for "sign in first", not for the upload
     private StampIntegrity.State integrityState = StampIntegrity.State.NO_STAMP;
     private Runnable integrityOnWhy;
     private final java.util.List<Runnable> stateListeners = new java.util.ArrayList<>();
@@ -381,6 +382,7 @@ public class QTracePanel {
         });
         PanelProfile.onChange(this, redraw);
         WorkspacePushes.onChange(this, redraw);
+        UploadInvite.onChange(this, redraw);
         return row;
     }
 
@@ -420,8 +422,18 @@ public class QTracePanel {
         boolean licensed = QTracePluginManager.isEntitled();
         btnPush = null;
         Button btnReport = null;
-        // Upload: there once a module has brought the upload (WorkspacePushes).
-        if (licensed && WorkspacePushes.entitled() != null) {
+        // Upload: there once a module has brought the upload (WorkspacePushes). On a workstation
+        // without an account it is greyed, and a click opens Getting started (UploadInvite).
+        UploadInvite.State upload = UploadInvite.state();
+        pushInvite = upload == UploadInvite.State.SIGN_IN;
+        if (pushInvite) {
+            btnPush = iconButton(iconFactory(this::iconUpload), QTraceI18n.t("btn.upload.caption"),
+                QTraceI18n.t("btn.upload.signin.tooltip"), Color.web(GROUP_WORKSPACE));
+            btnPush.setId("upload-button");
+            btnPush.setOpacity(0.45); // greyed, yet clickable: a disabled button could not say why
+            btnPush.setOnAction(e -> UploadInvite.open());
+        }
+        if (upload == UploadInvite.State.UPLOAD) {
             btnPush = iconButton(welcomeMarked("push", iconFactory(this::iconUpload)), QTraceI18n.t("btn.upload.caption"),
                 QTraceI18n.t("btn.upload.tooltip"), Color.web(GROUP_WORKSPACE));
             btnPush.setId("upload-button"); // looked up by the screenshot harness — see ScreenshotHarness
@@ -474,7 +486,11 @@ public class QTracePanel {
         }
 
         row.getChildren().add(btnRecord);
-        if (!licensed) row.getChildren().add(hookSlot(true, true, true));
+        if (!licensed) {
+            // No account yet: the greyed Upload opens the group Replay and Version(s) stand in.
+            if (pushInvite) row.getChildren().addAll(vseparator(), btnPush);
+            row.getChildren().add(hookSlot(true, true, !pushInvite));
+        }
         if (licensed) {
             row.getChildren().add(vseparator());
             if (btnPush != null) row.getChildren().add(btnPush);
@@ -1350,7 +1366,7 @@ public class QTracePanel {
         Platform.runLater(() -> {
             // Remembered even without the button: the module that brings Upload can load later.
             pushEnabled = enabled;
-            if (btnPush != null) {
+            if (btnPush != null && !pushInvite) {
                 btnPush.setDisable(!enabled);
                 btnPush.setOpacity(enabled ? 1.0 : 0.45);
             }
