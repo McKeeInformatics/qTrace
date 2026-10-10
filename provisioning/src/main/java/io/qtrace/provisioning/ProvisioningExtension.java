@@ -58,6 +58,8 @@ public class ProvisioningExtension implements QuPathExtension {
         ModuleInstaller.refreshServed();
         // Startup update check (async; the user validates, applied at the next start).
         ModuleInstaller.checkModules(qupath);
+        // A workstation connected to an account gets its identity certificate by itself once it exists.
+        CertificateArrival.start(qupath, QTRACE_DIR);
     }
 
     @Override

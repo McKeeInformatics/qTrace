@@ -77,4 +77,55 @@ class BasicRecordTest {
             "{\"sessions\":[{\"validation\":{},\"record\":{\"id\":\"qtc_whatever\"}}]}").getAsJsonObject()));
         assertNull(BasicRecord.idOf(null));
     }
+
+    // ── Re-stamping: a certified stamp over a basic one declares the record it certifies ──
+
+    private static final String BASIC_LAST = """
+        {"sessions":[
+          {"session_id":"a","validation":{"validator":"x"},"record":{"id":"qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV","identity":"self_declared"}},
+          {"session_id":"b","validation":null,"validation_state":"unstamped"}]}""";
+
+    @Test
+    void aCertifiedStampOverABasicOneDeclaresIt() {
+        JsonObject root = JsonParser.parseString(BASIC_LAST).getAsJsonObject();
+        assertEquals("qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV", BasicRecord.restampedFrom(root, true));
+    }
+
+    @Test
+    void aBasicStampNeverDeclaresAnything() {
+        JsonObject root = JsonParser.parseString(BASIC_LAST).getAsJsonObject();
+        assertNull(BasicRecord.restampedFrom(root, false));
+    }
+
+    @Test
+    void aCertifiedStampOverACertifiedOrNoStampDeclaresNothing() {
+        JsonObject certified = JsonParser.parseString("""
+            {"sessions":[{"session_id":"a","validation":{"validator":"x"}}]}""").getAsJsonObject();
+        assertNull(BasicRecord.restampedFrom(certified, true));
+        assertNull(BasicRecord.restampedFrom(JsonParser.parseString("{\"sessions\":[]}").getAsJsonObject(), true));
+        assertNull(BasicRecord.restampedFrom(null, true));
+    }
+
+    @Test
+    void theRestampedFromBlockCarriesTheIdAndIsReadBack() {
+        JsonObject block = BasicRecord.restampedFromBlock("qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assertEquals("qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV", block.get("id").getAsString());
+        assertEquals(1, block.size());
+        JsonObject session = new JsonObject();
+        session.add("restamped_from", block);
+        assertEquals("qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV", BasicRecord.restampedFromOf(session));
+        assertNull(BasicRecord.restampedFromOf(new JsonObject()));
+        assertNull(BasicRecord.restampedFromOf(null));
+    }
+
+    @Test
+    void theLatestStampDeclaresItsOriginForThePush() {
+        JsonObject root = JsonParser.parseString("""
+            {"sessions":[
+              {"session_id":"a","validation":{"validator":"x"},"record":{"id":"qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV"}},
+              {"session_id":"b","validation":{"validator":"x"},"restamped_from":{"id":"qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV"}},
+              {"session_id":"c","validation":null,"validation_state":"unstamped"}]}""").getAsJsonObject();
+        assertEquals("qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV", BasicRecord.restampedFromOfLatestStamp(root));
+        assertNull(BasicRecord.restampedFromOfLatestStamp(JsonParser.parseString(BASIC_LAST).getAsJsonObject()));
+    }
 }

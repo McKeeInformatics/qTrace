@@ -36,11 +36,14 @@ public interface WorkspacePush {
      * chain: {@code certPath} and {@code chainLogPath} are null and {@code recordId} is its
      * {@code qtb_…} id. For a certified record {@code recordId} is null (its id is the
      * certificate's).
+     *
+     * <p>{@code restampedFrom} is the {@code qtb_…} id a <b>certified</b> record declares it
+     * certifies (it re-stamps a basic record); null in every other case.
      */
     record Request(ValidationStamp stamp, Path certPath, Path chainLogPath, Path qtraceFile,
                    Collection<ClassifierRecord> classifiers, Path thumbnailPath,
                    Collection<ImportedObjectFileRecord> importedFiles, Path geojsonPath,
-                   String recordId) {}
+                   String recordId, String restampedFrom) {}
 
     /**
      * Sends the record, off the FX thread. Resolves to the workspace URL of the record, or to

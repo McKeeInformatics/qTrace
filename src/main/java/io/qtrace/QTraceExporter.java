@@ -67,6 +67,7 @@ public class QTraceExporter {
     private       JsonArray        extensions = null;
     private       String           sessionId  = null;
     private       String           basicRecordId = null;
+    private       boolean          certifiedStamp = false;
 
     public QTraceExporter(ActionLogger logger, ValidationStamp stamp) {
         this.logger  = logger;
@@ -83,6 +84,15 @@ public class QTraceExporter {
      */
     public void setBasicRecordId(String id) {
         this.basicRecordId = id;
+    }
+
+    /**
+     * The stamp comes with a certificate. When the .qtrace's latest stamp was a basic record,
+     * the new session then declares the record it certifies ({@code restamped_from}, see
+     * {@link BasicRecord#restampedFrom}). False (the default) never writes it.
+     */
+    public void setCertifiedStamp(boolean certified) {
+        this.certifiedStamp = certified;
     }
 
     /** Reuses the live draft's session id, so a session keeps one id from first autosave to commit. */
@@ -327,6 +337,9 @@ public class QTraceExporter {
         // A stamp that produced no certificate: the record's id and the nature of its identity,
         // beside the stamp and never inside it (the stamp's signed payload does not change).
         if (stamp != null && basicRecordId != null) session.add("record", BasicRecord.block(basicRecordId));
+        // A certified stamp over a basic one (re-stamp): the session names the record it certifies.
+        String restampedFrom = stamp != null ? BasicRecord.restampedFrom(existingRoot, certifiedStamp) : null;
+        if (restampedFrom != null) session.add("restamped_from", BasicRecord.restampedFromBlock(restampedFrom));
 
         // Workflow steps
         List<WorkflowStep> rawSteps = imageData.getHistoryWorkflow().getSteps();

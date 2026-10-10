@@ -402,10 +402,39 @@ final class ModuleInstaller {
             Optional<ButtonType> result = a.showAndWait();
             boolean quit = result.isPresent() && result.get() == quitNow;
             log.info(TAG + "post-install: user chose {}", quit ? "quit now" : "later");
-            if (quit && qupath != null) QTraceUpdater.whenNoModalOpen("quit request", () -> {
-                log.info(TAG + "post-install: sending quit request to QuPath");
-                qupath.sendQuitRequest();
-            });
+            if (quit && qupath != null) quitQuPath(qupath);
+        });
+    }
+
+    /**
+     * A non-blocking notice with "Quit QuPath Now" and "Later" (Esc answers Later), for a caller
+     * that has something installed which needs a restart (the certificate that arrived by itself).
+     * Same quit as {@link #promptQuit}. Call on the FX thread.
+     */
+    static void offerRestart(QuPathGUI qupath, String title, String text) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.initModality(javafx.stage.Modality.NONE);
+        a.setTitle(title);
+        a.setHeaderText(null);
+        a.setContentText(text);
+        if (qupath != null && qupath.getStage() != null) a.initOwner(qupath.getStage());
+
+        ButtonType quitNow = new ButtonType(QTraceI18n.t("update.quit.now"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType later   = new ButtonType(QTraceI18n.t("update.later"),    ButtonBar.ButtonData.CANCEL_CLOSE);
+        a.getButtonTypes().setAll(quitNow, later);
+        a.resultProperty().addListener((obs, was, chosen) -> {
+            boolean quit = chosen == quitNow;
+            log.info(TAG + "restart notice: user chose {}", quit ? "quit now" : "later");
+            if (quit && qupath != null) quitQuPath(qupath);
+        });
+        a.show();
+    }
+
+    /** QuPath's own quit (same path as File > Quit, incl. the unsaved-changes prompt), once no modal dialog is open. */
+    private static void quitQuPath(QuPathGUI qupath) {
+        QTraceUpdater.whenNoModalOpen("quit request", () -> {
+            log.info(TAG + "post-install: sending quit request to QuPath");
+            qupath.sendQuitRequest();
         });
     }
 

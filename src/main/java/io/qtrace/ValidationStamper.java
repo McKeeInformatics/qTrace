@@ -83,19 +83,31 @@ public class ValidationStamper {
                                                   ClassifierFidelity fidelity,
                                                   String currentStatusLabel,
                                                   String defaultCaseId) {
-        return show(owner, gitHash, imgHash, qpdataHash, fidelity, currentStatusLabel, defaultCaseId, null);
+        return show(owner, gitHash, imgHash, qpdataHash, fidelity, currentStatusLabel, defaultCaseId, null, null);
     }
 
-    /**
-     * @param replay what a replay of this session runs; shown (read-only) when the author took
-     *               instructions out of it, so the validator signs knowing. Null: not shown.
-     */
     public static Optional<ValidationStamp> show(Stage owner, String gitHash, String imgHash,
                                                   String qpdataHash,
                                                   ClassifierFidelity fidelity,
                                                   String currentStatusLabel,
                                                   String defaultCaseId,
                                                   ReplaySkip.Summary replay) {
+        return show(owner, gitHash, imgHash, qpdataHash, fidelity, currentStatusLabel, defaultCaseId, replay, null);
+    }
+
+    /**
+     * @param replay what a replay of this session runs; shown (read-only) when the author took
+     *               instructions out of it, so the validator signs knowing. Null: not shown.
+     * @param restampsBasicId the qtb_… id of the basic record this certified stamp would certify
+     *               (shown as one information line); null when the stamp certifies nothing.
+     */
+    public static Optional<ValidationStamp> show(Stage owner, String gitHash, String imgHash,
+                                                  String qpdataHash,
+                                                  ClassifierFidelity fidelity,
+                                                  String currentStatusLabel,
+                                                  String defaultCaseId,
+                                                  ReplaySkip.Summary replay,
+                                                  String restampsBasicId) {
         Dialog<ValidationStamp> dialog = new Dialog<>();
         dialog.initOwner(owner);
         // Not modal: the panel button that opened it must stay clickable to close it again.
@@ -303,6 +315,15 @@ public class ValidationStamper {
             Label notCertified = new Label(QTraceI18n.t("stamp.notcertified.line"));
             notCertified.setStyle("-fx-text-fill: " + TEXT_MUTED + "; -fx-font-size: 11;");
             javafx.scene.layout.VBox note = new javafx.scene.layout.VBox(notCertified);
+            note.setPadding(new Insets(0, 20, 8, 20));
+            content.getChildren().add(note);
+        }
+        if (ep != null && restampsBasicId != null) {
+            // A certified stamp over a basic one: it says which record it certifies.
+            Label certifies = new Label(QTraceI18n.f("stamp.restamp.line", restampsBasicId));
+            certifies.setWrapText(true);
+            certifies.setStyle("-fx-text-fill: " + TEXT_MUTED + "; -fx-font-size: 11;");
+            javafx.scene.layout.VBox note = new javafx.scene.layout.VBox(certifies);
             note.setPadding(new Insets(0, 20, 8, 20));
             content.getChildren().add(note);
         }

@@ -892,7 +892,7 @@ public class QTraceSettingsDialog {
             if (accountName.isEmpty()) {
                 statusLbl.setText("No certificate loaded.");
             } else {
-                statusLbl.setText(QTraceI18n.f("settings.account.line", accountName));
+                statusLbl.setText(QTraceI18n.f("settings.account.line", accountName) + ". " + QTraceI18n.t("settings.account.arrives"));
                 tfValidator.setText(accountName);
                 tfValidator.setEditable(false);
                 tfValidator.setTooltip(new Tooltip(QTraceI18n.t("stamp.account.tooltip")));

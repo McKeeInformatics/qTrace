@@ -6,6 +6,12 @@
 ### New — Records that are not certified say so
 Without an identity certificate, **Validate & Stamp** carries your account's name as a self-declared identity and says **Not certified — self-declared identity**. The record gets an identifier starting with `qtb_`, can be uploaded, shared and replayed, and its verification page states that it is not certified. Certifying a record still requires an identity certificate.
 
+### New — Your certificate arrives on its own
+Signed in without a certificate, QuPath checks at each start whether your identity certificate now exists on qtrace.ca. When it does, qTrace installs it and asks you to restart QuPath once.
+
+### New — Certify a record stamped without a certificate
+Once you hold a certificate, **Validate & Stamp** on an image whose last stamp was not certified produces a certified record that names the one it certifies. Both verification pages link to each other.
+
 ### Changed
 - In **Getting started**, **Sign in or create an account** comes first; the invitation code, which brings an identity certificate, comes below.
 - **Settings › Certificate** and **Settings › Identity** show the account QuPath is signed in to when there is no certificate.

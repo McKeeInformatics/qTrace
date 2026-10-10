@@ -84,4 +84,42 @@ public final class BasicRecord {
             return null;
         }
     }
+
+    /**
+     * Re-stamping: the basic id a <em>certified</em> stamp declares it certifies — the id of the
+     * latest stamp already in the .qtrace when that one is basic. Null for a basic stamp, and
+     * when the latest stamp is certified or absent. {@code root} is the .qtrace before this stamp.
+     */
+    public static String restampedFrom(JsonObject qtraceRootBeforeStamp, boolean certifiedStamp) {
+        return certifiedStamp ? idOfLatestStamp(qtraceRootBeforeStamp) : null;
+    }
+
+    /** The {@code restamped_from} object of a session. */
+    public static JsonObject restampedFromBlock(String basicId) {
+        JsonObject o = new JsonObject();
+        o.addProperty("id", basicId);
+        return o;
+    }
+
+    /** The basic id a session declares it certifies; null when it declares none. */
+    public static String restampedFromOf(JsonObject session) {
+        try {
+            if (session == null || !session.has("restamped_from") || !session.get("restamped_from").isJsonObject()) return null;
+            JsonObject rec = session.getAsJsonObject("restamped_from");
+            if (!rec.has("id") || !rec.get("id").isJsonPrimitive()) return null;
+            String id = rec.get("id").getAsString();
+            return isId(id) ? id : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** What the .qtrace's latest stamp declares it certifies (read when pushing); null when nothing. */
+    public static String restampedFromOfLatestStamp(JsonObject qtraceRoot) {
+        try {
+            return restampedFromOf(StampIntegrity.latestValidatedSession(qtraceRoot));
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
 }

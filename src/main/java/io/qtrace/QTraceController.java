@@ -1441,7 +1441,7 @@ public class QTraceController {
         String defaultCaseId = resolveDefaultCaseId();
         ValidationStamper.show(qupath.getStage(), null, logger.getImageHash(), qpdataHash,
                                logger.computeClassifierFidelity(), currentStatus, defaultCaseId,
-                               replaySinceLastStamp())
+                               replaySinceLastStamp(), pendingRestampId())
             .ifPresentOrElse(
                 stamp -> {
                     // The dialog doesn't block QuPath: what it certifies was read when it opened,
@@ -1579,6 +1579,22 @@ public class QTraceController {
         return "";
     }
 
+    /**
+     * The basic record the coming stamp would certify (its .qtrace ends on a basic stamp and a
+     * certificate comes with the stamp), or null. Read from the file, like the status.
+     */
+    private String pendingRestampId() {
+        try {
+            if (QTracePluginManager.getEntitled() == null) return null;
+            var imageData = logger.getCurrentImageData();
+            if (imageData == null) return null;
+            String base = imageData.getServer().getMetadata().getName().replaceAll("[^a-zA-Z0-9._-]", "_");
+            Path outFile = QTraceConfig.get().outputExportDir().resolve(base + ".qtrace");
+            if (!Files.exists(outFile)) return null;
+            return BasicRecord.restampedFrom(JsonParser.parseString(Files.readString(outFile)).getAsJsonObject(), true);
+        } catch (Exception ignored) { return null; }
+    }
+
     private String readCurrentStatus() {
         try {
             var imageData = logger.getCurrentImageData();
@@ -1607,6 +1623,7 @@ public class QTraceController {
             exporter.setExtensions(collectLoadedExtensions());
             exporter.setSessionId(drafts.sessionId());
             exporter.setBasicRecordId(basicId);
+            exporter.setCertifiedStamp(ep != null);
             Path outFile = exporter.export(outDir);
             drafts.markCommitted();
             refreshCommitGraph();
@@ -1657,6 +1674,13 @@ public class QTraceController {
             if (basicId != null) {
                 ActivityLog.add("  record: " + basicId + " (not certified — self-declared identity)");
                 if (panel != null) panel.setPushEnabled(true);
+            }
+            if (lastStamp != null && ep != null) {
+                try {
+                    String certifies = BasicRecord.restampedFromOfLatestStamp(
+                        JsonParser.parseString(Files.readString(outFile)).getAsJsonObject());
+                    if (certifies != null) ActivityLog.add("  certifies: " + certifies);
+                } catch (Exception ignored) {}
             }
             if (ep != null && lastStamp != null) {
                 try {
@@ -1756,6 +1780,15 @@ public class QTraceController {
             return;
         }
         Path chainLog = sel.chainLogPath();
+        // Re-stamp: read from the .qtrace being sent (its latest stamp), not from memory — the
+        // upload can happen in another QuPath session than the stamp.
+        String restampedFrom = null;
+        if (sel.kind() == PushSelection.Kind.CERTIFIED) {
+            try {
+                restampedFrom = BasicRecord.restampedFromOfLatestStamp(
+                    JsonParser.parseString(Files.readString(lastQtracePath)).getAsJsonObject());
+            } catch (Exception ignored) {}
+        }
         java.util.Collection<ClassifierRecord> classifiers = logger.getKnownClassifiers().values();
         java.util.Collection<ImportedObjectFileRecord> importedFiles = logger.getImportedFiles().values();
         if (panel != null) {
@@ -1777,7 +1810,7 @@ public class QTraceController {
             panel.startPushProgress();
         }
         ep.push(new WorkspacePush.Request(lastStamp, sel.certPath(), chainLog, lastQtracePath, classifiers,
-              lastThumbnailPath, importedFiles, lastGeojsonPath, sel.recordId()))
+              lastThumbnailPath, importedFiles, lastGeojsonPath, sel.recordId(), restampedFrom))
           .thenAccept(url -> {
               if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {
