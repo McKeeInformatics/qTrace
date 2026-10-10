@@ -1,3 +1,19 @@
+## What's new in v1.2.7
+
+### New — Sign in with a qtrace.ca account, with or without a certificate
+**Sign in to qtrace.ca** now connects QuPath to your account even when it holds no identity certificate. The panel then shows **Signed in as _your name_ · not certified**, and **Upload** is available.
+
+### New — Records that are not certified say so
+Without an identity certificate, **Validate & Stamp** carries your account's name as a self-declared identity and says **Not certified — self-declared identity**. The record gets an identifier starting with `qtb_`, can be uploaded, shared and replayed, and its verification page states that it is not certified. Certifying a record still requires an identity certificate.
+
+### Changed
+- In **Getting started**, **Sign in or create an account** comes first; the invitation code, which brings an identity certificate, comes below.
+- **Settings › Certificate** and **Settings › Identity** show the account QuPath is signed in to when there is no certificate.
+- A tool your account starts receiving shows in the panel at once, without restarting QuPath.
+- When an upload is refused because a limit of your account is reached, qTrace says which one in a sentence.
+
+---
+
 ## What's new in v1.2.6
 
 ### Changed — qTrace is now made of extensions
