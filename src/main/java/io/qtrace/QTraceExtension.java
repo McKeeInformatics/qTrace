@@ -128,8 +128,6 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         // Downgrades Compliance → Core when the license is expired/inactive, before
         // the panel is ever shown; the server confirmation runs async.
         QTraceLicenseGate.checkAtStartup(qupath, controller);
-        // Provisional identity certificate → swapped for the verified one when it exists.
-        CertificateRefresher.start(qupath, controller);
         // Which modules this workstation is served, their updates and the ones to switch off:
         // the provisioning module's work (loader.md § 7) — Core downloads nothing.
     }

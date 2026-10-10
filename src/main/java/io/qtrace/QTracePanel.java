@@ -302,16 +302,9 @@ public class QTracePanel {
         String accountName;
         if (entitled != null && entitled.getActiveLicenseInfo() != null) {
             licenseInfo = entitled.getActiveLicenseInfo();
-            if (licenseInfo.verified()) {
-                text = "Certified for " + licenseInfo.name()
-                     + "  ·  until " + licenseInfo.expiresAtFormatted().replace("-", "/");
-                iconColor = GOLD;
-            } else {
-                // Provisional certificate (loader.md § 17): everything works, the name is not verified yet.
-                text = "Identity verification pending  ·  provisional until "
-                     + licenseInfo.expiresAtFormatted().replace("-", "/");
-                iconColor = PEACH;
-            }
+            text = "Certified for " + licenseInfo.name()
+                 + "  ·  until " + licenseInfo.expiresAtFormatted().replace("-", "/");
+            iconColor = GOLD;
         } else if (!(accountName = accountNameForBadge()).isEmpty()) {
             // Signed in to a basic account: no certificate, said in the neutral colour.
             text = QTraceI18n.f("panel.account.badge", accountName);

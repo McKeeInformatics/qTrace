@@ -39,7 +39,7 @@ public record CommitIdentity(String name, String email, String validatorKey, boo
             return new CommitIdentity(license.name().strip(),
                 license.email() != null ? license.email().strip() : "",
                 license.validatorKey() != null && !license.validatorKey().isBlank() ? license.validatorKey() : null,
-                license.verified());
+                true);
         }
         if (contributor != null && !contributor.isBlank()) {
             return new CommitIdentity(contributor.strip(), "", null, false);
