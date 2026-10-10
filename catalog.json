@@ -5,7 +5,7 @@
         "name": "qTrace",
         "description": "Captures the complete provenance of a QuPath analysis. This small loader installs and keeps up to date the signed qTrace modules (Core, Getting started, Player, ...) on first start.",
         "author": "qTrace",
-        "homepage": "https://qtrace.ca",
+        "homepage": "https://github.com/RomainTourte/qTrace-core",
         "starred": false,
         "releases": [
             {
