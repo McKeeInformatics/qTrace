@@ -21,9 +21,16 @@ Outputs:
 
 ## Installation
 
-1. Download `qtrace-core-X.Y.Z.jar` from [Releases](../../releases)
-2. Copy to your QuPath extensions folder: `~/QuPath/v0.7/extensions/`
-3. Restart QuPath → Extensions > QTrace > Panel
+With QuPath 0.6 or later:
+
+1. In QuPath: **Extensions › Manage extensions › Manage extension catalogs**, add
+   `https://github.com/RomainTourte/qTrace-core` (once).
+2. Install **qTrace** from the list, then restart QuPath.
+3. Follow **Getting started**; qTrace then lives under Extensions › QTrace.
+
+Without the catalogue: download `qtrace-loader.jar` from [Releases](../../releases/latest) and
+drag it onto the QuPath window (or copy it to your extensions folder), then click **Install**.
+The loader downloads the signed qTrace modules itself — do not copy `qtrace-core-*` files by hand.
 
 ## Compliance features
 
@@ -38,8 +45,8 @@ visit [qtrace.ca](https://qtrace.ca) or contact [Romain Tourte](mailto:tourterom
 ## Build from source
 
 ```bash
-./gradlew jar
-# Output: build/libs/qtrace-core-X.Y.Z.jar
+./gradlew qtjar
+# Output: build/libs/qtrace-core-X.Y.Z.qtjar (signed, needs the signing key)
 ```
 
 Requires Java 21. Compiled against QuPath 0.5.1 API, runtime target QuPath 0.7.x.
