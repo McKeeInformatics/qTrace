@@ -76,14 +76,16 @@
     }).join('') + '</div>';
   }
 
+  // Sign in comes first: anyone with a qtrace.ca account can. The invitation code is the way
+  // to an identity certificate, for those who received one.
   function entryHTML() {
     return '<div class="entry">' +
+      '<button type="button" class="btn primary" data-act="sign-in">Sign in or create an account</button>' +
       '<form class="door" data-form="invite">' +
       '<label for="invite" class="lbl">Invitation code</label>' +
       '<input id="invite" name="invite" class="codein" placeholder="XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" maxlength="14">' +
-      '<button type="submit" class="btn primary">Continue with this code</button>' +
-      '<span class="hint" id="invite-hint">In the email from the qTrace team.</span></form>' +
-      '<a class="other" data-act="sign-in" role="button" tabindex="0">Sign in or create an account →</a></div>';
+      '<button type="submit" class="btn">Continue with this code</button>' +
+      '<span class="hint" id="invite-hint">In the email from the qTrace team: it brings your identity certificate.</span></form></div>';
   }
 
   // Signed in to a basic account (no certificate): the device state 'account' carries the name.
