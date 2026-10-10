@@ -57,6 +57,8 @@ final class GettingStartedDialog {
     private final Stage stage = new Stage();
     private final VBox root = new VBox(14);
     private final AtomicBoolean cancelled = new AtomicBoolean();
+    /** The name of the basic account this sign-in ended on (empty if none), null for a certificate. */
+    private volatile String accountName;
 
     GettingStartedDialog(QuPathGUI qupath, Provisioner provisioner) {
         this.qupath = qupath;
@@ -118,6 +120,7 @@ final class GettingStartedDialog {
 
     private void signIn() {
         cancelled.set(false);
+        accountName = null;
         Label code = new Label("…");
         code.setStyle("-fx-font-size: 28px; -fx-font-family: monospace; -fx-font-weight: bold;");
         Label status = muted("Contacting qtrace.ca…");
@@ -147,6 +150,7 @@ final class GettingStartedDialog {
                 });
             }
             public void approved(Path certificate) { }
+            public void signedInToAccount(String name) { accountName = name == null ? "" : name; }
             public void installing() { Platform.runLater(GettingStartedDialog.this::installing); }
             public void installed(int modules) { Platform.runLater(() -> done(modules)); }
             public void failed(String message) { Platform.runLater(() -> GettingStartedDialog.this.failed(message)); }
@@ -156,6 +160,14 @@ final class GettingStartedDialog {
     private void installing() {
         ProgressIndicator spin = new ProgressIndicator();
         spin.setPrefSize(22, 22);
+        if (accountName != null) {
+            setContent(
+                title("You are signed in"),
+                text(signedInAs() + " Records you upload are not certified. qTrace now downloads "
+                    + "the modules your account includes."),
+                new HBox(10, spin, muted("Installing the modules of your account…")));
+            return;
+        }
         Label status = muted("Installing the modules of your certificate…");
         setContent(
             title("You are signed in"),
@@ -166,6 +178,14 @@ final class GettingStartedDialog {
     private void done(int modules) {
         Button close = primary("Close");
         close.setOnAction(e -> stage.close());
+        if (accountName != null) {
+            setContent(
+                title(modules > 0 ? "Almost done: restart QuPath" : "You are signed in"),
+                text(signedInAs() + " Records you upload are not certified."
+                    + (modules > 0 ? " Restart QuPath to finish." : "")),
+                close);
+            return;
+        }
         setContent(
             title(modules > 0 ? "Almost done: restart QuPath" : "Your certificate is installed"),
             text(modules > 0
@@ -173,6 +193,12 @@ final class GettingStartedDialog {
                 : "Restart QuPath to activate it. If Compliance is still missing afterwards, "
                   + "check your connection and use Extensions > QTrace > Bug or Feature Request…"),
             close);
+    }
+
+    /** "Signed in as Ada." — or just "Signed in." when the account has no name. */
+    private String signedInAs() {
+        String n = accountName == null ? "" : accountName;
+        return n.isBlank() ? "Signed in." : "Signed in as " + n + ".";
     }
 
     private void failed(String why) {

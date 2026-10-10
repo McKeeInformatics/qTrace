@@ -40,6 +40,24 @@ class UploadInviteTest {
     }
 
     @Test
+    void aSignedInAccountSeesUploadWhenTheModuleIsServed() {
+        // "signed in" = active licence or basic account; the rule does not tell them apart.
+        assertEquals(UPLOAD, UploadInvite.state(true, true, true, true));
+        assertEquals(UPLOAD, UploadInvite.state(true, true, true, false));
+    }
+
+    @Test
+    void aSignedInAccountWithoutTheUploadModuleIsNeitherInvitedNorOffered() {
+        assertEquals(NONE, UploadInvite.state(true, false, true, true));
+    }
+
+    @Test
+    void anExpiredAccountWithNoLicenceIsInvitedToSignInAgain() {
+        // hasIdentity is false once the token expired (Account.signedIn), so the invitation comes back.
+        assertEquals(SIGN_IN, UploadInvite.state(false, true, false, true));
+    }
+
+    @Test
     void theInvitationOpensTheWindowTheWelcomeModuleRegistered() {
         assertFalse(UploadInvite.available());
         assertFalse(UploadInvite.open());

@@ -47,6 +47,13 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    // Headless checks against the update-sim mock (tools/update-sim/mock_server.py): skipped unless
+    //   ./gradlew --offline test -Dqtrace.sim=http://127.0.0.1:8766
+    // The same URL becomes qtrace.update.server, the switch every module reads to find qtrace.ca.
+    ['qtrace.sim', 'qtrace.sim.quota'].each { k ->
+        if (System.getProperty(k)) systemProperty k, System.getProperty(k)
+    }
+    if (System.getProperty('qtrace.sim')) systemProperty 'qtrace.update.server', System.getProperty('qtrace.sim')
 }
 
 jar {

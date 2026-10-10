@@ -23,14 +23,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * What stands at Upload's place in the panel and the mini-panel. Uploading needs an account on
- * qtrace.ca: a workstation without one shows Upload greyed, and a click on it opens the window
- * to sign in from (Getting started, which the welcome module registers here).
+ * qtrace.ca — a certified licence or a basic account: a workstation without one shows Upload
+ * greyed, and a click on it opens the window to sign in from (Getting started, which the welcome module registers here).
  */
 public final class UploadInvite {
 
     /** What the panels draw at Upload's place. */
     public enum State {
-        /** The upload itself: an active licence and the upload module. */
+        /** The upload itself: signed in (an active licence or a basic account) and the upload module. */
         UPLOAD,
         /** Greyed, and a click opens Getting started: no account on this workstation yet. */
         SIGN_IN,
@@ -46,22 +46,24 @@ public final class UploadInvite {
     // ── Rule (pure) ──────────────────────────────────────────────────────────────
 
     /**
-     * @param licensed       the licence is active
+     * @param signedIn       the licence is active, or a basic account is signed in
      * @param pushThere      a module brought the upload and is served
-     * @param hasCertificate a certificate is configured, active or not
+     * @param hasIdentity    a certificate is configured (active or not) or a basic account is signed in
      * @param signInThere    there is a window to sign in from
      */
-    static State state(boolean licensed, boolean pushThere, boolean hasCertificate, boolean signInThere) {
-        if (licensed && pushThere) return State.UPLOAD;
+    static State state(boolean signedIn, boolean pushThere, boolean hasIdentity, boolean signInThere) {
+        if (signedIn && pushThere) return State.UPLOAD;
         // A certificate that does not give Upload (inactive, or without the module) is another matter.
-        return !hasCertificate && signInThere ? State.SIGN_IN : State.NONE;
+        return !hasIdentity && signInThere ? State.SIGN_IN : State.NONE;
     }
 
     /** What to draw on this workstation, now. */
     public static State state() {
         String licence = QTraceConfig.get().getLicensePath();
-        return state(QTracePluginManager.isEntitled(), WorkspacePushes.entitled() != null,
-            licence != null && !licence.isBlank(), available());
+        boolean hasLicence = licence != null && !licence.isBlank();
+        boolean account = Account.counts(hasLicence, Account.signedIn());
+        return state(QTracePluginManager.isEntitled() || account, WorkspacePushes.entitled() != null,
+            hasLicence || account, available());
     }
 
     // ── The window to sign in from ───────────────────────────────────────────────

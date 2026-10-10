@@ -66,6 +66,7 @@ public class QTraceExporter {
     private       String           gitParent  = null;   // last commit of this .qtrace, set by export()
     private       JsonArray        extensions = null;
     private       String           sessionId  = null;
+    private       String           basicRecordId = null;
 
     public QTraceExporter(ActionLogger logger, ValidationStamp stamp) {
         this.logger  = logger;
@@ -74,6 +75,14 @@ public class QTraceExporter {
 
     public void setExtensions(JsonArray extensions) {
         this.extensions = extensions;
+    }
+
+    /**
+     * The session is a basic record ({@link BasicRecord}): its stamp produces no certificate.
+     * Written as a {@code record} object beside the stamp; null (the default) writes nothing.
+     */
+    public void setBasicRecordId(String id) {
+        this.basicRecordId = id;
     }
 
     /** Reuses the live draft's session id, so a session keeps one id from first autosave to commit. */
@@ -315,6 +324,9 @@ public class QTraceExporter {
         }
         // Explicit so readers never have to infer it (see StampIntegrity.isStamped).
         session.addProperty("validation_state", stamp != null ? "stamped" : "unstamped");
+        // A stamp that produced no certificate: the record's id and the nature of its identity,
+        // beside the stamp and never inside it (the stamp's signed payload does not change).
+        if (stamp != null && basicRecordId != null) session.add("record", BasicRecord.block(basicRecordId));
 
         // Workflow steps
         List<WorkflowStep> rawSteps = imageData.getHistoryWorkflow().getSteps();

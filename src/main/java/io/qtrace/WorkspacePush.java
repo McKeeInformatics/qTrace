@@ -31,10 +31,16 @@ public interface WorkspacePush {
     /**
      * What one upload sends. {@code certPath} and {@code chainLogPath} are the certificate and
      * the chain of custody the stamp produced; the companion files may be absent (null or empty).
+     *
+     * <p>A <b>basic</b> record (a stamp that produced no certificate) has no certificate and no
+     * chain: {@code certPath} and {@code chainLogPath} are null and {@code recordId} is its
+     * {@code qtb_…} id. For a certified record {@code recordId} is null (its id is the
+     * certificate's).
      */
     record Request(ValidationStamp stamp, Path certPath, Path chainLogPath, Path qtraceFile,
                    Collection<ClassifierRecord> classifiers, Path thumbnailPath,
-                   Collection<ImportedObjectFileRecord> importedFiles, Path geojsonPath) {}
+                   Collection<ImportedObjectFileRecord> importedFiles, Path geojsonPath,
+                   String recordId) {}
 
     /**
      * Sends the record, off the FX thread. Resolves to the workspace URL of the record, or to

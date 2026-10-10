@@ -52,10 +52,15 @@ public final class ProvisioningState {
         return new ProvisioningState(f, o);
     }
 
-    /** The trunk shows up on a machine with no license, until the user finished or skipped it. */
-    public boolean shouldShowTrunk(String licensePath) {
+    /**
+     * The trunk shows up on a machine with no certificate and no account, until the user
+     * finished or skipped it.
+     *
+     * @param hasAccount a basic account is signed in on this machine
+     */
+    public boolean shouldShowTrunk(String licensePath, boolean hasAccount) {
         boolean licensed = licensePath != null && !licensePath.isBlank();
-        return !licensed && !flag("trunkDone");
+        return !licensed && !hasAccount && !flag("trunkDone");
     }
 
     public void markTrunkDone() {

@@ -36,6 +36,18 @@ class ProjectRecordsTest {
     }
 
     @Test
+    void aTraceWhoseSessionCarriesABasicRecordIsReadLikeAnyOther() throws Exception {
+        Files.writeString(dir.resolve("Core_01.qtrace"),
+            "{\"qtrace_format\":\"2.0\",\"image\":{\"name\":\"Core_01.ome.tif\"},\"sessions\":[{\"session_id\":\"s\","
+          + "\"validation_state\":\"stamped\",\"validation\":{\"validator\":\"Ada\"},"
+          + "\"record\":{\"id\":\"qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"identity\":\"self_declared\"}}]}");
+        ProjectRecords.Scan scan = ProjectRecords.scan(List.of("Core_01.ome.tif"), dir.toFile());
+
+        assertNotNull(scan.rows().get(0).qtrace());
+        assertEquals(1, scan.qtraceCount());
+    }
+
+    @Test
     void aTraceWhoseImageLeftTheProjectIsStillListedAfterTheProjectImages() throws Exception {
         trace("Core_01.qtrace", "Core_01.ome.tif");
         trace("Old.qtrace", "Old.ome.tif");

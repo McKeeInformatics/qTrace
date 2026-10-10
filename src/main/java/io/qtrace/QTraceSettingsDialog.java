@@ -885,7 +885,19 @@ public class QTraceSettingsDialog {
         tfEmail.setText("");
 
         if (path == null || path.isBlank()) {
-            statusLbl.setText("No certificate loaded.");
+            // Signed in to a basic account, no certificate: the account's name is the validator,
+            // locked like a certified one, and the status line says it is not a certificate.
+            Account.Info account = Account.signedIn() ? Account.info() : null;
+            String accountName = Account.displayName(account);
+            if (accountName.isEmpty()) {
+                statusLbl.setText("No certificate loaded.");
+            } else {
+                statusLbl.setText(QTraceI18n.f("settings.account.line", accountName));
+                tfValidator.setText(accountName);
+                tfValidator.setEditable(false);
+                tfValidator.setTooltip(new Tooltip(QTraceI18n.t("stamp.account.tooltip")));
+                tfEmail.setText(account.email());
+            }
             statusLbl.setTextFill(Color.web(TEXT_MUTED));
             return;
         }

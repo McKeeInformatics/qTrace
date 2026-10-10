@@ -128,6 +128,9 @@ final class TrunkPlayer {
                 w.emit("device", Map.of("state", "waiting", "code", code, "url", url));
             }
             public void approved(Path certificate) { w.emit("device", Map.of("state", "approved", "code", code)); }
+            public void signedInToAccount(String name) {
+                w.emit("device", Map.of("state", "account", "name", name == null ? "" : name, "code", code));
+            }
             public void installing() {
                 w.gotoSlide("install");
                 w.emit("install", Map.of("state", "running"));

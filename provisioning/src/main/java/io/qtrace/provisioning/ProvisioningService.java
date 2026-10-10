@@ -19,6 +19,7 @@
 
 package io.qtrace.provisioning;
 
+import io.qtrace.Account;
 import io.qtrace.ModuleUpdates;
 import io.qtrace.Provisioner;
 import io.qtrace.QTraceConfig;
@@ -58,7 +59,7 @@ final class ProvisioningService implements Provisioner {
 
     @Override
     public boolean gettingStartedPending() {
-        return ProvisioningState.load(qtraceDir).shouldShowTrunk(QTraceConfig.get().getLicensePath());
+        return ProvisioningState.load(qtraceDir).shouldShowTrunk(QTraceConfig.get().getLicensePath(), Account.signedIn());
     }
 
     @Override

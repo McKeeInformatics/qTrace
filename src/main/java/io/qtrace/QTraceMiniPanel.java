@@ -283,7 +283,7 @@ public final class QTraceMiniPanel {
             }
         } else {
             nodes.add(stampBtn);
-            if (licensed || player || uploadInvite || (versions && !licensed)) nodes.add(separator());
+            if (licensed || player || uploadSlot != null || (versions && !licensed)) nodes.add(separator());
             if (uploadSlot != null) nodes.add(uploadSlot);
             if (player) nodes.add(replayBtn);
             if (licensed) nodes.add(separator());

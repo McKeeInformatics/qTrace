@@ -14,26 +14,32 @@ class ProvisioningStateTest {
 
     @Test
     void showsTheTrunkOnAFreshInstall() {
-        assertTrue(ProvisioningState.load(home).shouldShowTrunk(""));
+        assertTrue(ProvisioningState.load(home).shouldShowTrunk("", false));
     }
 
     @Test
     void staysQuietOnceALicenseIsConfigured() {
-        assertFalse(ProvisioningState.load(home).shouldShowTrunk("/home/x/.qTrace/qtrace.qtlicense"));
+        assertFalse(ProvisioningState.load(home).shouldShowTrunk("/home/x/.qTrace/qtrace.qtlicense", false));
+    }
+
+    @Test
+    void staysQuietOnceAnAccountIsSignedIn() {
+        assertFalse(ProvisioningState.load(home).shouldShowTrunk("", true));
+        assertFalse(ProvisioningState.load(home).shouldShowTrunk(null, true));
     }
 
     @Test
     void staysQuietOnceDoneAndRemembersIt() {
         ProvisioningState s = ProvisioningState.load(home);
         s.markTrunkDone();
-        assertFalse(ProvisioningState.load(home).shouldShowTrunk(""));
+        assertFalse(ProvisioningState.load(home).shouldShowTrunk("", false));
         assertTrue(Files.isRegularFile(home.resolve("provisioning.json")));
     }
 
     @Test
     void aCorruptFileMeansAFreshStart() throws Exception {
         Files.writeString(home.resolve("provisioning.json"), "{not json");
-        assertTrue(ProvisioningState.load(home).shouldShowTrunk(null));
+        assertTrue(ProvisioningState.load(home).shouldShowTrunk(null, false));
     }
 
     @Test

@@ -21,9 +21,9 @@
     },
     {
       "id": "account",
-      "eyebrow": "Your invitation",
-      "title": "Do you have an invitation code?",
-      "text": "It was sent to your email address. Enter it: your browser opens qtrace.ca to create your account with that address, and your certificate then arrives in QuPath on its own. No file to handle.",
+      "eyebrow": "Your account",
+      "title": "Sign in to qtrace.ca",
+      "text": "Your browser opens qtrace.ca to create your account or sign in, and QuPath is connected on its own. No file to handle. If you received an invitation code by email, enter it: your account then gets the identity certificate that certifies the records you sign.",
       "visual": "entry",
       "actions": [
         {
@@ -36,8 +36,12 @@
       "id": "code",
       "eyebrow": "In your browser",
       "title": "Finish in your browser",
-      "text": "qtrace.ca opened in your browser: create your account or sign in, accept the terms and choose your passphrase, then click “Authorize QuPath”. You can start working right away; if your identity still needs verifying, qTrace runs with a provisional certificate until it is done.",
+      "text": "qtrace.ca opened in your browser: create your account or sign in, follow the steps shown there, then click “Authorize QuPath”. QuPath is connected as soon as you do.",
       "visual": "device",
+      "account": {
+        "title": "You are signed in",
+        "text": "You can upload, share and replay your records right away. They are not certified: an identity certificate, obtained from qtrace.ca, is what certifies the records you sign."
+      },
       "actions": []
     },
     {
@@ -46,6 +50,10 @@
       "title": "Installing Compliance and your welcome",
       "text": "Your certificate is saved. qTrace downloads the modules it gives you, then asks you to restart QuPath once.",
       "visual": "install",
+      "account": {
+        "title": "Installing your modules",
+        "text": "Records you upload are not certified. qTrace downloads the modules your account includes, then asks you to restart QuPath once."
+      },
       "actions": [
         {
           "label": "Quit QuPath now",

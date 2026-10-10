@@ -118,9 +118,19 @@ public class ValidationStamper {
         LicenseInfo activeLicense = null;
         if (ep != null) activeLicense = ep.getActiveLicenseInfo();
 
+        // Without Compliance a signed-in basic account names the validator (locked, self-declared).
+        String accountName = null;
+        if (ep == null) {
+            String licence = QTraceConfig.get().getLicensePath();
+            boolean hasLicence = licence != null && !licence.isBlank();
+            Account.Info who = Account.counts(hasLicence, Account.signedIn()) ? Account.info() : null;
+            accountName = who != null ? who.name() : null;
+        }
+        StampIdentity identity = StampIdentity.resolve(null, accountName, QTraceConfig.get().getValidatorName());
+
         String configuredValidator = (activeLicense != null)
             ? activeLicense.name()
-            : QTraceConfig.get().getValidatorName();
+            : identity.name();
 
         TextField validatorField = new TextField(configuredValidator);
         validatorField.setPromptText("Dr. Lastname / Analyst ID");
@@ -144,6 +154,16 @@ public class ValidationStamper {
               + "Institution: " + activeLicense.institution() + "\n"
               + "Valid until: " + activeLicense.expiresAtFormatted()
             ));
+        } else if (identity.locked()) {
+            // A signed-in account, no certificate: the name is the account's and cannot be edited,
+            // in the neutral colour — green is for a certified identity only.
+            validatorField.setEditable(false);
+            validatorField.setFocusTraversable(false);
+            validatorField.setStyle(
+                "-fx-background-color: transparent; -fx-border-color: transparent;"
+              + "-fx-text-fill: " + TEXT_MAIN + "; -fx-font-size: 13; -fx-font-weight: bold; -fx-padding: 0;"
+            );
+            validatorField.setTooltip(new javafx.scene.control.Tooltip(QTraceI18n.t("stamp.account.tooltip")));
         }
 
         TextField caseIdField = new TextField(defaultCaseId != null ? defaultCaseId : "");
@@ -277,7 +297,16 @@ public class ValidationStamper {
         java.util.List<StampSection> sections = StampSections.create();
 
         DialogPane pane = dialog.getDialogPane();
-        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(header, grid, factsBox);
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(header, grid);
+        if (ep == null) {
+            // No certificate comes with this stamp: said once, discreetly (no passphrase, no PIN).
+            Label notCertified = new Label(QTraceI18n.t("stamp.notcertified.line"));
+            notCertified.setStyle("-fx-text-fill: " + TEXT_MUTED + "; -fx-font-size: 11;");
+            javafx.scene.layout.VBox note = new javafx.scene.layout.VBox(notCertified);
+            note.setPadding(new Insets(0, 20, 8, 20));
+            content.getChildren().add(note);
+        }
+        content.getChildren().add(factsBox);
         pane.setContent(content);
         pane.setPadding(Insets.EMPTY);
         // -fx-base makes every control (drop-down lists, check box, scroll bars) dark with light text.

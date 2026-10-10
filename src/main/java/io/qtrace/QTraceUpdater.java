@@ -79,6 +79,16 @@ public final class QTraceUpdater {
         }
     }
 
+    /**
+     * What the workstation presents to qtrace.ca as {@code Authorization: Bearer}: the licence's
+     * token when there is one — a licence always wins — otherwise the account token of a basic
+     * account, otherwise null. {@link #licenseJwt()} keeps meaning "the licence" only.
+     */
+    public static String bearer() {
+        String licence = licenseJwt();
+        return licence != null ? licence : Account.jwt();
+    }
+
     // ── Extensions dir + JAR cleanup ────────────────────────────────────────────
 
     /**

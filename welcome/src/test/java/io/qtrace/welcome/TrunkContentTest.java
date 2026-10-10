@@ -36,7 +36,7 @@ class TrunkContentTest {
         {"schemaVersion":2,"title":"Getting started with qTrace","slides":[
           {"id":"what","title":"Every analysis, traceable","text":"…","actions":[]},
           {"id":"network","title":"Checking your connection","text":"…","visual":"network","actions":[]},
-          {"id":"account","title":"Do you have an invitation code?","text":"…","actions":[{"label":"Not now","action":"continue"}]},
+          {"id":"account","title":"Sign in to qtrace.ca","text":"…","actions":[{"label":"Not now","action":"continue"}]},
           {"id":"ready","hidden":true,"title":"qTrace is on board","text":"Work as usual.",
            "actions":[{"label":"Start using qTrace","action":"close","primary":true}]}]}""";
 

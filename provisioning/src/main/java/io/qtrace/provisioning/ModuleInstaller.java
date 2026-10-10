@@ -110,7 +110,7 @@ final class ModuleInstaller {
     static List<ModuleUpdates.Card> moduleCards() {
         java.util.Map<String, ModuleUpdates.Card> byModule = new java.util.LinkedHashMap<>();
         for (ModuleUpdates.Card c : openModules()) byModule.putIfAbsent(c.offer().module(), c);
-        String jwt = QTraceUpdater.licenseJwt();
+        String jwt = QTraceUpdater.bearer();
         if (jwt != null) {
             try {
                 for (ModuleUpdates.Card c : ModuleUpdates.parseCards(
@@ -134,7 +134,7 @@ final class ModuleInstaller {
      * ({@link ModuleEntitlements}). Offline, or a refused certificate: the last answer stands.
      */
     static void refreshServed() {
-        String jwt = QTraceUpdater.licenseJwt();
+        String jwt = QTraceUpdater.bearer();
         CompletableFuture.runAsync(() -> {
             try {
                 ModuleEntitlements.accept(fetch(OPEN_MODULES_URL, null), jwt == null ? null : fetch(MODULES_URL, jwt), jwt != null);
@@ -185,7 +185,7 @@ final class ModuleInstaller {
                     if (openModulesLeftToGettingStarted && !local.containsKey(m.offer().module())) continue;
                     remote.add(m.offer());
                 }
-                String jwt = QTraceUpdater.licenseJwt();
+                String jwt = QTraceUpdater.bearer();
                 if (jwt != null) {
                     try {
                         remote = ModuleUpdates.merge(remote, ModuleUpdates.parse(
@@ -233,7 +233,7 @@ final class ModuleInstaller {
         return CompletableFuture.supplyAsync(() -> {
             int count = 0;
             try {
-                String jwt = QTraceUpdater.licenseJwt();
+                String jwt = QTraceUpdater.bearer();
                 List<ModuleUpdates.Offer> remote = new ArrayList<>(openModules().stream().map(ModuleUpdates.Card::offer).toList());
                 if (jwt != null) {
                     remote = ModuleUpdates.merge(remote, ModuleUpdates.parse(

@@ -32,7 +32,7 @@ import java.util.function.BooleanSupplier;
  */
 public interface Provisioner {
 
-    /** True on a workstation with no certificate whose user has not finished Getting started. */
+    /** True on a workstation with no certificate and no account whose user has not finished Getting started. */
     boolean gettingStartedPending();
 
     /** The user finished Getting started, or chose to go on without an account. */
@@ -76,6 +76,13 @@ public interface Provisioner {
         void starting();
         void waiting(String userCode, String verificationUrl);
         void approved(Path certificate);
+        /**
+         * Reported instead of {@link #approved} when the portal signed this workstation in to a
+         * basic account: there is no certificate, and what the user uploads is not certified.
+         *
+         * @param name the account's name, empty when the token does not carry one
+         */
+        default void signedInToAccount(String name) {}
         void installing();
         void installed(int modules);
         void failed(String message);

@@ -184,6 +184,7 @@ public class QTraceController {
     private ValidationStamp lastStamp    = null;
     private Path            lastCertPath  = null;  // written by exportReport(), used by pushToWorkspace()
     private Path            lastQtracePath = null;
+    private String          lastRecordId   = null;  // qtb_… of a stamp that produced no certificate (BasicRecord); null when certified
     private Path            lastThumbnailPath = null;
     private Path            lastGeojsonPath = null; // manual annotations GeoJSON — lives in QTraceConfig.outputTrainingDir(), not outDir
     // Captured-step count at the moment of lastStamp — imageHash alone (pixel content)
@@ -517,8 +518,9 @@ public class QTraceController {
      */
     private void refreshPushAvailability() {
         if (panel == null) return;
-        QTracePlugin ep = QTracePluginManager.getEntitled();
-        if (ep == null) return; // Upload button doesn't exist without Compliance
+        // With Compliance the record is certified (a .qtcert on disk); without, it is a basic
+        // record (a qtb_ id in the .qtrace).
+        boolean certified = QTracePluginManager.getEntitled() != null;
         try {
             var imageData = logger != null ? logger.getCurrentImageData() : null;
             String imageHash = logger != null ? logger.getImageHash() : null;
@@ -532,6 +534,11 @@ public class QTraceController {
             Path qtracePath = exportDir.resolve(base + ".qtrace");
             if (!Files.exists(qtracePath) || !Files.isDirectory(exportDir)) {
                 panel.setPushEnabled(false);
+                return;
+            }
+
+            if (!certified) {
+                restoreBasicRecord(qtracePath, imageHash);
                 return;
             }
 
@@ -568,6 +575,7 @@ public class QTraceController {
             if (bestCert != null && Files.exists(bestCert.getParent().getParent().resolve("chain.jsonl"))) {
                 lastQtracePath = qtracePath;
                 lastCertPath   = bestCert;
+                lastRecordId   = null;
                 // Cert may have been issued in a previous session (e.g. the day before) —
                 // reconstruct the in-memory stamp from it so pushToWorkspace() has data to send.
                 if (lastStamp == null || !imageHash.equals(lastStamp.imageHash())) {
@@ -582,12 +590,47 @@ public class QTraceController {
         }
     }
 
+    /**
+     * Without a certificate: the image's .qtrace may end on a basic record (a qtb_ id written
+     * by the latest stamp). Restores what Upload needs from it — and enables Upload.
+     */
+    private void restoreBasicRecord(Path qtracePath, String imageHash) {
+        try {
+            JsonObject root = JsonParser.parseString(Files.readString(qtracePath)).getAsJsonObject();
+            String id = BasicRecord.idOfLatestStamp(root);
+            if (id == null) {
+                panel.setPushEnabled(false);
+                return;
+            }
+            JsonObject last = StampIntegrity.latestValidatedSession(root);
+            lastQtracePath = qtracePath;
+            lastCertPath   = null;
+            lastRecordId   = id;
+            if (lastStamp == null || !imageHash.equals(lastStamp.imageHash())) {
+                ValidationStamp restored = stampFromValidation(last.getAsJsonObject("validation"), null);
+                if (restored != null) lastStamp = restored;
+            }
+            panel.setPushEnabled(lastStamp != null);
+        } catch (Exception e) {
+            panel.setPushEnabled(false);
+        }
+    }
+
     /** Rebuilds a ValidationStamp from a .qtcert's embedded validation payload (cert issued in a prior session). */
     private ValidationStamp buildStampFromCert(Path certFile) {
         try {
             JsonObject cert = JsonParser.parseString(Files.readString(certFile)).getAsJsonObject();
             JsonObject payload = cert.getAsJsonObject("qtrace_payload");
             JsonObject v = payload.getAsJsonObject("validation");
+            return stampFromValidation(v, cert.has("case_id") ? cert.get("case_id").getAsString() : null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** A ValidationStamp from a {@code validation} object (of a .qtcert payload or of a .qtrace session). */
+    private static ValidationStamp stampFromValidation(JsonObject v, String fallbackCaseId) {
+        try {
             String statusLabel = str(v, "statusLabel", "1-In Progress");
             int statusIndex = 1;
             for (int i = 0; i < ValidationStamper.STATUS_LABELS.length; i++)
@@ -601,7 +644,7 @@ public class QTraceController {
                 null, // gitHash — not embedded in the cert payload
                 str(v, "imageHash", null),
                 str(v, "qpdata_sha256", null),
-                str(v, "case_id", cert.has("case_id") ? cert.get("case_id").getAsString() : null),
+                str(v, "case_id", fallbackCaseId),
                 str(v, "classifier_fidelity", null),
                 statusIndex,
                 statusLabel,
@@ -1556,9 +1599,14 @@ public class QTraceController {
         }
         try {
             Path outDir  = QTraceConfig.get().outputExportDir();
+            // Compliance builds a certificate for this stamp (below) — or nothing does and the
+            // record is basic: it gets a qtb_ id, written in its session (BasicRecord).
+            QTracePlugin ep = QTracePluginManager.getEntitled();
+            String basicId = BasicRecord.applies(lastStamp != null, ep != null) ? BasicRecord.newId() : null;
             var exporter = new QTraceExporter(logger, lastStamp);
             exporter.setExtensions(collectLoadedExtensions());
             exporter.setSessionId(drafts.sessionId());
+            exporter.setBasicRecordId(basicId);
             Path outFile = exporter.export(outDir);
             drafts.markCommitted();
             refreshCommitGraph();
@@ -1603,9 +1651,13 @@ public class QTraceController {
             } catch (Exception ignored) {}
 
             // Compliance: build .qtcert chain-of-custody certificate (only when licensed & active)
-            QTracePlugin ep = QTracePluginManager.getEntitled();
             lastQtracePath = outFile;
             lastCertPath   = null;
+            lastRecordId   = basicId;
+            if (basicId != null) {
+                ActivityLog.add("  record: " + basicId + " (not certified — self-declared identity)");
+                if (panel != null) panel.setPushEnabled(true);
+            }
             if (ep != null && lastStamp != null) {
                 try {
                     JsonObject qtroot = JsonParser.parseString(Files.readString(outFile)).getAsJsonObject();
@@ -1691,27 +1743,30 @@ public class QTraceController {
     // ── Cloud workspace push (module upload, through WorkspacePushes) ──────────
 
     public void pushToWorkspace() {
-        // A record goes to the workspace with its certificate: certified accounts only for now.
-        if (QTracePluginManager.getEntitled() == null) return;
         WorkspacePush ep = WorkspacePushes.entitled();
         if (ep == null) return;
-        if (lastCertPath == null || lastQtracePath == null) {
+        // Certified: the certificate and its chain of custody. Basic (no certificate): the qtb_ id alone.
+        PushSelection sel = PushSelection.of(lastCertPath, lastRecordId, lastQtracePath);
+        if (sel.kind() == PushSelection.Kind.NOTHING) {
             ActivityLog.add("☁ Nothing to push — export first.");
             return;
         }
-        // chain.jsonl is at case_<id>/chain.jsonl, cert at case_<id>/certs/<id>.qtcert
-        Path chainLog = lastCertPath.getParent().getParent().resolve("chain.jsonl");
-        if (!chainLog.toFile().exists()) {
+        if (sel.kind() == PushSelection.Kind.NO_CHAIN) {
             ActivityLog.add("☁ chain.jsonl not found.");
             return;
         }
+        Path chainLog = sel.chainLogPath();
         java.util.Collection<ClassifierRecord> classifiers = logger.getKnownClassifiers().values();
         java.util.Collection<ImportedObjectFileRecord> importedFiles = logger.getImportedFiles().values();
         if (panel != null) {
             ActivityLog.add("☁ Pushing to workspace…");
             ActivityLog.add("  · " + lastQtracePath.getFileName());
-            ActivityLog.add("  · " + lastCertPath.getFileName());
-            ActivityLog.add("  · chain.jsonl");
+            if (sel.kind() == PushSelection.Kind.CERTIFIED) {
+                ActivityLog.add("  · " + sel.certPath().getFileName());
+                ActivityLog.add("  · chain.jsonl");
+            } else {
+                ActivityLog.add("  · record " + sel.recordId() + " (not certified)");
+            }
             for (ClassifierRecord clf : classifiers)
                 ActivityLog.add("  · classifiers/" + clf.name + ".json");
             for (ImportedObjectFileRecord imp : importedFiles)
@@ -1721,7 +1776,8 @@ public class QTraceController {
             panel.setPushEnabled(false);
             panel.startPushProgress();
         }
-        ep.push(new WorkspacePush.Request(lastStamp, lastCertPath, chainLog, lastQtracePath, classifiers, lastThumbnailPath, importedFiles, lastGeojsonPath))
+        ep.push(new WorkspacePush.Request(lastStamp, sel.certPath(), chainLog, lastQtracePath, classifiers,
+              lastThumbnailPath, importedFiles, lastGeojsonPath, sel.recordId()))
           .thenAccept(url -> {
               if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {

@@ -19,6 +19,7 @@
 
 package io.qtrace.provisioning;
 
+import io.qtrace.Account;
 import io.qtrace.BrowserOpener;
 import io.qtrace.Provisioner;
 import io.qtrace.QTraceConfig;
@@ -31,7 +32,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 
 /**
- * "Sign in to qtrace.ca", start to end, for whichever window asks (module welcome): device code → browser → certificate saved → licensed modules installed.
+ * "Sign in to qtrace.ca", start to end, for whichever window asks (module welcome): device code → browser → certificate (or, for a basic account, the account token) saved → modules installed.
  * Reports each stage to a {@link Provisioner.SignIn}, from a background thread.
  */
 final class SignInFlow {
@@ -62,13 +63,22 @@ final class SignInFlow {
                 DeviceFlowClient.Start s = client.start(invite);
                 l.waiting(s.userCode(), s.verificationUrl());
                 BrowserOpener.open(s.verificationUrl());
-                String envelope = client.awaitLicense(s, cancelled);
-                Path certificate = LicenseInstaller.write(envelope, qtraceDir);
-                QTraceConfig.get().setLicensePath(certificate.toString());
-                QTraceConfig.get().save();
-                ProvisioningState.load(qtraceDir).markTrunkDone();
-                log.info(TAG + "certificate received and saved to {}", certificate);
-                l.approved(certificate);
+                DeviceFlowClient.Grant grant = client.await(s, cancelled);
+                if (grant.kind() == DeviceFlowClient.Grant.Kind.ACCOUNT) {
+                    // A basic account: a token, no certificate. The licence path is left alone.
+                    Path file = AccountInstaller.write(grant.payload(), qtraceDir);
+                    ProvisioningState.load(qtraceDir).markTrunkDone();
+                    log.info(TAG + "account token received and saved to {}", file);
+                    Account.Info who = Account.info(qtraceDir);
+                    l.signedInToAccount(who == null ? "" : who.name());
+                } else {
+                    Path certificate = LicenseInstaller.write(grant.payload(), qtraceDir);
+                    QTraceConfig.get().setLicensePath(certificate.toString());
+                    QTraceConfig.get().save();
+                    ProvisioningState.load(qtraceDir).markTrunkDone();
+                    log.info(TAG + "certificate received and saved to {}", certificate);
+                    l.approved(certificate);
+                }
                 l.installing();
                 ModuleInstaller.installModulesNow(qupath, quitDialog).thenAccept(l::installed);
             } catch (DeviceFlowClient.DeviceFlowException e) {

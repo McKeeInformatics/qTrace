@@ -9,7 +9,9 @@
  *   JS → Java  alert('qtrace:' + {action, arg})  caught by PlayerWindow, whitelisted in PlayerBridge
  *   Preview    qtracePlayer.load / emit / goto   used when opened in a plain browser
  *
- * Slide: { id, eyebrow?, title, text, image?, visual?, hidden?, module?, actions: [{ label, action, url?, primary? }] }
+ * Slide: { id, eyebrow?, title, text, image?, visual?, hidden?, module?, account?, actions: [{ label, action, url?, primary? }] }
+ *        account: { title?, text? } — what the slide says instead once QuPath is signed in to a basic
+ *        account (device state 'account': no certificate; the text gets "Signed in as <name>." in front)
  *        module: { name, label?, version, icon, features: [..3], installing?, news? } — the module a
  *        'module' visual presents: its panel button and three points (news: what a version brings)
  * A hidden slide is not in the track: it is only reached by goto (e.g. the trunk's 'ready' after
@@ -81,31 +83,41 @@
       '<input id="invite" name="invite" class="codein" placeholder="XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" maxlength="14">' +
       '<button type="submit" class="btn primary">Continue with this code</button>' +
       '<span class="hint" id="invite-hint">In the email from the qTrace team.</span></form>' +
-      '<a class="other" data-act="sign-in" role="button" tabindex="0">I already have a qtrace.ca account →</a></div>';
+      '<a class="other" data-act="sign-in" role="button" tabindex="0">Sign in or create an account →</a></div>';
+  }
+
+  // Signed in to a basic account (no certificate): the device state 'account' carries the name.
+  function isAccount() { return state.device && state.device.state === 'account'; }
+  function signedInLine() {
+    var name = (state.device && state.device.name) || '';
+    return 'Signed in' + (name ? ' as ' + name : '') + '.';
   }
 
   function deviceHTML() {
     var d = state.device;
     var line = {
-      idle: 'Enter your invitation code, or use your account, to start.',
+      idle: 'Sign in, or enter your invitation code, to start.',
       starting: 'Contacting qtrace.ca…',
       waiting: 'Waiting for you on qtrace.ca…',
       approved: 'Approved: your certificate is in QuPath.',
+      account: signedInLine() + ' Records you upload are not certified.',
       failed: d.message || 'Not connected.'
     }[d.state] || '';
-    var cls = d.state === 'approved' ? 'ok' : d.state === 'failed' ? 'ko' : 'wait';
+    var cls = d.state === 'approved' || d.state === 'account' ? 'ok' : d.state === 'failed' ? 'ko' : 'wait';
     var retry = d.state === 'failed' ? '<button type="button" class="btn primary" data-act="goto-account">Try again</button>' : '';
     var reopen = d.state === 'waiting' ? '<button type="button" class="btn" data-act="open-url" data-url="' + esc(d.url || '') + '">Open the page again</button>' : '';
     return '<div class="device"><div class="code">' + esc(d.code || '····-····') + '</div>' +
       '<div class="flow"><b>QuPath</b><span>→</span><span>qtrace.ca</span><span>→</span><b>Authorize QuPath</b></div>' +
       '<div class="check ' + cls + '" style="width:100%;max-width:340px"><span class="dot">' +
-      (d.state === 'approved' ? '✓' : d.state === 'failed' ? '!' : '') + '</span><span>' + esc(line) + '</span></div>' +
+      (d.state === 'approved' || d.state === 'account' ? '✓' : d.state === 'failed' ? '!' : '') + '</span><span>' + esc(line) + '</span></div>' +
       (retry || reopen ? '<div class="actions">' + retry + reopen + '</div>' : '') + '</div>';
   }
 
   function installHTML() {
     var i = state.install;
-    var rows = (i.modules || [{ name: 'qTrace Compliance' }, { name: 'Your welcome' }]).map(function (m) {
+    var account = isAccount();
+    var rows = (i.modules || (account ? [{ name: 'The modules of your account' }]
+                                      : [{ name: 'qTrace Compliance' }, { name: 'Your welcome' }])).map(function (m) {
       var ok = i.state === 'done' || m.done;
       return '<div class="check ' + (ok ? 'ok' : 'wait') + '"><span class="dot">' + (ok ? '✓' : '') +
         '</span><span>' + esc(m.name) + '</span><span class="st">' + esc(m.version || '') + '</span></div>';
@@ -113,7 +125,7 @@
     var pct = i.state === 'done' ? 100 : i.state === 'running' ? 55 : 0;
     return '<div class="device"><div class="checks">' +
       '<div class="check ' + (i.state === 'idle' ? 'wait' : 'ok') + '"><span class="dot">' + (i.state === 'idle' ? '' : '✓') +
-      '</span><span>Certificate saved</span></div>' + rows +
+      '</span><span>' + (account ? esc(signedInLine()) : 'Certificate saved') + '</span></div>' + rows +
       '</div><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
   }
 
@@ -221,9 +233,31 @@
     document.title = content.title || 'qTrace';
     $('org').hidden = !content.org;
     $('org').textContent = content.org ? content.org.name : '';
-    $('who').innerHTML = content.who ? 'Certified for <strong>' + esc(content.who) + '</strong>' : 'qTrace Core · no certificate yet';
+    refreshWho();
     seen = {};
     go(0);
+  }
+
+  // The header line: the certified identity, the basic account QuPath is signed in to, or neither.
+  function refreshWho() {
+    var name = isAccount() && state.device.name;
+    $('who').innerHTML = content.who ? 'Certified for <strong>' + esc(content.who) + '</strong>'
+      : isAccount() ? 'Signed in' + (name ? ' as <strong>' + esc(name) + '</strong>' : '') + ' · not certified'
+      : 'qTrace Core · no certificate yet';
+  }
+
+  // A slide's own words once signed in to a basic account (slide.account), the usual ones otherwise.
+  function refreshCopy() {
+    refreshWho();
+    Array.prototype.forEach.call(document.querySelectorAll('.slide'), function (el) {
+      var s = content.slides[+el.dataset.i];
+      if (!s.account) return;
+      var acc = isAccount();
+      var title = (acc && s.account.title) || s.title;
+      var text = (acc && s.account.text) ? signedInLine() + ' ' + s.account.text : s.text;
+      el.querySelector('h2').textContent = title;
+      el.querySelector('p').textContent = text;
+    });
   }
 
   function refreshVisual(kind) {
@@ -271,7 +305,7 @@
   function emit(event, data) {
     data = typeof data === 'string' ? JSON.parse(data) : (data || {});
     if (event === 'network') { state.network[data.name] = !!data.ok; refreshVisual('network'); }
-    if (event === 'device') { state.device = data; refreshVisual('device'); }
+    if (event === 'device') { state.device = data; refreshVisual('device'); refreshCopy(); refreshVisual('install'); }
     if (event === 'install') { state.install = data; refreshVisual('install'); }
     if (event === 'modules') { state.modules = data; refreshVisual('module'); }
   }
@@ -379,6 +413,7 @@
     } else {
       ['network', 'device', 'install', 'module'].forEach(refreshVisual);
     }
+    refreshCopy();
     if (m.goto && m.goto.seq > lastGoto) { lastGoto = m.goto.seq; gotoId(m.goto.id); }
   }
   window.addEventListener('hashchange', applyHash);

@@ -285,6 +285,13 @@ public class QTracePanel {
 
     // ── License badge (medal icon + discreet text) ──────────────────────────────
 
+    /** The signed-in basic account's name, empty without one (a licence, active or not, always wins). */
+    private static String accountNameForBadge() {
+        String licence = QTraceConfig.get().getLicensePath();
+        boolean hasLicence = licence != null && !licence.isBlank();
+        return Account.counts(hasLicence, Account.signedIn()) ? Account.displayName(Account.info()) : "";
+    }
+
     private HBox buildLicenseBadge() {
         QTracePlugin entitled = QTracePluginManager.getEntitled();
         String text;
@@ -292,6 +299,7 @@ public class QTracePanel {
         boolean urgent = false; // keep the text itself colored for warning/error states
 
         LicenseInfo licenseInfo = null;
+        String accountName;
         if (entitled != null && entitled.getActiveLicenseInfo() != null) {
             licenseInfo = entitled.getActiveLicenseInfo();
             if (licenseInfo.verified()) {
@@ -304,6 +312,10 @@ public class QTracePanel {
                      + licenseInfo.expiresAtFormatted().replace("-", "/");
                 iconColor = PEACH;
             }
+        } else if (!(accountName = accountNameForBadge()).isEmpty()) {
+            // Signed in to a basic account: no certificate, said in the neutral colour.
+            text = QTraceI18n.f("panel.account.badge", accountName);
+            iconColor = TEXT_MUTED;
         } else if (QTracePluginManager.hasCompliance()) {
             text = QTraceI18n.t("license.inactive.header");
             iconColor = QTraceController.entitlementIsError() ? RED : PEACH;
@@ -496,8 +508,9 @@ public class QTracePanel {
         row.getChildren().add(btnRecord);
         if (!licensed) {
             // No account yet: the greyed Upload opens the group Replay and Version(s) stand in.
-            if (pushInvite) row.getChildren().addAll(vseparator(), btnPush);
-            row.getChildren().add(hookSlot(true, true, !pushInvite));
+            // A basic account (no certificate) has Upload itself, in that same place.
+            if (btnPush != null) row.getChildren().addAll(vseparator(), btnPush);
+            row.getChildren().add(hookSlot(true, true, btnPush == null));
         }
         if (licensed) {
             row.getChildren().add(vseparator());

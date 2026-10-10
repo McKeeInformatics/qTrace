@@ -36,11 +36,20 @@ import java.util.function.BooleanSupplier;
  * (docs/architecture/loader.md § 17, web/app/api/device/*). No JavaFX: unit-tested.
  *
  * start() gets a secret deviceCode and a userCode to show; the user approves the userCode in
- * the browser; awaitLicense() polls until the portal hands over the .qtlicense envelope, once.
+ * the browser; await() polls until the portal hands over what the account gets, once: the .qtlicense
+ * envelope of a certified account, or the token of a basic one.
  */
 public final class DeviceFlowClient {
 
     public record Start(String deviceCode, String userCode, String verificationUrl, int interval, int expiresIn) {}
+
+    /**
+     * What the portal handed over. {@code payload} is the .qtlicense envelope as JSON text for
+     * a {@link Kind#LICENSE}, and the account token (JWT) for a {@link Kind#ACCOUNT}.
+     */
+    public record Grant(Kind kind, String payload) {
+        public enum Kind { LICENSE, ACCOUNT }
+    }
 
     public enum Outcome { EXPIRED, DENIED, CANCELLED, ERROR }
 
@@ -77,10 +86,11 @@ public final class DeviceFlowClient {
 
     /**
      * Polls every {@code interval} seconds (doubled after a "slow_down") until approval, and
-     * returns the .qtlicense envelope as JSON text. Gives up after {@code expiresIn} seconds of
+     * returns what the portal handed over: a licence (the .qtlicense envelope as JSON text) or,
+     * for a basic account, the account token. Gives up after {@code expiresIn} seconds of
      * polling, when the user cancels, or when the portal answers expired / denied.
      */
-    public String awaitLicense(Start s, BooleanSupplier cancelled) throws DeviceFlowException {
+    public Grant await(Start s, BooleanSupplier cancelled) throws DeviceFlowException {
         long intervalMs = s.interval() * 1000L;
         long budgetMs = s.expiresIn() * 1000L;
         String body = "{\"deviceCode\":" + new com.google.gson.JsonPrimitive(s.deviceCode()) + "}";
@@ -103,8 +113,11 @@ public final class DeviceFlowClient {
                     case "pending" -> { }
                     case "approved" -> {
                         JsonObject o = JsonParser.parseString(r.body()).getAsJsonObject();
-                        if (!o.has("license")) throw new DeviceFlowException(Outcome.ERROR, "No license in the answer");
-                        return o.get("license").toString();
+                        if (o.has("license") && o.get("license").isJsonObject())
+                            return new Grant(Grant.Kind.LICENSE, o.get("license").toString());
+                        String jwt = accountJwt(o);
+                        if (jwt != null) return new Grant(Grant.Kind.ACCOUNT, jwt);
+                        throw new DeviceFlowException(Outcome.ERROR, "No license and no account in the answer");
                     }
                     case "denied" -> throw new DeviceFlowException(Outcome.DENIED, "The request was refused on qtrace.ca");
                     case "expired" -> throw new DeviceFlowException(Outcome.EXPIRED, "The code expired");
@@ -116,6 +129,15 @@ public final class DeviceFlowClient {
             throw new DeviceFlowException(Outcome.CANCELLED, "Interrupted");
         }
         throw new DeviceFlowException(Outcome.EXPIRED, "The code expired");
+    }
+
+    /** The token of {@code "account":{"jwt":…}}, or null. */
+    private static String accountJwt(JsonObject answer) {
+        if (!answer.has("account") || !answer.get("account").isJsonObject()) return null;
+        JsonObject a = answer.getAsJsonObject("account");
+        if (!a.has("jwt") || !a.get("jwt").isJsonPrimitive()) return null;
+        String jwt = a.get("jwt").getAsString();
+        return jwt.isBlank() ? null : jwt;
     }
 
     private static String statusOf(String body) {

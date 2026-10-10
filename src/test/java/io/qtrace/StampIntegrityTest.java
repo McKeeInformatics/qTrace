@@ -66,6 +66,15 @@ class StampIntegrityTest {
     }
 
     @Test
+    void theRecordObjectOfABasicSessionChangesNothingInTheStamp() {
+        // BasicRecord writes "record" beside "validation", never inside it: the signed payload is untouched.
+        root.getAsJsonArray("sessions").get(0).getAsJsonObject()
+            .add("record", BasicRecord.block("qtb_01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+        assertEquals(StampIntegrity.State.OK, StampIntegrity.check(root, QPDATA));
+        assertTrue(StampIntegrity.isStamped(root.getAsJsonArray("sessions").get(0).getAsJsonObject()));
+    }
+
+    @Test
     void editedStatusInvalidatesTheSignature() {
         validation().addProperty("statusLabel", "2-Finished");
         assertEquals(StampIntegrity.State.SIGNATURE_INVALID, StampIntegrity.check(root, QPDATA));
