@@ -100,9 +100,6 @@ public interface VersionEditor {
 
         void renamePacket(int packet, String title);
 
-        /** Renames the workflow itself (its {@code title}); a blank name changes nothing. */
-        default void renameWorkflow(String title) {}
-
         void setPacketNotes(int packet, String notes);
 
         void movePacket(int packet, int delta);
