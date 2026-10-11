@@ -56,7 +56,7 @@
       },
       "actions": [
         {
-          "label": "Quit QuPath now",
+          "label": "Quit & Relaunch QuPath now",
           "action": "quit",
           "primary": true
         }

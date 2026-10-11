@@ -106,6 +106,8 @@ final class TrunkPlayer {
             .on("close", a -> w.close())
             .on("quit", a -> {
                 w.close();
+                // "Quit & Relaunch QuPath now": QuPath comes back by itself once it has exited.
+                Relauncher.schedule();
                 QTraceUpdater.whenNoModalOpen("quit request", qupath::sendQuitRequest);
             })
             .on("open-url", BrowserOpener::open);

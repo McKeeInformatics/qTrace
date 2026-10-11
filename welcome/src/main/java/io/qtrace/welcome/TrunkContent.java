@@ -58,7 +58,7 @@ final class TrunkContent {
         last.addProperty("text", last.get("text").getAsString() + " " + names
             + (installing.size() == 1 ? " starts" : " start") + " the next time you open QuPath.");
         JsonArray actions = new JsonArray();
-        actions.add(action("Quit QuPath now", "quit", true));
+        actions.add(action("Quit & Relaunch QuPath now", "quit", true));
         actions.add(action("Later", "close", false));
         last.add("actions", actions);
     }
