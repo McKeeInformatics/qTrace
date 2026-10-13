@@ -184,6 +184,7 @@ public final class QTraceMiniPanel {
         resumeSpinner.setVisible(false);
         StackPane dotBox = new StackPane(pauseIcon, captureDot, startIcon, resumeSpinner);
         statusBox = dotBox;
+        TourHighlight.tag(dotBox, "start");
         // One click: the recent projects. Double-click: straight back to the last project and
         // image — so the single click waits a moment to see whether a second one follows.
         javafx.animation.PauseTransition single = new javafx.animation.PauseTransition(Duration.millis(260));
@@ -215,6 +216,7 @@ public final class QTraceMiniPanel {
 
         Color teal = Color.web(QTracePanel.CTA_TEAL);
         stampBtn = button(c -> panel.scaledIcon(panel.iconStamp(teal), ICON), "btn.stamp.caption", teal);
+        TourHighlight.tag(stampBtn, "stamp");
         stampBtn.setOnAction(e -> controller.recordTrace());
 
         // Workspace & Analyse — same rule as the panel's toolbar: only when licensed & active,
@@ -229,28 +231,28 @@ public final class QTraceMiniPanel {
         UploadInvite.State upload = UploadInvite.state();
         uploadInvite = upload == UploadInvite.State.SIGN_IN;
         if (uploadInvite) {
-            uploadBtn = button(icon(panel::iconUpload), "btn.upload.caption", workspace);
+            uploadBtn = TourHighlight.tag(button(icon(panel::iconUpload), "btn.upload.caption", workspace), "upload");
             uploadBtn.setTooltip(tip(QTraceI18n.t("btn.upload.signin.tooltip")));
             uploadBtn.setOpacity(0.45); // greyed, yet clickable: a disabled button could not say why
             uploadBtn.setOnAction(e -> UploadInvite.open());
             uploadSlot = new StackPane(uploadBtn);
         }
         if (upload == UploadInvite.State.UPLOAD) {
-            uploadBtn = button(QTracePanel.welcomeMarked("upload", icon(panel::iconUpload)), "btn.upload.caption", workspace);
+            uploadBtn = TourHighlight.tag(button(QTracePanel.welcomeMarked("upload", icon(panel::iconUpload)), "btn.upload.caption", workspace), "upload");
             uploadBtn.setOnAction(e -> QTracePanel.welcomeFirst("upload", controller::pushToWorkspace));
             uploadSlot = new StackPane(uploadBtn);
             uploadSpinner = uploadSpinner();
         }
         if (licensed) {
-            reportBtn = button(icon(panel::iconReport), "btn.report.caption", workspace);
+            reportBtn = TourHighlight.tag(button(icon(panel::iconReport), "btn.report.caption", workspace), "report");
             reportBtn.setOnAction(e -> controller.generateActivityReport());
         }
         if (player) {
-            replayBtn = button(QTracePanel.welcomeMarked("player", icon(panel::iconReplay)), "btn.replay.caption", workspace);
+            replayBtn = TourHighlight.tag(button(QTracePanel.welcomeMarked("player", icon(panel::iconReplay)), "btn.replay.caption", workspace), "player");
             replayBtn.setOnAction(e -> QTracePanel.welcomeFirst("player", controller::openReplayDialog));
         }
         if (versions) {
-            versionsBtn = button(QTracePanel.welcomeMarked("versiongraph", icon(panel::iconVersions)), "btn.versions.caption", workspace);
+            versionsBtn = TourHighlight.tag(button(QTracePanel.welcomeMarked("versiongraph", icon(panel::iconVersions)), "btn.versions.caption", workspace), "versiongraph");
             versionsBtn.setOnAction(e -> QTracePanel.welcomeFirst("versiongraph", controller::showCommitGraph));
         }
 
@@ -258,12 +260,15 @@ public final class QTraceMiniPanel {
         // Dashboard: there once a module has brought it (Dashboards).
         Button dashboardBtn = Dashboards.entitled() == null ? null
             : button(QTracePanel.welcomeMarked("dashboard", icon(panel::iconDashboard)), "btn.dashboard.caption", tools);
+        if (dashboardBtn != null) TourHighlight.tag(dashboardBtn, "dashboard");
         if (dashboardBtn != null) dashboardBtn.setOnAction(e -> QTracePanel.welcomeFirst("dashboard", controller::showDashboard));
         // Import: there once a module has brought it (BatchImports).
         Button importBtn = BatchImports.entitled() == null ? null
             : button(QTracePanel.welcomeMarked("import", icon(panel::iconImport)), "btn.import.caption", tools);
         if (importBtn != null) importBtn.setOnAction(e -> QTracePanel.welcomeFirst("import", controller::startBatchExport));
+        if (importBtn != null) TourHighlight.tag(importBtn, "import");
         resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
+        TourHighlight.tag(resetBtn, "reset");
         resetBtn.setOnAction(e -> panel.confirmReset());
 
         // The organization chose its panel (PanelProfile): its tools, in its order, and nothing else.
@@ -305,13 +310,16 @@ public final class QTraceMiniPanel {
         Color admin = Color.web(QTracePanel.GROUP_ADMIN);
         nodes.add(separator());
         Button settingsBtn = titled(glyph("⚙"), "Settings", admin);
+        TourHighlight.tag(settingsBtn, "settings");
         settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
         // Same glyph and look as the mini-player's ⤢.
         Button expandBtn = boxed("⤢", "Full panel");
+        TourHighlight.tag(expandBtn, "expand");
         expandBtn.setOnAction(e -> controller.switchToFullPanel());
         // Smaller than the rest: not part of the daily workflow, but always one click away.
         Button issueBtn = titled(QTraceMiniPanel::reportIcon,
             QTraceI18n.t("report.menu").replace("...", ""), admin);
+        TourHighlight.tag(issueBtn, "issue");
         issueBtn.setOnAction(e -> IssueReportDialog.show(qupath));
         nodes.add(settingsBtn);
         nodes.add(issueBtn);
@@ -321,6 +329,7 @@ public final class QTraceMiniPanel {
 
         column.getChildren().setAll(nodes);
         refresh();
+        TourHighlight.reapply();
     }
 
     /** Modules' buttons ({@link PanelExtensions}): under the button they go with, or where the organization's panel puts them. */
@@ -328,6 +337,7 @@ public final class QTraceMiniPanel {
         for (PanelExtensions.Entry entry : entries) {
             Color hover = Color.web(PanelExtensions.DASHBOARD.equals(entry.anchor()) ? QTracePanel.GROUP_TOOLS : QTracePanel.GROUP_WORKSPACE);
             Button b = titled(QTracePanel.welcomeMarked(entry.module(), icon(QTracePanel.moduleIcon(entry))), entry.label(), hover);
+            TourHighlight.tag(b, entry.module());
             b.setOnAction(e -> QTracePanel.welcomeFirst(entry.module(), () -> QTracePanel.runModuleEntry(entry)));
             nodes.add(b);
         }

@@ -16,7 +16,9 @@
  *        'module' visual presents: its panel button and three points (news: what a version brings)
  * A hidden slide is not in the track: it is only reached by goto (e.g. the trunk's 'ready' after
  * Continue) and is shown as a final screen, without the bottom bar.
- * Drawn visuals: network, entry, device, install, module, report, done. Opened without QuPath (plain browser),
+ * Drawn visuals: hello, capture, panel, network, entry, device, install, module, report, done.
+ * tour: { image, width, height, bar, cx, buttons: [{ key, y, title, text }] } — what the 'panel' visual plays;
+ *        each button is sent to QuPath as 'tour-highlight' (its key) while its bubble shows. Opened without QuPath (plain browser),
  * the player plays trunk.json and shows what QuPath would do.
  */
 (function () {
@@ -32,7 +34,8 @@
     'issue-report': 'QuPath opens Bug or Feature Request, which creates an issue for the team',
     'unlock-key': 'QuPath opens the passphrase dialog',
     'network-check': 'QuPath checks qtrace.ca and github.com',
-    'close': 'QuPath closes this window: you can start working'
+    'close': 'QuPath closes this window: you can start working',
+    'tour-highlight': 'QuPath outlines this tool in the panel'
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -50,7 +53,7 @@
   function run(action, arg) {
     if (window.__qtraceHost) {
       window.alert('qtrace:' + JSON.stringify({ action: action, arg: arg == null ? '' : String(arg) }));
-    } else {
+    } else if (action !== 'tour-highlight') {
       toast(BROWSER_PREVIEW[action] || action);
       simulate(action, arg);
     }
@@ -79,9 +82,7 @@
   // Sign in comes first: anyone with a qtrace.ca account can. The invitation code is the way
   // to an identity certificate, for those who received one.
   function entryHTML() {
-    return '<div class="entry">' +
-      '<button type="button" class="btn primary" data-act="sign-in">Sign in or create an account</button>' +
-      '<form class="door" data-form="invite">' +
+    return '<div class="entry"><form class="door" data-form="invite">' +
       '<label for="invite" class="lbl">Invitation code</label>' +
       '<input id="invite" name="invite" class="codein" placeholder="XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" maxlength="14">' +
       '<button type="submit" class="btn">Continue with this code</button>' +
@@ -209,7 +210,276 @@
       (content && content.who ? '<p>Certified for <strong>' + esc(content.who) + '</strong></p>' : '') + '</div>';
   }
 
-  var VISUALS = { network: networkHTML, entry: entryHTML, device: deviceHTML, install: installHTML, module: moduleHTML, report: reportHTML, done: doneHTML };
+  // ── The tour's drawn visuals: hello, capture (Core's flow), panel (the mini-panel) ───────────
+  function helloHTML() {
+    return '<div class="hello"><div class="hello-mark">q<b>Trace</b></div><ul class="hello-points">' +
+      '<li><span class="tick">●</span><span>Records each step you take in QuPath</span></li>' +
+      '<li><span class="tick">●</span><span>Replays it on new images</span></li>' +
+      '<li><span class="tick">●</span><span>Signs it with your identity</span></li></ul></div>';
+  }
+
+  var CS = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"';
+  // What flows into a record, in the order QuPath produces it (the last one is a person's, not a tool's).
+  var CAPTURE_ROWS = [
+    { k: 'annotations', t: 'Annotation', s: 'ROIs · author tracked', i: '<path d="M5 16v3.5h3.5L19 9l-4-4z"/><path d="M15 5l2.5-2.5a1.6 1.6 0 012.3 0 1.6 1.6 0 010 2.3L17.5 7"/>' },
+    { k: 'cells', t: 'Cell detection', s: 'StarDist · parameters', i: '<circle cx="12" cy="12" r="10" stroke-dasharray="3 2"/><circle cx="8" cy="9" r="2.5"/><circle cx="15" cy="8" r="2"/><circle cx="10" cy="15" r="3"/><circle cx="17" cy="15" r="2"/>' },
+    { k: 'transform', t: 'Image alignment', s: 'affine · transform matrix', i: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M5 12.5l4-2h6l4 2"/><path d="M12 2v4M12 18v4"/>' },
+    { k: 'classifier', t: 'Pixel classifier', s: 'SHA-256 · git hash · fidelity', i: '<rect x="2" y="2" width="9" height="9" rx="1.5"/><rect x="13" y="2" width="9" height="9" rx="1.5"/><rect x="2" y="13" width="9" height="9" rx="1.5"/><rect x="13" y="13" width="9" height="9" rx="1.5"/>' },
+    { k: 'cell_types', t: 'Cell typing', s: 'applied_at + by', i: '<path d="M3 7h11l6 5-6 5H3z"/><circle cx="7.5" cy="12" r="1.8" fill="currentColor"/>' },
+    { k: 'validation', t: 'Validation stamp', s: 'validator · scope · confidence', human: true, i: '<circle cx="12" cy="12" r="10"/><path d="M7 12l3 3 7-6"/>' }
+  ];
+  var CAPTURE_LINES = [['steps_captured', '"steps_captured":'], ['annotations', '"annotations":'], ['cells', '"cells":'],
+    ['classifier', '"classifier":'], ['sha256', '"sha256":'], ['validation', '"validation":']];
+
+  function captureHTML() {
+    var rows = CAPTURE_ROWS.map(function (r) {
+      return '<div class="cap-row' + (r.human ? ' human' : '') + '" data-k="' + r.k + '"><svg viewBox="0 0 24 24" ' + CS + '>' + r.i + '</svg>' +
+        '<div><b>' + r.t + (r.human ? '<span class="who">HUMAN</span>' : '') + '</b><small>' + r.s + '</small></div>' +
+        '<span class="cap-rec"><i></i>REC</span></div>';
+    }).join('');
+    var lines = CAPTURE_LINES.map(function (l) {
+      return '<div class="cap-ln" data-l="' + l[0] + '"><span class="k">' + l[1] + '</span><span class="v"></span></div>';
+    }).join('');
+    return '<div class="cap"><div class="cap-top"><span>QuPath workflow · glioma TMA</span><span class="cap-live">Live capture</span></div>' +
+      '<div class="cap-body"><svg class="cap-links" aria-hidden="true"></svg><div class="cap-rows">' + rows + '</div><div class="cap-gap"></div>' +
+      '<div class="cap-right"><div class="cap-node"><span class="lg">qTrace</span><p>listens to QuPath, writes the record</p></div>' +
+      '<div class="cap-down">↓ 1 record per image</div>' +
+      '<div class="cap-pass"><div class="fn">TMA_Core_07.qtrace</div>' + lines + '</div></div></div>' +
+      '<a class="mp-again" role="button" tabindex="0" data-act="tour-again" title="Play again">↻</a></div>';
+  }
+
+  function panelHTML(s) {
+    var t = s.tour || {};
+    return '<div class="mp"><div class="mp-cam" style="width:' + t.width + 'px;height:' + t.height + 'px">' +
+      '<img src="' + esc(t.image) + '" alt="QuPath with the qTrace mini-panel" width="' + t.width + '" height="' + t.height + '"></div>' +
+      '<div class="mp-top"><div class="mp-ring"></div><div class="mp-bubble"><b></b><span></span></div></div>' +
+      '<a class="mp-again" role="button" tabindex="0" data-act="tour-again" title="Play again">↻</a></div>';
+  }
+
+  // ── Animations, started when their slide shows and stopped when it leaves ──────────────────
+  var timers = [], runId = 0;
+  var REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+  function stopVisual() {
+    runId++;
+    timers.forEach(clearTimeout);
+    timers = [];
+  }
+  function startVisual(i) {
+    var el = document.querySelector('.slide[data-i="' + i + '"]');
+    var s = content.slides[i];
+    if (!el || !s) return;
+    var id = ++runId;
+    // The slide is only laid out once it is displayed: measure on the next frame.
+    later(function () {
+      if (id !== runId) return;
+      if (s.visual === 'capture') playCapture(el, id);
+      if (s.visual === 'panel') playPanel(el, s, id);
+    }, 80);
+  }
+
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function playCapture(el, id) {
+    var root = el.querySelector('.cap');
+    if (!root) return;
+    var body = root.querySelector('.cap-body'), svg = root.querySelector('.cap-links'),
+        rows = [].slice.call(root.querySelectorAll('.cap-row')), node = root.querySelector('.cap-node'),
+        live = root.querySelector('.cap-live'), paths = [];
+    function line(k) { return root.querySelector('.cap-ln[data-l="' + k + '"]'); }
+    function set(k, v, cls) {
+      var l = line(k);
+      l.querySelector('.v').textContent = v;
+      l.className = 'cap-ln' + (cls ? ' ' + cls : '');
+      void l.offsetWidth;
+      l.classList.add('flash');
+      later(function () { l.classList.remove('flash'); }, 90);
+    }
+    function hex() { var h = '0123456789abcdef', o = ''; for (var n = 0; n < 6; n++) o += h[Math.floor(Math.random() * 16)]; return o; }
+    function geom() {
+      svg.innerHTML = '';
+      paths = [];
+      var b = body.getBoundingClientRect(), n = node.getBoundingClientRect(), hx = n.left - b.left, hy = n.top - b.top + n.height / 2;
+      rows.forEach(function (r) {
+        var rr = r.getBoundingClientRect(), x = rr.right - b.left, y = rr.top - b.top + rr.height / 2, mx = (x + hx) / 2;
+        var p = document.createElementNS(SVGNS, 'path');
+        p.setAttribute('d', 'M' + x + ',' + y + ' C' + mx + ',' + y + ' ' + mx + ',' + hy + ' ' + hx + ',' + hy);
+        svg.appendChild(p);
+        paths.push(p);
+        var o = document.createElementNS(SVGNS, 'circle');
+        o.setAttribute('cx', x); o.setAttribute('cy', y); o.setAttribute('r', 3); o.setAttribute('class', 'start');
+        svg.appendChild(o);
+      });
+      var hub = document.createElementNS(SVGNS, 'circle');
+      hub.setAttribute('class', 'hub'); hub.setAttribute('cx', hx); hub.setAttribute('cy', hy); hub.setAttribute('r', 4.5);
+      svg.appendChild(hub);
+    }
+    var st, i;
+    function reset() {
+      st = { steps: 22, ann: 41 };
+      i = -1;
+      root.classList.remove('over');
+      rows.forEach(function (r) { r.classList.remove('on', 'done'); });
+      live.textContent = 'Live capture';
+      live.classList.remove('stamped');
+      set('steps_captured', st.steps + ',');
+      set('annotations', st.ann + ',');
+      set('cells', 'null,', 'pend');
+      set('classifier', 'null,', 'pend');
+      set('sha256', '"' + hex() + '…' + hex() + '",');
+      set('validation', 'pending', 'pend');
+    }
+    function apply(k) {
+      node.classList.add('hit');
+      later(function () { node.classList.remove('hit'); }, 450);
+      st.steps += k === 'annotations' ? 3 : 1;
+      set('steps_captured', st.steps + ',');
+      set('sha256', '"' + hex() + '…' + hex() + '",');
+      if (k === 'annotations') { st.ann += 6; set('annotations', st.ann + ','); }
+      if (k === 'cells') set('cells', '18204,');
+      if (k === 'classifier') set('classifier', '"tumor_stroma v3 · HIGH",');
+      if (k === 'validation') {
+        set('validation', '"A. Moreau · HIGH"', 'ok');
+        live.textContent = 'Stamped · anchored';
+        live.classList.add('stamped');
+      }
+    }
+    function travel(p, done) {
+      var L = p.getTotalLength(), dot = document.createElementNS(SVGNS, 'circle');
+      dot.setAttribute('class', 'pk'); dot.setAttribute('r', 4.5);
+      svg.appendChild(dot);
+      p.classList.add('on');
+      var t0 = performance.now(), D = 700;
+      (function f(t) {
+        if (id !== runId) return;
+        var k = Math.min(1, (t - t0) / D), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2, pt = p.getPointAtLength(e * L);
+        dot.setAttribute('cx', pt.x); dot.setAttribute('cy', pt.y);
+        if (k < 1) requestAnimationFrame(f); else { dot.remove(); p.classList.remove('on'); done(); }
+      })(t0);
+    }
+    function next() {
+      if (id !== runId) return;
+      i++;
+      if (i >= rows.length) { root.classList.add('over'); return; } // played once: ↻ plays it again
+      if (i > 0) { rows[i - 1].classList.remove('on'); rows[i - 1].classList.add('done'); }
+      var r = rows[i];
+      r.classList.add('on');
+      travel(paths[i], function () {
+        apply(r.dataset.k);
+        later(function () { if (i === rows.length - 1) { r.classList.remove('on'); r.classList.add('done'); } next(); }, 600);
+      });
+    }
+    geom();
+    reset();
+    if (REDUCED) {
+      root.classList.add('over');
+      rows.forEach(function (r) { r.classList.add('done'); });
+      ['annotations', 'cells', 'classifier', 'validation'].forEach(apply);
+      return;
+    }
+    later(next, 500);
+  }
+
+  // The mini-panel: QuPath whole, then a 5 s zoom onto the bar, the bar slides to the left and
+  // each of its buttons gets, in turn, a bubble on its right — and, in the real panel, the green
+  // square (tour-highlight). The zoom is geometric (the same ratio every moment: that is what the
+  // eye reads as a steady zoom) and keeps the bar in view the whole way.
+  var ZOOM_MS = 5000, SLIDE_MS = 900, BUBBLE_MS = 1200;
+  function playPanel(el, s, id) {
+    var t = s.tour, root = el.querySelector('.mp');
+    if (!root || !t) return;
+    var cam = root.querySelector('.mp-cam'), top = root.querySelector('.mp-top'),
+        ring = root.querySelector('.mp-ring'), bubble = root.querySelector('.mp-bubble');
+    var cw = root.clientWidth, ch = root.clientHeight, bar = t.bar;
+    function pose(k, tx, ty) { return 'translate(' + tx + 'px,' + ty + 'px) scale(' + k + ')'; }
+    function clip(on) {
+      var m = 3, v = on
+        ? 'inset(' + (bar.y - m) + 'px ' + (t.width - bar.x - bar.w - m) + 'px ' + (t.height - bar.y - bar.h - m) + 'px ' + (bar.x - m) + 'px round 14px)'
+        : 'inset(0px 0px 0px 0px round 0px)';
+      cam.style.webkitClipPath = v;
+      cam.style.clipPath = v;
+    }
+    var k0 = Math.min(cw / t.width, ch / t.height), k1 = ch * 0.94 / bar.h;
+    var cy = bar.y + bar.h / 2;
+    var start = pose(k0, (cw - t.width * k0) / 2, (ch - t.height * k0) / 2);
+    var left = cw * 0.17 - t.cx * k1;
+    var slid = pose(k1, left, ch / 2 - cy * k1);
+    top.className = 'mp-top';
+    cam.style.transition = 'none';
+    cam.style.transformOrigin = '0 0';
+    cam.style.transform = start;
+    clip(false);
+    ring.style.opacity = 0;
+    bubble.style.opacity = 0;
+    Array.prototype.forEach.call(top.querySelectorAll('.mp-bubble.kept'), function (n) { n.remove(); });
+    highlight('');
+    void cam.offsetWidth;
+
+    function show(n) {
+      var b = t.buttons[n];
+      if (!b) { ring.style.opacity = 0; highlight(''); return; }
+      var y = ch / 2 + (b.y - cy) * k1, x = left + t.cx * k1;
+      ring.style.left = (x - 16) + 'px';
+      ring.style.top = (y - 16) + 'px';
+      ring.style.opacity = 1;
+      // One bubble per button, and each stays: the whole picture is there when the tour ends.
+      Array.prototype.forEach.call(top.querySelectorAll('.mp-bubble.kept'), function (n) { n.classList.remove('cur'); });
+      var nb = bubble.cloneNode(true);
+      nb.classList.add('kept', 'cur');
+      nb.querySelector('b').textContent = b.title;
+      nb.querySelector('span').textContent = b.text;
+      nb.style.left = (x + 30) + 'px';
+      nb.style.opacity = 0;
+      top.appendChild(nb);
+      nb.style.top = (y - nb.offsetHeight / 2) + 'px';
+      void nb.offsetWidth;
+      nb.style.opacity = '';
+      highlight(b.key);
+      // The last button: its green square goes out after a second, the bubble stays.
+      if (n + 1 === t.buttons.length) later(function () { ring.style.opacity = 0; highlight(''); }, 1000);
+    }
+    function sequence(n) {
+      if (id !== runId) return;
+      show(n);
+      // The last bubble stays lit: the explanation is still there when the tour ends.
+      if (n + 1 < t.buttons.length) later(function () { sequence(n + 1); }, BUBBLE_MS);
+    }
+    if (REDUCED) {
+      cam.style.transform = slid;
+      clip(true);
+      sequence(0);
+      return;
+    }
+    // Where the bar's centre is on screen at the start, and where it ends (the middle).
+    var sx0 = parseFloat(start.match(/translate\(([-\d.]+)px/)[1]) + t.cx * k0,
+        sy0 = (ch - t.height * k0) / 2 + cy * k0;
+    var sx1 = cw / 2, sy1 = ch / 2;
+    var t0 = performance.now();
+    (function frame(now) {
+      if (id !== runId) return;
+      var u = Math.min(1, (now - t0) / ZOOM_MS);
+      var e = u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; // ease in-out
+      var k = k0 * Math.pow(k1 / k0, e);
+      var x = sx0 + (sx1 - sx0) * e, y = sy0 + (sy1 - sy0) * e;
+      cam.style.transform = pose(k, x - t.cx * k, y - cy * k);
+      if (u < 1) requestAnimationFrame(frame);
+    })(t0);
+    later(function () {
+      cam.style.transition = 'transform ' + SLIDE_MS + 'ms ease-in-out, clip-path ' + SLIDE_MS + 'ms ease-in-out, -webkit-clip-path ' + SLIDE_MS + 'ms ease-in-out';
+      cam.style.transform = slid;
+      clip(true);
+    }, ZOOM_MS + 200);
+    later(function () { sequence(0); }, ZOOM_MS + 200 + SLIDE_MS + 200);
+  }
+
+  // The green square in the real panel: which tool is being talked about ('' = none).
+  var lastHighlight = '';
+  function highlight(key) {
+    if (key === lastHighlight) return;
+    lastHighlight = key;
+    if (window.__qtraceHost) run('tour-highlight', key);
+  }
+
+  var VISUALS = { hello: helloHTML, capture: captureHTML, panel: panelHTML, network: networkHTML, entry: entryHTML, device: deviceHTML, install: installHTML, module: moduleHTML, report: reportHTML, done: doneHTML };
 
   function visualHTML(s) {
     if (s.image) return '<img src="' + esc(s.image) + '" alt="' + esc(s.title) + '">';
@@ -226,12 +496,15 @@
   // ── Rendering ─────────────────────────────────────────────────────────────
   function build() {
     var stage = $('stage');
+    var ed = document.querySelector('.edition');
+    if (ed) ed.textContent = ' Core' + (content.coreVersion ? ' v' + content.coreVersion : '');
     Array.prototype.forEach.call(stage.querySelectorAll('.slide'), function (n) { n.remove(); });
     content.slides.forEach(function (s, i) {
       var el = document.createElement('section');
       el.className = 'slide';
       el.dataset.i = i;
       el.dataset.id = s.id;
+      el.dataset.visual = s.visual || '';
       el.innerHTML = '<div class="visual">' + visualHTML(s) + '</div><div class="copy">' +
         (s.eyebrow ? '<div class="eyebrow">' + esc(s.eyebrow) + '</div>' : '') +
         '<h2>' + esc(s.title) + '</h2><p>' + esc(s.text) + '</p>' +
@@ -303,7 +576,11 @@
     cur = Math.max(0, Math.min(content.slides.length - 1, i));
     var v = visible(), k = v.indexOf(cur);
     document.querySelector('.player').classList.toggle('final', k === -1);
+    // Hello page: the header says "qTrace Core" beside the logo and nothing on the right.
+    document.querySelector('.player').classList.toggle('hello', content.slides[cur].id === 'what');
     seen[cur] = true;
+    stopVisual();
+    highlight('');
     Array.prototype.forEach.call(document.querySelectorAll('.slide'), function (n) {
       n.classList.toggle('on', +n.dataset.i === cur);
     });
@@ -317,6 +594,7 @@
     $('prev').disabled = k <= 0;
     $('next').disabled = k === -1 || k === v.length - 1;
     var s = content.slides[cur];
+    startVisual(cur);
     if (s.visual === 'network' && !networkAsked && !Object.keys(state.network).length) { networkAsked = true; run('network-check'); }
   }
 
@@ -358,6 +636,7 @@
     var b = e.target.closest('[data-act]');
     if (!b) return;
     if (b.dataset.act === 'goto-account') { gotoId('account'); return; }
+    if (b.dataset.act === 'tour-again') { go(cur); return; }
     run(b.dataset.act, b.dataset.url || '');
   });
   stage.addEventListener('submit', function (e) {

@@ -478,6 +478,7 @@ public class QTracePanel {
         if (importBtn != null) {
             importBtn.setId("import-button");
             importBtn.setOnAction(e -> welcomeFirst("import", controller::startBatchExport));
+            TourHighlight.tag(importBtn, "import");
         }
         resetBtn.setId("reset-button");
         resetBtn.setOnAction(e -> confirmReset());
@@ -593,6 +594,7 @@ public class QTracePanel {
             for (PanelExtensions.Entry entry : entries.get()) {
                 Button b = iconButton(welcomeMarked(entry.module(), iconFactory(moduleIcon(entry))), entry.label(), entry.label(),
                     Color.web(groupColor.apply(entry)));
+                TourHighlight.tag(b, entry.module());
                 b.setOnAction(e -> welcomeFirst(entry.module(), () -> runModuleEntry(entry)));
                 slot.getChildren().add(b);
             }

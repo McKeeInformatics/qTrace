@@ -51,6 +51,13 @@ final class TrunkContent {
         return root.toString();
     }
 
+    /** The Core version, shown after "Core" in the header (absent from the file: the build knows it). */
+    static String withCoreVersion(String trunkJson, String version) {
+        JsonObject root = JsonParser.parseString(trunkJson).getAsJsonObject();
+        root.addProperty("coreVersion", version);
+        return root.toString();
+    }
+
     /** Modules being installed load at the next start: the last slide says so and offers it. */
     private static void restartOffer(JsonObject last, List<OpenModule> modules) {
         List<OpenModule> installing = modules.stream().filter(OpenModule::installing).toList();

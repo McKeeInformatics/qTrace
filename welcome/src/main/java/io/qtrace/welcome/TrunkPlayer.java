@@ -23,6 +23,7 @@ import io.qtrace.BrowserOpener;
 import io.qtrace.Provisioner;
 import io.qtrace.Provisioner.OpenModule;
 import io.qtrace.QTraceUpdater;
+import io.qtrace.TourHighlight;
 import io.qtrace.tools.PlayerBridge;
 import io.qtrace.tools.PlayerWindow;
 import org.slf4j.Logger;
@@ -79,7 +80,9 @@ final class TrunkPlayer {
         }
         String content;
         try (InputStream in = TrunkPlayer.class.getResourceAsStream("player/trunk.json")) {
-            content = TrunkContent.withOpenModules(new String(in.readAllBytes(), StandardCharsets.UTF_8), modules);
+            content = TrunkContent.withCoreVersion(
+                TrunkContent.withOpenModules(new String(in.readAllBytes(), StandardCharsets.UTF_8), modules),
+                io.qtrace.QTraceController.VERSION);
         } catch (Exception e) {
             log.warn("[qtrace-welcome] Getting started content missing, plain dialog instead", e);
             new GettingStartedDialog(qupath, provisioner).show();
@@ -104,6 +107,8 @@ final class TrunkPlayer {
                 w.gotoSlide("ready");
             })
             .on("close", a -> w.close())
+            // The tour outlines in green the tool a slide talks about, in the panel and the mini-panel.
+            .on("tour-highlight", TourHighlight::set)
             .on("quit", a -> {
                 w.close();
                 // "Quit & Relaunch QuPath now": QuPath comes back by itself once it has exited.
@@ -112,7 +117,7 @@ final class TrunkPlayer {
             })
             .on("open-url", BrowserOpener::open);
 
-        w.stage().setOnHidden(e -> cancelled.set(true));
+        w.stage().setOnHidden(e -> { cancelled.set(true); TourHighlight.set(""); });
         w.show();
         if (slide != null) w.gotoSlide(slide);
     }
