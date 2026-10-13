@@ -96,14 +96,14 @@ final class IssueReportClient {
     }
 
     /** Blocking — call off the FX thread. Network failure → status 0. */
-    static Result send(String licenseJwt, JsonObject body) {
+    static Result send(String bearer, JsonObject body) {
         try {
             HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10)).build();
             HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(REPORT_URL))
                 .timeout(Duration.ofSeconds(90))
-                .header("Authorization", "Bearer " + licenseJwt)
+                .header("Authorization", "Bearer " + bearer)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(
                     body.toString().getBytes(StandardCharsets.UTF_8)))

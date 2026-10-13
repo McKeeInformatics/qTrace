@@ -85,7 +85,9 @@ public final class IssueReportDialog {
             else { current.show(); current.toFront(); }
             return;
         }
-        if (!QTracePluginManager.isEntitled() || QTraceUpdater.licenseJwt() == null) {
+        // Signed in to qtrace.ca, with a certificate or with an account: the server says which
+        // name the report carries (certified, or the account's own, marked as not certified).
+        if (QTraceUpdater.bearer() == null) {
             Alert a = new Alert(Alert.AlertType.INFORMATION);
             a.setTitle(QTraceI18n.t("report.title"));
             a.setHeaderText(null);
@@ -228,7 +230,7 @@ public final class IssueReportDialog {
                 lblStatus.setText(QTraceI18n.t("report.err.empty"));
                 return;
             }
-            String jwt = QTraceUpdater.licenseJwt();
+            String jwt = QTraceUpdater.bearer();
             if (jwt == null) { lblStatus.setText(QTraceI18n.t("report.err.license")); return; }
 
             boolean bug = cbType.getSelectionModel().getSelectedIndex() == BUG_INDEX;
