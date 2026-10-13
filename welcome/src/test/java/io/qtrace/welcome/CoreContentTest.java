@@ -52,12 +52,13 @@ class CoreContentTest {
     }
 
     @Test
-    void inASequence_itComesFirstAndItsClosingSlideGivesWayToTheNextPart() {
+    void inASequence_itComesLast_andItsClosingSlideEndsTheWhole() {
         String tools = ToolContent.of(java.util.List.of(
             new ToolContent.Item("player", "qTrace Player", "Replay.", "0.1.0", "player", java.util.List.of("a"), java.util.List.of())));
-        JsonArray s = JsonParser.parseString(WelcomeSequence.of(CoreContent.of(), tools)).getAsJsonObject().getAsJsonArray("slides");
-        assertEquals("core-report", s.get(0).getAsJsonObject().get("id").getAsString());
-        assertEquals("tool-player", s.get(1).getAsJsonObject().get("id").getAsString());
-        assertEquals(2 + 1, s.size(), "report, the tool's card, one closing slide");
+        JsonArray s = JsonParser.parseString(WelcomeSequence.of(tools, CoreContent.of())).getAsJsonObject().getAsJsonArray("slides");
+        assertEquals("tool-player", s.get(0).getAsJsonObject().get("id").getAsString());
+        assertEquals("core-report", s.get(1).getAsJsonObject().get("id").getAsString());
+        assertEquals("done", s.get(2).getAsJsonObject().get("id").getAsString());
+        assertEquals(3, s.size(), "the tool's card, the feedback slide, one closing slide");
     }
 }

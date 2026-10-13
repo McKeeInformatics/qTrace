@@ -185,13 +185,21 @@
       '<p class="module-line">' + (m.version ? '<span class="module-version">v' + esc(m.version) + '</span>' : '') + esc(line) + '</p></div>';
   }
 
+  // The panel's own icon (QTraceMiniPanel.reportIcon): a speech bubble with an exclamation mark.
+  var REPORT_ICON = '<svg viewBox="0 0 16 16" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M3 2H13Q15 2 15 4V9Q15 11 13 11H7.5L4.5 14V11H3Q1 11 1 9V4Q1 2 3 2Z"/>' +
+    '<path d="M8 4.3V7" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="9" r="0.8" fill="currentColor" stroke="none"/></svg>';
+
   function reportHTML() {
-    return '<div class="report"><div class="report-head"><span>Bug or Feature Request</span><span class="pill">Bug</span></div>' +
+    return '<div class="report-wrap"><div class="report"><div class="report-head"><span>Bug or Feature Request</span><span class="pill">Bug</span></div>' +
       '<div class="field">Replay stops on the second image</div>' +
       '<div class="field tall">Steps to reproduce, what you expected, what happened…</div>' +
       '<div class="report-foot"><span>Reported by <strong>' + esc((content && (content.who || content.account)) || 'you') + '</strong>' +
         (content && content.who ? ' · certified' : content && content.account ? ' · not certified' : '') + '</span>' +
-      '<span class="send">Send</span></div></div>';
+      '<span class="send">Send</span></div></div>' +
+      // The panel's button, here to click: the same message box, always one click away.
+      '<div class="report-hint"><span class="report-open" data-act="issue-report" role="button" tabindex="0" title="Report a bug or a feature request">' +
+      REPORT_ICON + '</span><span>This button, in the panel, opens it any time.</span></div></div>';
   }
 
   function doneHTML() {

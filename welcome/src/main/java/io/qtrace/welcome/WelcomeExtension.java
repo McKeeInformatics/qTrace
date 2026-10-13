@@ -161,9 +161,11 @@ public class WelcomeExtension implements QuPathExtension {
             }
             List<ModuleUpdates.Card> tools = auto ? toolCards(unread) : List.of();
             boolean core = auto && coreUnread();
-            String json = WelcomeSequence.of(core ? CoreContent.of() : null, orgJson,
+            // The base welcome's feedback slide comes last, just before the closing one.
+            String json = WelcomeSequence.of(orgJson,
                 ToolContent.of(toolItems(tools)),
-                auto ? NewsContent.of(newsItems(cards, updated)) : null);
+                auto ? NewsContent.of(newsItems(cards, updated)) : null,
+                core ? CoreContent.of() : null);
             if (json == null) return;
             String title = orgJson != null || core ? "Welcome to qTrace" : !tools.isEmpty() ? toolsTitle(tools) : "What's new in qTrace";
             QTraceUpdater.whenNoModalOpen("welcome", () -> {
@@ -201,11 +203,11 @@ public class WelcomeExtension implements QuPathExtension {
 
     // ── On demand: each welcome alone, from the menu or a gold square ────────────
 
-    /** Extensions > QTrace > Welcome… — the base welcome, then the organization's or the standard one. */
+    /** Extensions > QTrace > Welcome… — the organization's or the standard welcome, then the base one. */
     private static void playWelcome(QuPathGUI qupath) {
         CompletableFuture.supplyAsync(WelcomeExtension::fetch).exceptionally(e -> null).thenAccept(json -> {
             Platform.runLater(() -> {
-                if (PlayerBridge.webViewAvailable()) play(qupath, "Welcome to qTrace", WelcomeSequence.of(CoreContent.of(), json), () -> {});
+                if (PlayerBridge.webViewAvailable()) play(qupath, "Welcome to qTrace", WelcomeSequence.of(json, CoreContent.of()), () -> {});
                 else if (json != null) new WelcomeDialog(qupath).show(WelcomeSpec.parse(json, WelcomeDialog.ACTIONS));
             });
         });
