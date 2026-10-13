@@ -241,9 +241,14 @@
   }
 
   // The header line: the certified identity, the basic account QuPath is signed in to, or neither.
+  // The gold shield beside a certified name, as in the panel: this identity is verified.
+  var SHIELD = '<svg class="shield" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">' +
+    '<path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3z" fill="#f2c14e"/>' +
+    '<path d="m8.5 12 2.5 2.5 4.5-5" fill="none" stroke="#0d1b2a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
   function refreshWho() {
     var name = isAccount() && state.device.name;
-    $('who').innerHTML = content.who ? 'Certified for <strong>' + esc(content.who) + '</strong>'
+    $('who').innerHTML = content.who ? SHIELD + 'Certified for <strong>' + esc(content.who) + '</strong>'
       : isAccount() ? 'Signed in' + (name ? ' as <strong>' + esc(name) + '</strong>' : '') + ' · not certified'
       : 'qTrace Core · no certificate yet';
   }
