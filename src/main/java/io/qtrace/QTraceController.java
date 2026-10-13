@@ -1981,10 +1981,12 @@ public class QTraceController {
         } catch (Exception ignored) {}
     }
 
-    // ── Batch export ─────────────────────────────────────────────────────────
+    // ── Batch export (module import, through BatchImports) ───────────────────
 
     public void startBatchExport() {
-        QTraceBatchExporter.start(qupath, this);
+        BatchImport module = BatchImports.entitled();
+        if (module == null) return; // no module brings Import: nothing shows a way to it
+        module.start(this);
     }
 
     /**

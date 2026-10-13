@@ -14,15 +14,15 @@ import javafx.scene.layout.VBox;
  * the darker surface, a discreet Cancel and one solid action button. Esc cancels (the dialog
  * must carry a {@link ButtonType#CANCEL}-like button).
  */
-final class DialogLook {
+public final class DialogLook {
 
     // Catppuccin Mocha — matches QTraceSettingsDialog / QTracePanel
-    static final String BG_BASE    = "#1e1e2e";
-    static final String BG_SURFACE = "#181825";
-    static final String TEXT_MAIN  = "#cdd6f4";
-    static final String TEXT_SUB   = "#a6adc8";
-    static final String BLUE       = "#89b4fa";
-    static final String RED        = "#f38ba8";
+    public static final String BG_BASE    = "#1e1e2e";
+    public static final String BG_SURFACE = "#181825";
+    public static final String TEXT_MAIN  = "#cdd6f4";
+    public static final String TEXT_SUB   = "#a6adc8";
+    public static final String BLUE       = "#89b4fa";
+    public static final String RED        = "#f38ba8";
 
     private DialogLook() {}
 
@@ -31,7 +31,7 @@ final class DialogLook {
      * @param action      the button that carries the action; restyled solid in {@code actionColor}
      * @param cancel      the cancel button; restyled as plain text
      */
-    static void apply(Dialog<?> dialog, String title, String subtitle, Node body,
+    public static void apply(Dialog<?> dialog, String title, String subtitle, Node body,
                       ButtonType action, String actionColor, ButtonType cancel) {
         dialog.setHeaderText(null);
         dialog.setGraphic(null);
@@ -68,7 +68,7 @@ final class DialogLook {
     }
 
     /** A paragraph of body text, padded like the rest of the dialog. */
-    static Node text(String message) {
+    public static Node text(String message) {
         Label l = new Label(message);
         l.setWrapText(true);
         l.setMaxWidth(380);

@@ -53,9 +53,9 @@ public final class PanelProfile {
 
     /** Core's own panel buttons. */
     public static final String STAMP = "stamp", UPLOAD = "upload", REPORT = "report",
-                               DASHBOARD = "dashboard", IMPORT = "import", RESET = "reset";
-    /** The buttons Core draws for the windows a module brings. */
-    public static final String PLAYER = "player", VERSIONS = "versiongraph";
+                               DASHBOARD = "dashboard", RESET = "reset";
+    /** The buttons Core draws for what a module brings. */
+    public static final String PLAYER = "player", VERSIONS = "versiongraph", IMPORT = "import";
 
     private static final Path FILE = Path.of(System.getProperty("user.home"), ".qTrace", "panel-profile.json");
 

@@ -101,6 +101,7 @@ public final class QTraceMiniPanel {
         PanelProfile.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         WorkspacePushes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         Dashboards.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        BatchImports.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         ModuleEntitlements.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         UploadInvite.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
@@ -258,8 +259,10 @@ public final class QTraceMiniPanel {
         Button dashboardBtn = Dashboards.entitled() == null ? null
             : button(QTracePanel.welcomeMarked("dashboard", icon(panel::iconDashboard)), "btn.dashboard.caption", tools);
         if (dashboardBtn != null) dashboardBtn.setOnAction(e -> QTracePanel.welcomeFirst("dashboard", controller::showDashboard));
-        Button importBtn = button(icon(panel::iconImport), "btn.import.caption", tools);
-        importBtn.setOnAction(e -> controller.startBatchExport());
+        // Import: there once a module has brought it (BatchImports).
+        Button importBtn = BatchImports.entitled() == null ? null
+            : button(QTracePanel.welcomeMarked("import", icon(panel::iconImport)), "btn.import.caption", tools);
+        if (importBtn != null) importBtn.setOnAction(e -> QTracePanel.welcomeFirst("import", controller::startBatchExport));
         resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
         resetBtn.setOnAction(e -> panel.confirmReset());
 
@@ -295,7 +298,7 @@ public final class QTraceMiniPanel {
             nodes.add(separator());
             if (dashboardBtn != null) nodes.add(dashboardBtn);
             addModuleButtons(nodes, PanelExtensions.entitled(PanelExtensions.DASHBOARD));
-            nodes.add(importBtn);
+            if (importBtn != null) nodes.add(importBtn);
             nodes.add(resetBtn);
         }
 

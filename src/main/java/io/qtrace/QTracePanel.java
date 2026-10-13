@@ -341,7 +341,8 @@ public class QTracePanel {
      * Width at which every toolbar caption fits: the Compliance toolbar carries 9 buttons
      * (Stamp + Upload/Replay/Versions/Report + Dashboard/Import/Reset) — below 760 captions got
      * truncated to "St…"/"Up…"; the Core one (Stamp + Dashboard/Import/Reset) fits in 400, and
-     * needs one more button's room for each of Replay and Version(s) a module adds.
+     * needs one more button's room for each of Replay and Version(s) a module adds, one less
+     * without the module that brings Import.
      */
     private static double captionsWidth() {
         // An organization's panel: Stamp's room, and one button's for each other tool.
@@ -350,7 +351,8 @@ public class QTracePanel {
             return Math.max(MIN_WIDTH, 80 * profile.size() + (profile.contains(PanelProfile.STAMP) ? 80 : 0));
         if (QTracePluginManager.isEntitled()) return 760;
         int extra = (Players.entitled() != null ? 1 : 0) + (VersionGraphs.entitled() != null ? 1 : 0);
-        return 400 + 80 * extra;
+        if (BatchImports.entitled() == null) extra--;
+        return Math.max(MIN_WIDTH, 400 + 80 * extra);
     }
 
     /** Captions only when they fit; icons alone (names in tooltips) when the panel is narrowed. */
@@ -388,6 +390,7 @@ public class QTracePanel {
         PanelProfile.onChange(this, redraw);
         WorkspacePushes.onChange(this, redraw);
         Dashboards.onChange(this, redraw);
+        BatchImports.onChange(this, redraw);
         // What the workstation is served is confirmed after the panel is drawn: a module served
         // since the last start (or no longer served) is taken into account at once.
         ModuleEntitlements.onChange(this, redraw);
@@ -457,13 +460,14 @@ public class QTracePanel {
             btnReport.setOnAction(e -> controller.generateActivityReport());
         }
 
-        // Consultation & Traitement — Core + Compliance. Dashboard: there once a module has
-        // brought it (Dashboards).
+        // Consultation & Traitement — Core + Compliance. Dashboard and Import: there once a
+        // module has brought them (Dashboards, BatchImports).
         Button dashboardBtn = Dashboards.entitled() == null ? null
             : iconButton(welcomeMarked("dashboard", iconFactory(this::iconDashboard)), QTraceI18n.t("btn.dashboard.caption"),
                 QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
-        Button importBtn = iconButton(iconFactory(this::iconImport), QTraceI18n.t("btn.import.caption"),
-            QTraceI18n.t("btn.import.tooltip"), Color.web(GROUP_TOOLS));
+        Button importBtn = BatchImports.entitled() == null ? null
+            : iconButton(welcomeMarked("import", iconFactory(this::iconImport)), QTraceI18n.t("btn.import.caption"),
+                QTraceI18n.t("btn.import.tooltip"), Color.web(GROUP_TOOLS));
         Button resetBtn = btnReset = iconButton(iconFactory(this::iconReset), QTraceI18n.t("btn.reset.caption"),
             QTraceI18n.t("btn.reset.tooltip"), Color.web(RED));
         // looked up by the screenshot harness — see ScreenshotHarness
@@ -471,9 +475,11 @@ public class QTracePanel {
             dashboardBtn.setId("dashboard-button");
             dashboardBtn.setOnAction(e -> welcomeFirst("dashboard", controller::showDashboard));
         }
-        importBtn.setId("import-button");
+        if (importBtn != null) {
+            importBtn.setId("import-button");
+            importBtn.setOnAction(e -> welcomeFirst("import", controller::startBatchExport));
+        }
         resetBtn.setId("reset-button");
-        importBtn.setOnAction(e -> controller.startBatchExport());
         resetBtn.setOnAction(e -> confirmReset());
         resetBtn.setDisable(!controller.hasActiveImage());
         resetBtn.setOpacity(controller.hasActiveImage() ? 1.0 : 0.45);
@@ -493,7 +499,7 @@ public class QTracePanel {
                     case PanelProfile.VERSIONS  -> hookSlot(false, true, false);
                     default                     -> profileSlot(tool);
                 };
-                if (node != null) row.getChildren().add(node); // Upload, Report: with the licence only
+                if (node != null) row.getChildren().add(node); // Upload, Report: with the licence only; Dashboard, Import: with their module
             }
             return;
         }
@@ -514,7 +520,9 @@ public class QTracePanel {
         }
         row.getChildren().add(vseparator());
         if (dashboardBtn != null) row.getChildren().add(dashboardBtn);
-        row.getChildren().addAll(moduleSlot(PanelExtensions.DASHBOARD, GROUP_TOOLS), importBtn, resetBtn);
+        row.getChildren().add(moduleSlot(PanelExtensions.DASHBOARD, GROUP_TOOLS));
+        if (importBtn != null) row.getChildren().add(importBtn);
+        row.getChildren().add(resetBtn);
     }
 
     /**
