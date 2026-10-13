@@ -22,8 +22,10 @@ package io.qtrace.welcome;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.qtrace.Account;
 import io.qtrace.BrowserOpener;
 import io.qtrace.IssueReportDialog;
+import io.qtrace.LicenseInfo;
 import io.qtrace.QTraceController;
 import io.qtrace.QTracePlugin;
 import io.qtrace.QTracePluginManager;
@@ -158,14 +160,18 @@ public class WelcomeExtension implements QuPathExtension {
                 return;
             }
             List<ModuleUpdates.Card> tools = auto ? toolCards(unread) : List.of();
-            String json = WelcomeSequence.of(orgJson,
+            boolean core = auto && coreUnread();
+            String json = WelcomeSequence.of(core ? CoreContent.of() : null, orgJson,
                 ToolContent.of(toolItems(tools)),
                 auto ? NewsContent.of(newsItems(cards, updated)) : null);
             if (json == null) return;
-            String title = orgJson != null ? "Welcome to qTrace" : !tools.isEmpty() ? toolsTitle(tools) : "What's new in qTrace";
+            String title = orgJson != null || core ? "Welcome to qTrace" : !tools.isEmpty() ? toolsTitle(tools) : "What's new in qTrace";
             QTraceUpdater.whenNoModalOpen("welcome", () -> {
                 if (orgJson != null) markSeen();
-                play(qupath, title, json, () -> markRead(tools));
+                play(qupath, title, json, () -> {
+                    markRead(tools);
+                    if (core) ToolWelcomes.markRead(CORE, CORE_REVISION);
+                });
             });
         }));
     }
@@ -174,6 +180,14 @@ public class WelcomeExtension implements QuPathExtension {
     private static List<ModuleUpdates.Card> moduleCards() {
         Provisioner provisioner = Provisioners.current();
         return provisioner == null ? List.of() : provisioner.moduleCards();
+    }
+
+    /** The base welcome ({@link CoreContent}): the revision written, read once per workstation. */
+    static final String CORE = "core";
+    static final int CORE_REVISION = 1;
+
+    private static boolean coreUnread() {
+        return !ToolWelcomes.unreadHere(Map.of(CORE, CORE_REVISION), Set.of(CORE)).isEmpty();
     }
 
     /** The tools installed and served here whose welcome was not read at its current revision. */
@@ -187,13 +201,12 @@ public class WelcomeExtension implements QuPathExtension {
 
     // ── On demand: each welcome alone, from the menu or a gold square ────────────
 
-    /** Extensions > QTrace > Welcome… — the organization's welcome, or the standard one. */
+    /** Extensions > QTrace > Welcome… — the base welcome, then the organization's or the standard one. */
     private static void playWelcome(QuPathGUI qupath) {
-        CompletableFuture.supplyAsync(WelcomeExtension::fetch).thenAccept(json -> {
-            if (json == null) return;
+        CompletableFuture.supplyAsync(WelcomeExtension::fetch).exceptionally(e -> null).thenAccept(json -> {
             Platform.runLater(() -> {
-                if (PlayerBridge.webViewAvailable()) play(qupath, "Welcome to qTrace", WelcomeSequence.of(json), () -> {});
-                else new WelcomeDialog(qupath).show(WelcomeSpec.parse(json, WelcomeDialog.ACTIONS));
+                if (PlayerBridge.webViewAvailable()) play(qupath, "Welcome to qTrace", WelcomeSequence.of(CoreContent.of(), json), () -> {});
+                else if (json != null) new WelcomeDialog(qupath).show(WelcomeSpec.parse(json, WelcomeDialog.ACTIONS));
             });
         });
     }
@@ -266,7 +279,8 @@ public class WelcomeExtension implements QuPathExtension {
      * One welcome window, played by the HTML player served by qtrace.ca, with every action a
      * welcome may ask for. {@code closed} runs once the window is closed.
      */
-    private static void play(QuPathGUI qupath, String title, String json, Runnable closed) {
+    private static void play(QuPathGUI qupath, String title, String content, Runnable closed) {
+        String json = identified(content);
         PlayerBridge bridge = new PlayerBridge();
         PlayerWindow w = new PlayerWindow(qupath.getStage(), title, SERVER + "/player/player.html", json, bridge);
         bridge.on("close", a -> w.close())
@@ -282,6 +296,14 @@ public class WelcomeExtension implements QuPathExtension {
             });
         w.stage().setOnHidden(e -> closed.run());
         w.show();
+    }
+
+    /** The header of every welcome names the certified identity, or the account QuPath is signed in to. */
+    private static String identified(String json) {
+        QTracePlugin plugin = QTracePluginManager.get();
+        LicenseInfo licence = plugin != null ? plugin.getActiveLicenseInfo() : null;
+        if (licence != null) return WelcomeSequence.identify(json, licence.name(), null);
+        return WelcomeSequence.identify(json, null, Account.signedIn() ? Account.displayName(Account.info()) : null);
     }
 
     /** GET /api/onboarding?v=<this module's version>, or null (offline, inactive license). */

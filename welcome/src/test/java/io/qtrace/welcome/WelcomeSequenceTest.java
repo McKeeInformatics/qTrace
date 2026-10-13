@@ -127,4 +127,29 @@ class WelcomeSequenceTest {
     void aPartThatCannotBeReadIsSkipped() {
         assertEquals(List.of("tool-player", "tools-done"), ids(WelcomeSequence.of("not json", TOOLS, null)));
     }
+
+    @Test
+    void theHeaderNamesTheCertifiedIdentity_orTheAccount_orNothing() {
+        String plain = "{\"schemaVersion\":2,\"slides\":[{\"id\":\"done\",\"title\":\"x\",\"actions\":[]}]}";
+        JsonObject certified = JsonParser.parseString(WelcomeSequence.identify(plain, "Ada Lovelace", null)).getAsJsonObject();
+        assertEquals("Ada Lovelace", certified.get("who").getAsString());
+        assertFalse(certified.has("account"));
+        JsonObject account = JsonParser.parseString(WelcomeSequence.identify(plain, null, "Ada Basic")).getAsJsonObject();
+        assertEquals("Ada Basic", account.get("account").getAsString());
+        assertFalse(account.has("who"));
+        assertEquals(plain, WelcomeSequence.identify(plain, null, null));
+        assertEquals(plain, WelcomeSequence.identify(plain, " ", ""));
+    }
+
+    @Test
+    void aWelcomeThatAlreadyNamesItsOwnerKeepsIt() {
+        JsonObject out = JsonParser.parseString(WelcomeSequence.identify(ORG, "Someone Else", null)).getAsJsonObject();
+        assertEquals("Ada Lovelace", out.get("who").getAsString());
+    }
+
+    @Test
+    void unreadableContentIsReturnedAsIs() {
+        assertEquals("not json", WelcomeSequence.identify("not json", "Ada", null));
+        assertNull(WelcomeSequence.identify(null, "Ada", null));
+    }
 }

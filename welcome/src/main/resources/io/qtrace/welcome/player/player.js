@@ -189,7 +189,8 @@
     return '<div class="report"><div class="report-head"><span>Bug or Feature Request</span><span class="pill">Bug</span></div>' +
       '<div class="field">Replay stops on the second image</div>' +
       '<div class="field tall">Steps to reproduce, what you expected, what happened…</div>' +
-      '<div class="report-foot"><span>Reported by <strong>' + esc((content && content.who) || 'you') + '</strong> · certified</span>' +
+      '<div class="report-foot"><span>Reported by <strong>' + esc((content && (content.who || content.account)) || 'you') + '</strong>' +
+        (content && content.who ? ' · certified' : content && content.account ? ' · not certified' : '') + '</span>' +
       '<span class="send">Send</span></div></div>';
   }
 
@@ -249,6 +250,7 @@
   function refreshWho() {
     var name = isAccount() && state.device.name;
     $('who').innerHTML = content.who ? SHIELD + 'Certified for <strong>' + esc(content.who) + '</strong>'
+      : content.account ? 'Signed in as <strong>' + esc(content.account) + '</strong> · not certified'
       : isAccount() ? 'Signed in' + (name ? ' as <strong>' + esc(name) + '</strong>' : '') + ' · not certified'
       : 'qTrace Core · no certificate yet';
   }

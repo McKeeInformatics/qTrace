@@ -71,6 +71,27 @@ final class WelcomeSequence {
         return out.toString();
     }
 
+    /**
+     * Says in the header whose workstation this is, unless the content already does: the
+     * certified name ({@code who}), else the account QuPath is signed in to ({@code account},
+     * not certified). Returns {@code json} unchanged when there is nothing to say or it is unreadable.
+     */
+    static String identify(String json, String certifiedName, String accountName) {
+        if (json == null) return null;
+        boolean certified = certifiedName != null && !certifiedName.isBlank();
+        boolean account = accountName != null && !accountName.isBlank();
+        if (!certified && !account) return json;
+        try {
+            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+            if (root.has("who") || root.has("account")) return json;
+            if (certified) root.addProperty("who", certifiedName);
+            else root.addProperty("account", accountName);
+            return root.toString();
+        } catch (Exception e) {
+            return json;
+        }
+    }
+
     private static JsonObject parse(String json) {
         if (json == null) return null;
         try {
