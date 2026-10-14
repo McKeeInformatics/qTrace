@@ -1,6 +1,6 @@
 # qTrace Player
 
-**Replay any recorded QuPath analysis, step by step, on the same image or on a whole project.**
+**Replay any recorded QuPath analysis on the same image or on a whole project.**
 
 The Player is the replay module of [qTrace](../README.md), the QuPath extension that records the
 provenance of an image analysis. It opens a `.qtrace` record (or a qtrace.ca certificate) and
