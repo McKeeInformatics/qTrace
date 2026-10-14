@@ -31,11 +31,11 @@ class PanelExtensionsTest {
 
     @Test
     void aModuleButtonFollowsItsOwnButtonOnly() {
-        ModuleEntitlements.setForTest(Set.of("cohort", "workfloweditor"));
+        ModuleEntitlements.setForTest(Set.of("cohort", "othertool"));
         PanelExtensions.register("cohort", PanelExtensions.DASHBOARD, "Cohort map", NOTHING);
-        PanelExtensions.register("workfloweditor", PanelExtensions.VERSIONS, "Workflow Editor", NOTHING);
+        PanelExtensions.register("othertool", PanelExtensions.VERSIONS, "Other tool", NOTHING);
         assertEquals(List.of("Cohort map"), labels(PanelExtensions.DASHBOARD));
-        assertEquals(List.of("Workflow Editor"), labels(PanelExtensions.VERSIONS));
+        assertEquals(List.of("Other tool"), labels(PanelExtensions.VERSIONS));
     }
 
     @Test

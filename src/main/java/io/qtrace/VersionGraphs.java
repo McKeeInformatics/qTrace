@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The Version window a module brings ({@link VersionGraph}). The module registers it when it
- * is installed; Core opens it from the panel, the mini-panel and for the modules that edit or
+ * is installed; Core opens it from the panel, the mini-panel and for the modules that
  * read a workflow. With no module registered there is no Version window, and nothing that
  * opens one is shown.
  */

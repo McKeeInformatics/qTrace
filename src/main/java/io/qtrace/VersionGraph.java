@@ -53,10 +53,6 @@ public interface VersionGraph {
          */
         void refresh(File current);
 
-        /** Enters the editing mode a module adds ({@link VersionEditor}), if not already in it. */
-        void startEditing();
-
-        boolean isEditing();
         boolean isShowing();
         boolean isIconified();
         void minimize();

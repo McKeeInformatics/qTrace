@@ -33,8 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A workflow opened in the player: a {@code .qtflow} written by the workflow editor module
- * (docs/architecture/workflow-editor.md). It has the shape of a .qtrace — one
+ * A workflow opened in the player: a {@code .qtflow} file. It has the shape of a .qtrace — one
  * {@code sessions[]} entry per packet — so the replay engine reads it as it is, and playing one
  * packet is replaying one session. What differs is said here: it is composed, not recorded, no
  * packet carries a stamp, and its classifiers sit in a folder beside the file. Pure, no JavaFX.

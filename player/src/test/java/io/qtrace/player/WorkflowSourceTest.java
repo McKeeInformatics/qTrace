@@ -29,7 +29,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** A workflow (.qtflow, written by the workflow editor module) opened in the replay player. */
+/** A workflow (.qtflow) opened in the replay player. */
 class WorkflowSourceTest {
 
     private static final String WORKFLOW = """

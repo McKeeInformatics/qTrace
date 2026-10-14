@@ -11,7 +11,7 @@ import java.util.function.Function;
 
 /**
  * What modules add to the panel: a button of their own, placed right after the one it goes
- * with — the cohort map after Dashboard, the workflow editor after Version (under it on the
+ * with — the cohort map after Dashboard, another tool after Version (under it on the
  * mini-panel's column). A module registers its button when it is installed; the panel shows
  * those of the modules the licence includes ({@link ModuleEntitlements}). With no module
  * registered the panel is unchanged.

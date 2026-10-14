@@ -67,7 +67,7 @@ public class QTraceConfig {
     private String exportDir;
     private String classifierDir;
     private String trainingDir;
-    private String workflowDir; // .qtflow files of the workflow editor — null = <export dir>/workflows
+    private String workflowDir; // workflows (.qtflow) — null = <export dir>/workflows
     private String lastReplayBrowseDir; // last folder the Compliance Player's "Browse" opened from
     private String logsDir; // Player replay logs — null = ~/.qTrace/replay-logs/
     private Boolean useProjectFolder; // when true, store everything under <project>/qTrace/ instead of the paths above

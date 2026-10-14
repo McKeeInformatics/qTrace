@@ -169,6 +169,9 @@ public class QTraceController {
     private QTraceMiniPanel miniPanel; // null when the panel fell back to its window
     private Dashboard.Window dashboard; // the module's window (Dashboards), once opened
     private VersionGraph.Window commitGraph; // from the module that brings it (VersionGraphs)
+    // Other windows that read records and follow the open image like the Version window does
+    // (a module's own window, built on the one versiongraph brings): told the same things.
+    private final java.util.List<VersionGraph.Window> followers = new java.util.concurrent.CopyOnWriteArrayList<>();
     private ActionLogger    logger;
     // Live draft of the open image (autosave, unstamped sessions, crash recovery).
     private DraftManager    drafts;
@@ -250,6 +253,7 @@ public class QTraceController {
         fireRecordingState(data != null);
         if (data == null) { drafts.end(); return; }
         if (commitGraph != null) commitGraph.showImage(currentQtraceFile());
+        for (VersionGraph.Window w : followers) w.showImage(currentQtraceFile());
         Optional<io.qtrace.draft.DraftStore.Draft> orphan = drafts.findOrphan(data);
         if (orphan.isPresent()) {
             // Not tracked until the user chooses — a fresh draft would overwrite the orphan.
@@ -857,42 +861,9 @@ public class QTraceController {
     }
 
     /**
-     * Opens the Version window on the open image, in the editing mode a module adds to it (the
-     * workflow editor's entry under the panel's Version button). Same conditions as
-     * {@link #showCommitGraph()}. A toggle like the panel's other buttons: when the window is
-     * already up in that mode, a second click minimizes it — the workflow being edited is kept.
-     */
-    public void showCommitGraphEditing() {
-        if (commitGraph != null && commitGraph.isShowing()) {
-            if (commitGraph.isEditing() && !commitGraph.isIconified()) { commitGraph.minimize(); return; }
-            commitGraph.front();
-        } else {
-            showCommitGraph();
-        }
-        if (commitGraph != null && commitGraph.isShowing()) commitGraph.startEditing();
-    }
-
-    /**
-     * Opens the Version window directly on a .qtflow file, straight into the module's editing
-     * mode — for a caller that already has a specific workflow file chosen (e.g. the Library
-     * module's Edit button), skipping the project/image/stamp checks {@link #showCommitGraph()}
-     * applies for the panel's own button. No-op without a registered {@link VersionEditor}
-     * (workfloweditor not installed/entitled) — callers should check {@link VersionEditors#entitled()}
-     * first to decide whether to show their own Edit button.
-     */
-    public void editWorkflowFile(File qtflowFile) {
-        if (qtflowFile == null || !qtflowFile.isFile()) return;
-        if (VersionEditors.entitled().isEmpty()) return;
-        if ((commitGraph == null || !commitGraph.isShowing()) && !newVersionWindow()) return;
-        commitGraph.show(qtflowFile);
-        commitGraph.startEditing();
-    }
-
-    /**
-     * Opens the Version window directly on a .qtflow or .qtrace file, in plain read mode — no
-     * project, image or stamp needed, and no module required (the window reads for anyone,
-     * `workflow-library.md` § 2). Whoever can edit it already has the Version window's own
-     * Super User toggle once it is open. Used by the Library module's "Open in Version…".
+     * Opens the Version window directly on a .qtflow or .qtrace file, to read it — no project,
+     * image or stamp needed (the window reads for anyone, `workflow-library.md` § 2). Used by the
+     * Library module's "Open in Version…".
      */
     public void showWorkflowFile(File qtflowFile) {
         if (qtflowFile == null || !qtflowFile.isFile()) return;
@@ -968,9 +939,31 @@ public class QTraceController {
 
     /** The Version window, when open, follows the capture and the .qtrace as they change. */
     private void refreshCommitGraph() {
-        if (commitGraph == null) return;
-        if (Platform.isFxApplicationThread()) commitGraph.refresh(currentQtraceFile());
-        else Platform.runLater(() -> commitGraph.refresh(currentQtraceFile()));
+        if (commitGraph == null && followers.isEmpty()) return;
+        Runnable refresh = () -> {
+            if (commitGraph != null) commitGraph.refresh(currentQtraceFile());
+            for (VersionGraph.Window w : followers) w.refresh(currentQtraceFile());
+        };
+        if (Platform.isFxApplicationThread()) refresh.run();
+        else Platform.runLater(refresh);
+    }
+
+    /**
+     * What a window reading records needs from the open image — the one Core gives the Version
+     * window: its capture in progress, its .qtrace, the replay player, the −/+ of a step. For a
+     * module that opens such a window of its own.
+     */
+    public VersionGraph.Host versionGraphHost() {
+        return graphHost;
+    }
+
+    /**
+     * A module's window that reads records follows the open image from now on, like the Version
+     * window: it is told when another image is opened and when the capture or the .qtrace changes.
+     * Once per window; a window already following is not added again.
+     */
+    public void follow(VersionGraph.Window window) {
+        if (window != null && !followers.contains(window)) followers.add(window);
     }
 
     private boolean isCurrentQtrace(File qtrace) {
