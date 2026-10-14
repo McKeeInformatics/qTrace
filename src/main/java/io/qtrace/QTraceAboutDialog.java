@@ -57,6 +57,17 @@ public class QTraceAboutDialog {
 
     enum Mode { CORE, COMPLIANCE, CERTIFIED }
 
+    /** What the footer offers a workstation that runs Core alone. */
+    enum Offer { ACCOUNT, COMPLIANCE }
+
+    /**
+     * @param hasLicence a certificate is configured (active or not)
+     * @param signedIn   a basic account is signed in
+     */
+    static Offer offer(boolean hasLicence, boolean signedIn) {
+        return hasLicence || signedIn ? Offer.COMPLIANCE : Offer.ACCOUNT;
+    }
+
     /**
      * Builds the same hero/cert-card/feature-grid/footer content shown in the standalone
      * About dialog, without the floating-window chrome — for embedding elsewhere (e.g. a
@@ -391,7 +402,9 @@ public class QTraceAboutDialog {
             renew.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
             footer.getChildren().add(renew);
         } else if (mode == Mode.CORE) {
-            Button upgrade = new Button("Get Compliance ↑");
+            String licence = QTraceConfig.get().getLicensePath();
+            boolean account = offer(licence != null && !licence.isBlank(), Account.signedIn()) == Offer.ACCOUNT;
+            Button upgrade = new Button(account ? "Get your account ↑" : "Get Compliance ↑");
             upgrade.setStyle(
                 "-fx-background-color: " + YELLOW + "22;"
               + "-fx-border-color: " + YELLOW + "66;"
@@ -400,7 +413,13 @@ public class QTraceAboutDialog {
               + "-fx-font-size: 11; -fx-font-weight: bold;"
               + "-fx-cursor: hand; -fx-padding: 4 10 4 10;"
             );
-            upgrade.setOnAction(e -> BrowserOpener.open(PORTAL_URL));
+            upgrade.setOnAction(e -> {
+                if (!account) { BrowserOpener.open(PORTAL_URL); return; }
+                // The standalone About is modal: it would keep Getting started out of reach.
+                if (upgrade.getScene().getWindow() instanceof Stage s
+                        && s.getModality() == Modality.APPLICATION_MODAL) s.close();
+                if (!UploadInvite.open()) BrowserOpener.open(PORTAL_URL);
+            });
             footer.getChildren().add(upgrade);
         } else if (mode == Mode.COMPLIANCE) {
             Button cert = new Button("Load certificate →");
