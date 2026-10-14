@@ -31,6 +31,7 @@ import io.qtrace.QTracePlugin;
 import io.qtrace.QTracePluginManager;
 import io.qtrace.ModuleEntitlements;
 import io.qtrace.ToolWelcomes;
+import io.qtrace.TourHighlight;
 import io.qtrace.ModuleNews;
 import io.qtrace.ModuleUpdates;
 import io.qtrace.Provisioner;
@@ -288,6 +289,7 @@ public class WelcomeExtension implements QuPathExtension {
         PlayerWindow w = new PlayerWindow(qupath.getStage(), title, SERVER + "/player/player.html", json, bridge);
         bridge.on("close", a -> w.close())
             .on("open-url", BrowserOpener::open)
+            .on("tour-highlight", TourHighlight::set)
             .on("open-player", a -> {
                 QTraceController c = QTraceController.current();
                 if (c != null) c.openReplayDialog();
@@ -297,7 +299,7 @@ public class WelcomeExtension implements QuPathExtension {
                 QTracePlugin p = QTracePluginManager.getEntitled();
                 if (p != null) p.promptPassphraseAndDecrypt(w.stage());
             });
-        w.stage().setOnHidden(e -> closed.run());
+        w.stage().setOnHidden(e -> { TourHighlight.set(""); closed.run(); });
         w.show();
     }
 
