@@ -96,6 +96,7 @@ public final class QTraceMiniPanel {
         // A module can load after the column was drawn: its button comes in then.
         PanelExtensions.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         Players.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        PendingModules.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         VersionGraphs.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         ToolWelcomes.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         PanelProfile.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
@@ -223,8 +224,11 @@ public final class QTraceMiniPanel {
         // except Replay, which is there as soon as a module brings the player.
         Color workspace = Color.web(QTracePanel.GROUP_WORKSPACE);
         boolean licensed = QTracePluginManager.isEntitled();
-        boolean player = Players.entitled() != null;
-        boolean versions = VersionGraphs.entitled() != null;
+        // A module that arrived but does not run yet (it starts after the restart) has its button greyed.
+        boolean playerWait = Players.entitled() == null && PendingModules.awaiting("player");
+        boolean versionsWait = VersionGraphs.entitled() == null && PendingModules.awaiting("versiongraph");
+        boolean player = Players.entitled() != null || playerWait;
+        boolean versions = VersionGraphs.entitled() != null || versionsWait;
         Button reportBtn = null, replayBtn = null, versionsBtn = null;
         // Upload: there once a module has brought the upload (WorkspacePushes). On a workstation
         // without an account it is greyed, and a click opens Getting started (UploadInvite).
@@ -250,10 +254,12 @@ public final class QTraceMiniPanel {
         if (player) {
             replayBtn = TourHighlight.tag(button(QTracePanel.welcomeMarked("player", icon(panel::iconReplay)), "btn.replay.caption", workspace), "player");
             replayBtn.setOnAction(e -> QTracePanel.welcomeFirst("player", controller::openReplayDialog));
+            if (playerWait) pendingLook(replayBtn, "Replay");
         }
         if (versions) {
             versionsBtn = TourHighlight.tag(button(QTracePanel.welcomeMarked("versiongraph", icon(panel::iconVersions)), "btn.versions.caption", workspace), "versiongraph");
             versionsBtn.setOnAction(e -> QTracePanel.welcomeFirst("versiongraph", controller::showCommitGraph));
+            if (versionsWait) pendingLook(versionsBtn, "Version(s)");
         }
 
         Color tools = Color.web(QTracePanel.GROUP_TOOLS);
@@ -333,6 +339,13 @@ public final class QTraceMiniPanel {
     }
 
     /** Modules' buttons ({@link PanelExtensions}): under the button they go with, or where the organization's panel puts them. */
+    /** A button of a module that arrived but starts after the restart: greyed, and it says so. */
+    private void pendingLook(Button b, String tool) {
+        b.setOpacity(0.45);
+        b.setTooltip(tip(QTraceI18n.t("pending.tooltip").replace("{0}", tool)));
+        b.setOnAction(e -> PendingModules.explain(qupath.getStage(), tool));
+    }
+
     private void addModuleButtons(List<Node> nodes, List<PanelExtensions.Entry> entries) {
         for (PanelExtensions.Entry entry : entries) {
             Color hover = Color.web(PanelExtensions.DASHBOARD.equals(entry.anchor()) ? QTracePanel.GROUP_TOOLS : QTracePanel.GROUP_WORKSPACE);

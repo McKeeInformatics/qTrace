@@ -262,6 +262,13 @@ final class ModuleInstaller {
                     downloadAndInstall(qupath, o.module(), o.version(), o.sha256(),
                         () -> downloadWithProgress(o.url(), bearer, f -> report(progress, o, titles, f * 0.98)), () -> failed[0] = true);
                     report(progress, o, titles, failed[0] ? -1 : 1);
+                    if (!failed[0]) {
+                        try {
+                            io.qtrace.PendingModules.refresh(); // the panel draws its button, greyed until the restart
+                        } catch (LinkageError olderCore) {
+                            // a Core from before PendingModules: the button simply comes after the restart
+                        }
+                    }
                     count++;
                 }
                 log.info(TAG + "install now: {} module(s) from /api/modules{}", count, jwt == null ? "/open" : " and /api/modules/open");

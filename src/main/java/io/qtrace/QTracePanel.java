@@ -379,6 +379,7 @@ public class QTracePanel {
         });
         Players.onChange(this, hooksChanged);
         VersionGraphs.onChange(this, hooksChanged);
+        PendingModules.onChange(this, hooksChanged);
         // A welcome read, or one more to read: the gold squares follow.
         ToolWelcomes.onChange(this, hooksChanged);
         // The organization's panel comes with the server's answer, after the panel was drawn;
@@ -540,18 +541,22 @@ public class QTracePanel {
             captionedButtons.removeIf(b -> slot.getChildren().contains(b));
             slot.getChildren().clear();
             java.util.List<Button> buttons = new java.util.ArrayList<>();
-            if (replay && Players.entitled() != null) {
+            boolean replayWait = replay && Players.entitled() == null && PendingModules.awaiting("player");
+            if (replay && (Players.entitled() != null || replayWait)) {
                 Button btnReplay = iconButton(welcomeMarked("player", iconFactory(this::iconReplay)), QTraceI18n.t("btn.replay.caption"),
                     QTraceI18n.t("btn.replay.tooltip"), Color.web(GROUP_WORKSPACE));
                 btnReplay.setId("replay-button"); // looked up by the screenshot harness — see ScreenshotHarness
                 btnReplay.setOnAction(e -> welcomeFirst("player", controller::openReplayDialog));
+                if (replayWait) pendingLook(btnReplay, "Replay");
                 buttons.add(btnReplay);
             }
-            if (versions && VersionGraphs.entitled() != null) {
+            boolean versionsWait = versions && VersionGraphs.entitled() == null && PendingModules.awaiting("versiongraph");
+            if (versions && (VersionGraphs.entitled() != null || versionsWait)) {
                 Button btnGraph = iconButton(welcomeMarked("versiongraph", iconFactory(this::iconVersions)), QTraceI18n.t("btn.versions.caption"),
                     QTraceI18n.t("btn.versions.tooltip"), Color.web(GROUP_WORKSPACE));
                 btnGraph.setId("versions-button"); // looked up by the screenshot harness — see ScreenshotHarness
                 btnGraph.setOnAction(e -> welcomeFirst("versiongraph", controller::showCommitGraph));
+                if (versionsWait) pendingLook(btnGraph, "Version(s)");
                 buttons.add(btnGraph);
             }
             if (ownGroup && !buttons.isEmpty()) slot.getChildren().add(vseparator());
@@ -562,6 +567,13 @@ public class QTracePanel {
         moduleSlots.add(fill);
         fill.run();
         return slot;
+    }
+
+    /** A button of a module that arrived but starts after the restart: greyed, and it says so. */
+    private void pendingLook(Button b, String tool) {
+        b.setOpacity(0.45);
+        b.setTooltip(new Tooltip(QTraceI18n.t("pending.tooltip").replace("{0}", tool)));
+        b.setOnAction(e -> PendingModules.explain(b.getScene() != null ? b.getScene().getWindow() : null, tool));
     }
 
     private final java.util.List<Runnable> moduleSlots = new java.util.ArrayList<>(); // each refills one slot
