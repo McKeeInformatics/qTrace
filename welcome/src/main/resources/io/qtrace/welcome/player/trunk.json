@@ -106,10 +106,6 @@
           "label": "Sign in or create an account",
           "action": "sign-in",
           "primary": true
-        },
-        {
-          "label": "Not now",
-          "action": "continue"
         }
       ]
     },
@@ -123,7 +119,8 @@
         "title": "You are signed in",
         "text": "You can upload, share and replay your records right away. They are not certified: an identity certificate, obtained from qtrace.ca, is what certifies the records you sign."
       },
-      "actions": []
+      "actions": [],
+      "branch": true
     },
     {
       "id": "install",
@@ -141,11 +138,11 @@
           "action": "quit",
           "primary": true
         }
-      ]
+      ],
+      "branch": true
     },
     {
       "id": "ready",
-      "hidden": true,
       "eyebrow": "All set",
       "title": "qTrace is on board",
       "text": "qTrace already records your work in QuPath: open a project and work as usual. Whenever you want your results signed with your certified identity, sign in from Extensions > QTrace > Getting started.",
@@ -156,7 +153,8 @@
           "action": "close",
           "primary": true
         }
-      ]
+      ],
+      "enter": "continue"
     }
   ]
 }

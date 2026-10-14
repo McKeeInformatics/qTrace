@@ -508,18 +508,32 @@
       el.innerHTML = '<div class="visual">' + visualHTML(s) + '</div><div class="copy">' +
         (s.eyebrow ? '<div class="eyebrow">' + esc(s.eyebrow) + '</div>' : '') +
         '<h2>' + esc(s.title) + '</h2><p>' + esc(s.text) + '</p>' +
-        '<div class="actions">' + actionsHTML(s) + '</div>' +
-        '<div class="pager"><button type="button" class="btn" data-nav="-1">Previous</button>' +
-        '<button type="button" class="btn" data-nav="1">Next</button></div></div>';
+        '<div class="actions">' + actionsHTML(s) + '</div></div>';
       stage.insertBefore(el, $('toast'));
     });
-    // A metro line: the start, a station per slide, the arrival; the names are in the titles.
-    $('track').innerHTML = visible().map(function (i, k) {
-      var s = content.slides[i];
-      var name = esc(s.eyebrow || s.title);
-      return (k ? '<b class="rail"></b>' : '') +
-        '<button type="button" data-go="' + i + '" title="' + name + '" aria-label="Step ' + (k + 1) + ': ' + name + '"><i></i></button>';
-    }).join('');
+    // A metro line: the start, a station per slide, the arrival; the names are in the titles. The slides of
+    // the sign-in journey (slide.branch) leave the line after the station they follow, on a violet branch.
+    var L = layout(), onLine = L.onLine, onBranch = L.onBranch;
+    var slots = Math.max(1, onLine.length - 1);   // the gaps of the main line
+    function station(i, n, cls) {
+      var s = content.slides[i], name = esc(s.eyebrow || s.title);
+      return '<button type="button" ' + (cls ? 'class="bs" data-q="' + n + '"' : 'data-k="' + n + '" data-go="' + i + '"') +
+        ' title="' + name + '" aria-label="' + name + '"><i></i></button>';
+    }
+    var html = '<div class="line">' +
+      onLine.map(function (i, k) { return (k ? '<b class="rail" data-k="' + k + '"></b>' : '') + station(i, k); }).join('') + '</div>';
+    if (onBranch.length && L.attach > -1) {
+      var b = onBranch.length;
+      html += '<div class="branch" style="left: calc((100% - 9px) * ' + (L.attach / slots) + ' + 4.5px); width: calc((100% - 9px) / ' + slots + ')">' +
+        '<svg class="elbow" width="16" height="20" viewBox="0 0 16 20"><path d="M0 0 C0 12 4 20 16 20"/></svg>' +
+        onBranch.map(function (i, q) {
+          return '<b class="brail" data-q="' + q + '" style="left:' + (q ? (q / b * 100) + '%' : '16px') +
+            '; width: calc(' + (100 / b) + '% - ' + (q ? 0 : 16) + 'px)"></b>' +
+            '<span class="bstop" style="left:' + ((q + 1) / b * 100) + '%">' + station(i, q, true) + '</span>';
+        }).join('') + '</div>';
+    }
+    $('track').classList.toggle('has-branch', !!onBranch.length && L.attach > -1);
+    $('track').innerHTML = html;
     document.title = content.title || 'qTrace';
     $('org').hidden = !content.org;
     $('org').textContent = content.org ? content.org.name : '';
@@ -568,11 +582,32 @@
     content.slides.forEach(function (s, i) { if (!s.hidden) out.push(i); });
     return out;
   }
+  // The main line, and the branch (the slides marked `branch`, which leave it after the station they follow).
+  function layout() {
+    var vis = visible();
+    var onLine = vis.filter(function (i) { return !content.slides[i].branch; });
+    var onBranch = vis.filter(function (i) { return content.slides[i].branch; });
+    var attach = onBranch.length ? onLine.filter(function (i) { return i < onBranch[0]; }).length - 1 : -1;
+    return { onLine: onLine, onBranch: onBranch, attach: attach };
+  }
+  // Reaching a slide that announces it (slide.enter) tells QuPath first: Getting started is done there.
+  function reach(i) {
+    var s = content.slides[i];
+    if (s.enter) { run(s.enter); return; }
+    go(i);
+  }
   function step(dir) {
-    var v = visible(), k = v.indexOf(cur);
+    var L = layout();
+    if (content.slides[cur].branch) {            // on the branch: back along it, forward only by signing in
+      if (dir > 0) return;
+      var q = L.onBranch.indexOf(cur);
+      go(q > 0 ? L.onBranch[q - 1] : L.onLine[L.attach]);
+      return;
+    }
+    var k = L.onLine.indexOf(cur);
     if (k === -1) return;
-    var n = v[k + dir];
-    if (n != null) go(n);
+    var n = L.onLine[k + dir];
+    if (n != null) reach(n);
   }
 
   function go(i) {
@@ -595,22 +630,42 @@
     Array.prototype.forEach.call(document.querySelectorAll('.slide'), function (n) {
       n.classList.toggle('on', +n.dataset.i === cur);
     });
-    // Stations before this one are passed, the rail up to it is lit; past the last slide, the whole line is.
-    var here = k === -1 ? v.length : k;
-    Array.prototype.forEach.call(document.querySelectorAll('#track button'), function (b, n) {
-      b.classList.toggle('cur', n === k);
-      b.classList.toggle('past', n < here);
+    // Stations before this one are passed, the rails up to it are lit; past the last slide, the whole line is.
+    var L = layout();
+    var onBr = !!content.slides[cur].branch;
+    var curK = onBr ? L.attach : (L.onLine.indexOf(cur) === -1 ? L.onLine.length : L.onLine.indexOf(cur));
+    var curQ = onBr ? L.onBranch.indexOf(cur) : -1;
+    Array.prototype.forEach.call(document.querySelectorAll('#track button[data-k]'), function (b) {
+      var n = +b.dataset.k;
+      b.classList.toggle('cur', !onBr && n === curK);
+      b.classList.toggle('past', onBr ? n <= curK : n < curK);
     });
-    Array.prototype.forEach.call(document.querySelectorAll('#track .rail'), function (r, n) {
-      r.classList.toggle('lit', n + 1 <= here);
+    Array.prototype.forEach.call(document.querySelectorAll('#track .rail'), function (r) {
+      r.classList.toggle('lit', +r.dataset.k <= curK);
     });
-    $('count').textContent = k === -1 ? '' : (k + 1) + ' / ' + v.length;
+    Array.prototype.forEach.call(document.querySelectorAll('#track button[data-q]'), function (b) {
+      var q = +b.dataset.q;
+      b.classList.toggle('cur', q === curQ);
+      b.classList.toggle('past', q < curQ);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#track .brail'), function (r) {
+      r.classList.toggle('lit', +r.dataset.q <= curQ);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#track .elbow'), function (r) {
+      r.classList.toggle('lit', curQ >= 0);
+    });
+    // The count follows the main line; on the sign-in branch it stays where the branch leaves it.
+    var at = onBr ? L.attach : L.onLine.indexOf(cur);
+    $('count').textContent = at === -1 ? '' : (at + 1) + ' / ' + L.onLine.length;
     remember(cur);
     // Previous / Next under the text: none where there is nowhere to go.
     Array.prototype.forEach.call(document.querySelectorAll('.pager [data-nav]'), function (b) {
       var dir = +b.dataset.nav;
-      b.style.visibility = (dir < 0 ? k <= 0 : k === -1 || k === v.length - 1) ? 'hidden' : 'visible';
+      var kk = L.onLine.indexOf(cur);            // -1 on the branch
+      var none = dir < 0 ? (kk === 0) : (kk === -1 || kk === L.onLine.length - 1);
+      b.style.visibility = none ? 'hidden' : 'visible';
     });
+    placePager();
     var s = content.slides[cur];
     startVisual(cur);
     if (s.visual === 'network' && !networkAsked && !Object.keys(state.network).length) { networkAsked = true; run('network-check'); }
@@ -673,12 +728,15 @@
   });
   $('track').addEventListener('click', function (e) {
     var b = e.target.closest('[data-go]');
-    if (b) go(+b.dataset.go);
+    if (b) reach(+b.dataset.go);
   });
-  $('stage').addEventListener('click', function (e) {
+  $('pager').addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-nav]');
     if (b) step(+b.dataset.nav);
   });
+  // Previous / Next stay at the bottom right edge, just above the bar, whatever the slide says.
+  function placePager() { $('pager').style.bottom = (document.querySelector('.bar').offsetHeight + 14) + 'px'; }
+  window.addEventListener('resize', placePager);
   // Skip leaves the tour. With a closing 'ready' slide (the trunk), that is the same exit as
   // "Not now": the host marks the tour done and shows it. Otherwise, the last slide of the track.
   $('skip').onclick = function () {
