@@ -300,7 +300,7 @@ public final class QTraceMiniPanel {
             if (licensed || player || uploadSlot != null || (versions && !licensed)) nodes.add(separator());
             if (uploadSlot != null) nodes.add(uploadSlot);
             if (player) nodes.add(replayBtn);
-            if (licensed) nodes.add(separator());
+            if (licensed || (player && versions)) nodes.add(separator());
             if (versions) nodes.add(versionsBtn);
             if (licensed) {
                 addModuleButtons(nodes, PanelExtensions.entitled(PanelExtensions.VERSIONS));

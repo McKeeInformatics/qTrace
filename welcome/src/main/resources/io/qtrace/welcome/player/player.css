@@ -239,6 +239,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .track .brail { position: absolute; top: 19px; height: 2px; background: var(--navy-b); }
 .track .brail.lit { background: var(--violet); }
 .track .bstop { position: absolute; top: 20px; transform: translate(-50%, -50%); }
+.track .bnote { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 12px; white-space: nowrap;
+  font-size: 12px; color: var(--violet); opacity: 0; transition: opacity .4s; pointer-events: none; }
+.track.deployed .bnote { opacity: 1; }
 .track button.bs { cursor: default; padding: 10px 0; }
 .track button.bs i { border-color: rgba(167, 139, 250, .45); }
 .track button.bs.past i { background: var(--violet); border-color: var(--violet); }

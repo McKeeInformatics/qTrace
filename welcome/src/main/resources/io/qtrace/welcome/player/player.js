@@ -536,11 +536,13 @@
         onBranch.map(function (i, q) {
           return '<b class="brail" data-q="' + q + '" style="left:' + (q ? (q / b * 100) + '%' : '16px') +
             '; width: calc(' + (100 / b) + '% - ' + (q ? 0 : 16) + 'px)"></b>' +
-            '<span class="bstop" style="left:' + ((q + 1) / b * 100) + '%">' + station(i, q, true) + '</span>';
+            '<span class="bstop" style="left:' + ((q + 1) / b * 100) + '%">' + station(i, q, true) +
+              (q === b - 1 ? '<span class="bnote">Modules deployed</span>' : '') + '</span>';
         }).join('') + '</div>';
     }
     $('track').classList.toggle('has-branch', !!onBranch.length && L.attach > -1);
     $('track').innerHTML = html;
+    refreshInstallCopy();
     document.title = content.title || 'qTrace';
     $('org').hidden = !content.org;
     $('org').textContent = content.org ? content.org.name : '';
@@ -696,6 +698,9 @@
     var s = content.slides.filter(function (x) { return x.id === 'install'; })[0];
     var h = el.querySelector('h2'), p = el.querySelector('p'), i = state.install;
     var failed = (i.modules || []).some(function (m) { return m.failed; });
+    // The restart is offered once every module has arrived; the line says so at its arrival.
+    Array.prototype.forEach.call(el.querySelectorAll('[data-act="quit"]'), function (b) { b.disabled = i.state !== 'done'; });
+    $('track').classList.toggle('deployed', i.state === 'done' && !failed);
     if (i.state === 'done' && !failed) {
       h.textContent = 'Modules Download completed';
       p.textContent = 'Every module you are subscribed to has been delivered. They start the next time you open QuPath.';
