@@ -133,7 +133,7 @@
     }).join('');
     var total = mods ? Math.round(mods.reduce(function (s, m) { return s + (i.state === 'done' || m.done ? 100 : (m.pct || 0)); }, 0) / mods.length)
                      : (i.state === 'done' ? 100 : i.state === 'running' ? 55 : 0);
-    return '<div class="device"><div class="checks">' +
+    return '<div class="device"><div class="checks' + (mods && mods.length > 3 ? ' cols' : '') + '">' +
       '<div class="check ' + (i.state === 'idle' ? 'wait' : 'ok') + '"><span class="dot">' + (i.state === 'idle' ? '' : '✓') +
       '</span><span>' + (account ? esc(signedInLine()) : 'Certificate saved') + '</span></div>' + rows +
       '</div><div class="progress"><i style="width:' + total + '%"></i></div></div>';
@@ -685,8 +685,27 @@
     data = typeof data === 'string' ? JSON.parse(data) : (data || {});
     if (event === 'network') { state.network[data.name] = !!data.ok; refreshVisual('network'); }
     if (event === 'device') { state.device = data; refreshVisual('device'); refreshCopy(); refreshVisual('install'); }
-    if (event === 'install') { state.install = data; refreshVisual('install'); }
+    if (event === 'install') { state.install = data; refreshVisual('install'); refreshInstallCopy(); }
     if (event === 'modules') { state.modules = data; refreshVisual('module'); }
+  }
+
+  // The install slide says how it went once every module is there: all delivered, or some not.
+  function refreshInstallCopy() {
+    var el = document.querySelector('.slide[data-id="install"]');
+    if (!el || !content) return;
+    var s = content.slides.filter(function (x) { return x.id === 'install'; })[0];
+    var h = el.querySelector('h2'), p = el.querySelector('p'), i = state.install;
+    var failed = (i.modules || []).some(function (m) { return m.failed; });
+    if (i.state === 'done' && !failed) {
+      h.textContent = 'Modules Download completed';
+      p.textContent = 'Every module you are subscribed to has been delivered. They start the next time you open QuPath.';
+    } else if (i.state === 'done') {
+      h.textContent = 'Some modules did not arrive';
+      p.textContent = 'The ones marked ! could not be downloaded. The others have been delivered and start the next time you open QuPath.';
+    } else if (s && !s.account) {
+      h.textContent = s.title;
+      p.textContent = s.text;
+    }
   }
 
   function gotoId(id) {
@@ -708,8 +727,8 @@
       setTimeout(function () { emit('device', { state: 'waiting', code: 'EDW9-QJGL' }); }, 800);
       setTimeout(function () { emit('device', { state: 'approved', code: 'EDW9-QJGL', name: 'Dr. Jane Demo', institution: 'Demo Hospital' }); }, 4000);
       setTimeout(function () { gotoId('install'); emit('install', { state: 'running' }); }, 5000);
-      // Three modules, downloaded one after the other.
-      var sim = [{ name: 'Compliance', version: '1.2.6', pct: 0 }, { name: 'Player', version: '0.1.1', pct: 0 }, { name: 'Your welcome', version: '1.0.4', pct: 0 }];
+      // Nine modules, downloaded one after the other.
+      var sim = ['Compliance 1.2.6', 'Cohort 0.1.1', 'Dashboard 0.1.0', 'Import 0.1.0', 'Library 0.1.2', 'Security 0.1.0', 'Training 0.1.1', 'Upload 0.2.0', 'Workfloweditor 0.1.2'].map(function (s) { var a = s.split(' '); return { name: a[0], version: a[1], pct: 0 }; });
       setTimeout(function () { emit('install', { state: 'running', modules: JSON.parse(JSON.stringify(sim)) }); }, 5400);
       var t = 5800;
       sim.forEach(function (m) {
@@ -718,7 +737,7 @@
             m.pct = pp; m.done = pp === 100;
             emit('install', { state: 'running', modules: JSON.parse(JSON.stringify(sim)) });
           }, t);
-          t += 350;
+          t += 120;
         })(p);
       });
       setTimeout(function () { emit('install', { state: 'done', modules: JSON.parse(JSON.stringify(sim)) }); }, t + 300);

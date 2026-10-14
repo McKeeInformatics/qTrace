@@ -125,7 +125,7 @@
     {
       "id": "install",
       "eyebrow": "Almost done",
-      "title": "Installing Compliance and your welcome",
+      "title": "Installing your modules",
       "text": "Your certificate is saved. qTrace downloads the modules it gives you, then asks you to restart QuPath once.",
       "visual": "install",
       "account": {

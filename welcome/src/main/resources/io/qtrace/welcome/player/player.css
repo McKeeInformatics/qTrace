@@ -73,6 +73,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .check.ok .dot { border-color: var(--green); color: var(--green); }
 .check.ko .dot { border-color: var(--amber); color: var(--amber); }
 .check.wait .dot { border-color: var(--blue); border-top-color: transparent; animation: spin .9s linear infinite; }
+.checks.cols { grid-template-columns: 1fr 1fr; max-width: 100%; gap: 8px 10px; }
+.checks.cols .check { padding: 9px 12px; gap: 8px; }
+.checks.cols .check:first-child { grid-column: 1 / -1; }
+.checks.cols .check span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .check code { font-family: var(--mono); font-size: 13px; color: var(--tx-sub); }
 .check .mbar { flex: 0 0 100%; height: 3px; border-radius: 2px; background: var(--navy-b); overflow: hidden; margin-top: -2px; }
 .check .mbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
