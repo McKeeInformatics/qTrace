@@ -997,6 +997,7 @@ public class QTracePanel {
             Rectangle mark = new Rectangle(7, 7, Color.web(GOLD));
             mark.setArcWidth(2);
             mark.setArcHeight(2);
+            mark.visibleProperty().bind(TourHighlight.activeProperty().not());
             StackPane both = new StackPane(drawn, mark);
             StackPane.setAlignment(mark, Pos.TOP_RIGHT);
             mark.setTranslateX(4);

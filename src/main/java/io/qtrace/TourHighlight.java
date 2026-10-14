@@ -19,6 +19,8 @@
 package io.qtrace;
 
 import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.stage.Window;
@@ -28,7 +30,7 @@ import java.util.Map;
 /**
  * The green square of Getting started's tour: while a slide talks about a tool, its button is
  * outlined in the panel and in the mini-panel, and every other button is greyed — so the user
- * sees where the button is. {@code set("")} gives the panel back.
+ * sees where the button is. {@code set("")} gives the panel back. With the {@link #ONLY} prefix the others stay as they are.
  *
  * <p>A button is known by its tool key ({@code stamp}, {@code upload}, {@code player},
  * {@code versiongraph}, {@code report}, {@code dashboard}, {@code import}, {@code reset},
@@ -58,13 +60,27 @@ public final class TourHighlight {
     enum Look { PLAIN, ON, OFF }
 
     private static volatile String current = "";
+    private static volatile boolean dimOthers = true;
+
+    /** True while a square is shown: the gold squares of unread welcomes step aside. FX thread. */
+    private static final BooleanProperty ACTIVE = new SimpleBooleanProperty(false);
+
+    /** Prefix of a key that outlines the button without greying the others (a tool's own welcome). */
+    public static final String ONLY = "only:";
+
+    public static BooleanProperty activeProperty() { return ACTIVE; }
 
     private TourHighlight() {}
 
     /** Look of the button of tool {@code key} while {@code shown} is the tool the tour talks about. */
     static Look look(String shown, String key) {
+        return look(shown, key, true);
+    }
+
+    static Look look(String shown, String key, boolean dim) {
         if (shown == null || shown.isEmpty()) return Look.PLAIN;
-        return shown.equals(key) ? Look.ON : Look.OFF;
+        if (shown.equals(key)) return Look.ON;
+        return dim ? Look.OFF : Look.PLAIN;
     }
 
     /** Marks a button as the one of this tool. Returns it, for chaining. */
@@ -75,8 +91,10 @@ public final class TourHighlight {
 
     /** Outlines the button of this tool everywhere it shows; "" restores all. Any thread. */
     public static void set(String key) {
-        current = key == null ? "" : key;
-        Platform.runLater(TourHighlight::applyAll);
+        String k = key == null ? "" : key;
+        dimOthers = !k.startsWith(ONLY);
+        current = dimOthers ? k : k.substring(ONLY.length());
+        Platform.runLater(() -> { ACTIVE.set(!current.isEmpty()); applyAll(); });
     }
 
     /** For a panel that was just rebuilt: gives its new buttons the current look. FX thread. */
@@ -93,7 +111,7 @@ public final class TourHighlight {
     private static void walk(Node n) {
         String key = keyOf(n);
         if (key != null) {
-            paint(n, look(current, key));
+            paint(n, look(current, key, dimOthers));
             return;
         }
         if (n instanceof Parent p) {

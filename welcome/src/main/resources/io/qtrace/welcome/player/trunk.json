@@ -14,7 +14,7 @@
     {
       "id": "panel",
       "eyebrow": "Your panel",
-      "title": "Your panel, always at hand",
+      "title": "Your panel at hand",
       "text": "The first thing you see in QuPath is this bar, floating over the viewer. Each button is one tool of qTrace; the same button lights up in your panel while we talk about it.",
       "visual": "panel",
       "tour": {

@@ -580,7 +580,9 @@
     document.querySelector('.player').classList.toggle('hello', content.slides[cur].id === 'what');
     seen[cur] = true;
     stopVisual();
-    highlight('');
+    // A tool's own welcome: its button is outlined in the panel (the others stay as they are).
+    var tool = /^tool-([a-z0-9]+)(-\d+)?$/.exec(content.slides[cur].id || '');
+    highlight(tool ? 'only:' + tool[1] : '');
     Array.prototype.forEach.call(document.querySelectorAll('.slide'), function (n) {
       n.classList.toggle('on', +n.dataset.i === cur);
     });
