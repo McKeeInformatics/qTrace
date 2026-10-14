@@ -508,13 +508,17 @@
       el.innerHTML = '<div class="visual">' + visualHTML(s) + '</div><div class="copy">' +
         (s.eyebrow ? '<div class="eyebrow">' + esc(s.eyebrow) + '</div>' : '') +
         '<h2>' + esc(s.title) + '</h2><p>' + esc(s.text) + '</p>' +
-        '<div class="actions">' + actionsHTML(s) + '</div></div>';
+        '<div class="actions">' + actionsHTML(s) + '</div>' +
+        '<div class="pager"><button type="button" class="btn" data-nav="-1">Previous</button>' +
+        '<button type="button" class="btn" data-nav="1">Next</button></div></div>';
       stage.insertBefore(el, $('toast'));
     });
+    // A metro line: the start, a station per slide, the arrival; the names are in the titles.
     $('track').innerHTML = visible().map(function (i, k) {
       var s = content.slides[i];
-      return '<button type="button" data-go="' + i + '" aria-label="Step ' + (k + 1) + ': ' + esc(s.title) + '"><i></i><span>' +
-        esc(s.eyebrow || s.title) + '</span></button>';
+      var name = esc(s.eyebrow || s.title);
+      return (k ? '<b class="rail"></b>' : '') +
+        '<button type="button" data-go="' + i + '" title="' + name + '" aria-label="Step ' + (k + 1) + ': ' + name + '"><i></i></button>';
     }).join('');
     document.title = content.title || 'qTrace';
     $('org').hidden = !content.org;
@@ -591,15 +595,22 @@
     Array.prototype.forEach.call(document.querySelectorAll('.slide'), function (n) {
       n.classList.toggle('on', +n.dataset.i === cur);
     });
-    Array.prototype.forEach.call(document.querySelectorAll('#track button'), function (b) {
-      var i = +b.dataset.go;
-      b.classList.toggle('cur', i === cur);
-      b.classList.toggle('seen', !!seen[i] && i !== cur);
+    // Stations before this one are passed, the rail up to it is lit; past the last slide, the whole line is.
+    var here = k === -1 ? v.length : k;
+    Array.prototype.forEach.call(document.querySelectorAll('#track button'), function (b, n) {
+      b.classList.toggle('cur', n === k);
+      b.classList.toggle('past', n < here);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#track .rail'), function (r, n) {
+      r.classList.toggle('lit', n + 1 <= here);
     });
     $('count').textContent = k === -1 ? '' : (k + 1) + ' / ' + v.length;
     remember(cur);
-    $('prev').disabled = k <= 0;
-    $('next').disabled = k === -1 || k === v.length - 1;
+    // Previous / Next under the text: none where there is nowhere to go.
+    Array.prototype.forEach.call(document.querySelectorAll('.pager [data-nav]'), function (b) {
+      var dir = +b.dataset.nav;
+      b.style.visibility = (dir < 0 ? k <= 0 : k === -1 || k === v.length - 1) ? 'hidden' : 'visible';
+    });
     var s = content.slides[cur];
     startVisual(cur);
     if (s.visual === 'network' && !networkAsked && !Object.keys(state.network).length) { networkAsked = true; run('network-check'); }
@@ -664,8 +675,10 @@
     var b = e.target.closest('[data-go]');
     if (b) go(+b.dataset.go);
   });
-  $('prev').onclick = function () { step(-1); };
-  $('next').onclick = function () { step(1); };
+  $('stage').addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-nav]');
+    if (b) step(+b.dataset.nav);
+  });
   // Skip leaves the tour. With a closing 'ready' slide (the trunk), that is the same exit as
   // "Not now": the host marks the tour done and shows it. Otherwise, the last slide of the track.
   $('skip').onclick = function () {
@@ -676,8 +689,8 @@
   document.addEventListener('keydown', function (e) {
     if (e.target.closest && e.target.closest('input, textarea')) return;
     if (e.key === 'Enter' && e.target.dataset && e.target.dataset.act) { e.target.click(); return; }
-    if (e.key === 'ArrowRight') $('next').click();
-    if (e.key === 'ArrowLeft') $('prev').click();
+    if (e.key === 'ArrowRight') step(1);
+    if (e.key === 'ArrowLeft') step(-1);
   });
 
   // ── The state sent by QuPath in the URL fragment ────────────────────────────

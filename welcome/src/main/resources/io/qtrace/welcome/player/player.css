@@ -209,22 +209,19 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .mp-again:hover { color: var(--accent); border-color: var(--accent); }
 
 /* bottom bar */
-.bar { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding: 12px 24px 16px; border-top: 1px solid var(--navy-b); }
-.nav { display: flex; gap: 6px; }
-.nav button {
-  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--navy-b); background: transparent;
-  color: var(--tx-sub); cursor: pointer; font-size: 18px; display: grid; place-items: center;
-}
-.nav button:disabled { opacity: .35; cursor: default; }
-.track { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
-.track button { background: none; border: 0; padding: 10px 0 4px; cursor: pointer; display: grid; gap: 6px; text-align: left; min-width: 0; }
-.track button i { display: block; height: 4px; border-radius: 2px; background: var(--navy-b); overflow: hidden; position: relative; }
-.track button i::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--accent); }
-.track button.cur i::after { width: 100%; }
-.track button span { font-size: 11px; color: var(--tx-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.track button.cur span { color: var(--tx-sub); }
-.track button.seen i::after { background: var(--green); width: 100%; }
-.meta { display: flex; gap: 14px; align-items: center; font-size: 13px; color: var(--tx-muted); white-space: nowrap; }
+.bar { display: grid; grid-template-columns: 1fr; gap: 2px; align-items: center; padding: 8px 24px 12px; border-top: 1px solid var(--navy-b); }
+.pager { display: flex; gap: 10px; margin-top: 14px; }
+.pager .btn { min-width: 96px; font-weight: 500; color: var(--tx-sub); }
+/* the progress: a metro line — start, stations, arrival; same size everywhere, only the light changes */
+.track { display: flex; align-items: center; min-width: 0; }
+.track button { background: none; border: 0; padding: 10px 0; cursor: pointer; display: grid; place-items: center; flex: none; }
+.track button i { display: block; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box;
+  background: var(--navy); border: 1.5px solid var(--navy-b); transition: background .2s, border-color .2s, box-shadow .2s; }
+.track .rail { flex: 1 1 0; height: 2px; min-width: 6px; background: var(--navy-b); transition: background .2s; }
+.track .rail.lit { background: var(--green); }
+.track button.past i { background: var(--green); border-color: var(--green); }
+.track button.cur i { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 7px 1px var(--accent); }
+.meta { justify-content: flex-end; display: flex; gap: 14px; align-items: center; font-size: 13px; color: var(--tx-muted); white-space: nowrap; }
 .meta a { color: var(--tx-muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
 .toast {
@@ -238,7 +235,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   .slide { grid-template-columns: 1fr; padding: 20px 16px; }
   .visual { min-height: 200px; }
   .bar { grid-template-columns: 1fr; }
-  .track button span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .slide.on { animation: none; }
