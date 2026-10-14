@@ -27,7 +27,7 @@ class PlayerSizeTest {
 
     @Test
     void aBigScreenGetsTheWantedHeight() {
-        assertEquals(800, PlayerSize.heightFor(1080));
+        assertEquals(730, PlayerSize.heightFor(1080));
     }
 
     @Test

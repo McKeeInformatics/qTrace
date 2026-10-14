@@ -30,7 +30,7 @@ import javafx.stage.Stage;
 final class PlayerSize {
 
     /** The window's outer height when the screen allows it. */
-    static final double WANTED = 800;
+    static final double WANTED = 730;
 
     private PlayerSize() {}
 
