@@ -579,6 +579,8 @@
       el.querySelector('h2').textContent = title;
       el.querySelector('p').textContent = text;
     });
+    // In QuPath every event arrives here (through the URL fragment): the install slide follows its state.
+    refreshInstallCopy();
   }
 
   function refreshVisual(kind) {
