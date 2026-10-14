@@ -584,7 +584,10 @@
     var tool = /^tool-([a-z0-9]+)(-\d+)?$/.exec(content.slides[cur].id || '');
     // The feedback slide shows the panel's Bug or Feature Request button.
     var id = content.slides[cur].id || '';
-    highlight(id === 'core-report' ? 'only:issue' : tool ? 'only:' + tool[1] : '');
+    // The closing slide outlines nothing, but the gold squares stay away until the window closes
+    // (the welcomes are marked read then): 'only:-' matches no button.
+    var closing = id === 'done' || /-done$/.test(id);
+    highlight(id === 'core-report' ? 'only:issue' : tool ? 'only:' + tool[1] : closing ? 'only:-' : '');
     Array.prototype.forEach.call(document.querySelectorAll('.slide'), function (n) {
       n.classList.toggle('on', +n.dataset.i === cur);
     });
