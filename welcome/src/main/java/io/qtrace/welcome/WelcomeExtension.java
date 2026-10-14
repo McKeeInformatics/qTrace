@@ -287,6 +287,7 @@ public class WelcomeExtension implements QuPathExtension {
         String json = identified(content);
         PlayerBridge bridge = new PlayerBridge();
         PlayerWindow w = new PlayerWindow(qupath.getStage(), title, SERVER + "/player/player.html", json, bridge);
+        PlayerSize.apply(w.stage());
         bridge.on("close", a -> w.close())
             .on("open-url", BrowserOpener::open)
             .on("tour-highlight", TourHighlight::set)

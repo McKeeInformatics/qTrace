@@ -93,6 +93,7 @@ final class TrunkPlayer {
         AtomicBoolean cancelled = new AtomicBoolean();
         PlayerBridge bridge = new PlayerBridge();
         PlayerWindow w = new PlayerWindow(qupath.getStage(), "Getting started with qTrace", playerUrl, content, bridge);
+        PlayerSize.apply(w.stage());
 
         AtomicBoolean networkChecked = new AtomicBoolean();
         bridge.on("network-check", a -> {
