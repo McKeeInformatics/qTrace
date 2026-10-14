@@ -23,57 +23,63 @@
         "height": 897,
         "bar": {
           "x": 1441,
-          "y": 340,
+          "y": 318,
           "w": 56,
-          "h": 314
+          "h": 359
         },
         "cx": 1469,
         "buttons": [
           {
             "key": "start",
-            "y": 384,
+            "y": 362,
             "title": "Start",
             "text": "Open a project, start recording"
           },
           {
             "key": "stamp",
-            "y": 420,
+            "y": 398,
             "title": "Stamp",
             "text": "Put a milestone into your workflow"
           },
           {
             "key": "upload",
-            "y": 457,
+            "y": 435,
             "title": "Upload",
             "text": "Upload your qtrace into your workspace"
           },
           {
             "key": "player",
-            "y": 485,
+            "y": 463,
             "title": "Replay",
             "text": "Run your trace onto any images"
           },
           {
+            "key": "versiongraph",
+            "y": 505,
+            "title": "Version(s)",
+            "text": "Browse the history of changes"
+          },
+          {
             "key": "reset",
-            "y": 525,
+            "y": 548,
             "title": "Reset",
             "text": "Clear the capture, start over"
           },
           {
             "key": "settings",
-            "y": 570,
+            "y": 593,
             "title": "Settings",
             "text": "Paths, identity and preferences"
           },
           {
             "key": "issue",
-            "y": 604,
+            "y": 627,
             "title": "Bug or Feature Request",
             "text": "Send feedback or ideas"
           },
           {
             "key": "expand",
-            "y": 636,
+            "y": 659,
             "title": "Full panel",
             "text": "Switch to the full panel"
           }

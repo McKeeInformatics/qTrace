@@ -236,7 +236,8 @@ public class WelcomeExtension implements QuPathExtension {
     }
 
     private static List<ModuleUpdates.Card> toolCards(Set<String> modules) {
-        return cards.stream().filter(c -> modules.contains(c.offer().module()) && c.hasWelcome()).toList();
+        return cards.stream().filter(c -> modules.contains(c.offer().module()) && c.hasWelcome())
+            .sorted(java.util.Comparator.comparingInt(c -> ToolOrder.rank(c.offer().module()))).toList();
     }
 
     private static String toolsTitle(List<ModuleUpdates.Card> tools) {

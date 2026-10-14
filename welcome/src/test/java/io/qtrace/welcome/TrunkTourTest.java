@@ -49,6 +49,6 @@ class TrunkTourTest {
             assertTrue(text.split("\\s+").length <= 6, "six words at most: " + text);
             assertTrue(!b.get("title").getAsString().isBlank());
         }
-        assertTrue(keys.containsAll(Set.of("start", "stamp", "upload", "player", "reset", "settings", "issue", "expand")));
+        assertTrue(keys.containsAll(Set.of("start", "stamp", "upload", "player", "versiongraph", "reset", "settings", "issue", "expand")));
     }
 }
