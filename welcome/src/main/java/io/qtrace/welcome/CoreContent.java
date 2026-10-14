@@ -24,7 +24,8 @@ import com.google.gson.JsonObject;
 /**
  * The welcome of qTrace itself — the base layer (docs/architecture/welcome-tour.md), before the
  * organization's and the tools': what a user can do on the very first start, whoever they are,
- * with or without a certificate. Today one slide, the bug and feature request. Read once
+ * with or without a certificate. Today one closing slide: the bug and feature request button is the
+ * panel's own, shown by the Core tool welcome. Read once
  * ({@link WelcomeExtension#CORE_REVISION}); played again from Extensions > QTrace > Welcome….
  * Pure JSON, no JavaFX: unit-tested.
  */
@@ -34,7 +35,6 @@ final class CoreContent {
 
     static String of() {
         JsonArray slides = new JsonArray();
-        slides.add(report());
         slides.add(closing());
         JsonObject root = new JsonObject();
         root.addProperty("schemaVersion", 2);
@@ -42,23 +42,6 @@ final class CoreContent {
         root.addProperty("title", "Welcome to qTrace");
         root.add("slides", slides);
         return root.toString();
-    }
-
-    private static JsonObject report() {
-        JsonObject s = new JsonObject();
-        s.addProperty("id", "core-report");
-        s.addProperty("eyebrow", "Your feedback");
-        s.addProperty("title", "Tell us what is missing");
-        s.addProperty("text", "A bug, or a feature you would like: report it from QuPath. It opens an issue for the team, with your name.");
-        s.addProperty("visual", "report");
-        JsonArray actions = new JsonArray();
-        JsonObject report = new JsonObject();
-        report.addProperty("label", "Report something");
-        report.addProperty("action", "issue-report");
-        report.addProperty("primary", true);
-        actions.add(report);
-        s.add("actions", actions);
-        return s;
     }
 
     private static JsonObject closing() {

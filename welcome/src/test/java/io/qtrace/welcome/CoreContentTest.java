@@ -32,15 +32,10 @@ class CoreContentTest {
     }
 
     @Test
-    void theBaseWelcomeAsksForBugsAndFeatureRequests_thenCloses() {
+    void theBaseWelcomeIsOneClosingSlide() {
         JsonArray s = slides();
-        assertEquals(2, s.size());
-        JsonObject report = s.get(0).getAsJsonObject();
-        assertEquals("core-report", report.get("id").getAsString());
-        assertEquals("report", report.get("visual").getAsString());
-        JsonObject action = report.getAsJsonArray("actions").get(0).getAsJsonObject();
-        assertEquals("issue-report", action.get("action").getAsString());
-        JsonObject done = s.get(1).getAsJsonObject();
+        assertEquals(1, s.size());
+        JsonObject done = s.get(0).getAsJsonObject();
         assertEquals("done", done.get("id").getAsString());
         assertEquals(WelcomeSequence.START, done.getAsJsonArray("actions").get(0).getAsJsonObject().get("label").getAsString());
     }
@@ -57,8 +52,7 @@ class CoreContentTest {
             new ToolContent.Item("player", "qTrace Player", "Replay.", "0.1.0", "player", java.util.List.of("a"), java.util.List.of())));
         JsonArray s = JsonParser.parseString(WelcomeSequence.of(tools, CoreContent.of())).getAsJsonObject().getAsJsonArray("slides");
         assertEquals("tool-player", s.get(0).getAsJsonObject().get("id").getAsString());
-        assertEquals("core-report", s.get(1).getAsJsonObject().get("id").getAsString());
-        assertEquals("done", s.get(2).getAsJsonObject().get("id").getAsString());
-        assertEquals(3, s.size(), "the tool's card, the feedback slide, one closing slide");
+        assertEquals("done", s.get(1).getAsJsonObject().get("id").getAsString());
+        assertEquals(2, s.size(), "the tool's card, one closing slide");
     }
 }
