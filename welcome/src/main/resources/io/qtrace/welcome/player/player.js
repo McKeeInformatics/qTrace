@@ -119,17 +119,24 @@
   function installHTML() {
     var i = state.install;
     var account = isAccount();
-    var rows = (i.modules || (account ? [{ name: 'The modules of your account' }]
-                                      : [{ name: 'qTrace Compliance' }, { name: 'Your welcome' }])).map(function (m) {
-      var ok = i.state === 'done' || m.done;
-      return '<div class="check ' + (ok ? 'ok' : 'wait') + '"><span class="dot">' + (ok ? '✓' : '') +
-        '</span><span>' + esc(m.name) + '</span><span class="st">' + esc(m.version || '') + '</span></div>';
+    var mods = i.modules && i.modules.length ? i.modules : null;
+    // Each module of the installation, with how far its download is; before the list arrives, what is known.
+    var rows = (mods || (account ? [{ name: 'The modules of your account' }]
+                                  : [{ name: 'qTrace Compliance' }, { name: 'Your welcome' }])).map(function (m) {
+      var ok = i.state === 'done' ? !m.failed : !!m.done;
+      var ko = !!m.failed;
+      var pct = ok ? 100 : Math.max(0, Math.min(100, m.pct || 0));
+      var note = ko ? 'failed' : ok ? (m.version || '') : mods && m.pct ? pct + ' %' : (m.version || '');
+      return '<div class="check ' + (ko ? 'ko' : ok ? 'ok' : 'wait') + '"><span class="dot">' + (ok ? '✓' : ko ? '!' : '') +
+        '</span><span>' + esc(m.name) + '</span><span class="st">' + esc(note) + '</span>' +
+        (mods ? '<span class="mbar"><i style="width:' + pct + '%"></i></span>' : '') + '</div>';
     }).join('');
-    var pct = i.state === 'done' ? 100 : i.state === 'running' ? 55 : 0;
+    var total = mods ? Math.round(mods.reduce(function (s, m) { return s + (i.state === 'done' || m.done ? 100 : (m.pct || 0)); }, 0) / mods.length)
+                     : (i.state === 'done' ? 100 : i.state === 'running' ? 55 : 0);
     return '<div class="device"><div class="checks">' +
       '<div class="check ' + (i.state === 'idle' ? 'wait' : 'ok') + '"><span class="dot">' + (i.state === 'idle' ? '' : '✓') +
       '</span><span>' + (account ? esc(signedInLine()) : 'Certificate saved') + '</span></div>' + rows +
-      '</div><div class="progress"><i style="width:' + pct + '%"></i></div></div>';
+      '</div><div class="progress"><i style="width:' + total + '%"></i></div></div>';
   }
 
   // The icon of a module's panel button, by id — same 24-unit drawings as the QuPath panel
@@ -550,7 +557,9 @@
 
   function refreshWho() {
     var name = isAccount() && state.device.name;
+    var cert = state.device && state.device.state === 'approved' && state.device.name ? state.device : null;
     $('who').innerHTML = content.who ? SHIELD + 'Certified for <strong>' + esc(content.who) + '</strong>'
+      : cert ? SHIELD + 'Certified for <strong>' + esc(cert.name) + '</strong>' + (cert.institution ? ' · ' + esc(cert.institution) : '')
       : content.account ? 'Signed in as <strong>' + esc(content.account) + '</strong> · not certified'
       : isAccount() ? 'Signed in' + (name ? ' as <strong>' + esc(name) + '</strong>' : '') + ' · not certified'
       : 'qTrace Core · no certificate yet';
@@ -697,9 +706,22 @@
       gotoId('code');
       emit('device', { state: 'starting' });
       setTimeout(function () { emit('device', { state: 'waiting', code: 'EDW9-QJGL' }); }, 800);
-      setTimeout(function () { emit('device', { state: 'approved', code: 'EDW9-QJGL' }); }, 4000);
+      setTimeout(function () { emit('device', { state: 'approved', code: 'EDW9-QJGL', name: 'Dr. Jane Demo', institution: 'Demo Hospital' }); }, 4000);
       setTimeout(function () { gotoId('install'); emit('install', { state: 'running' }); }, 5000);
-      setTimeout(function () { emit('install', { state: 'done' }); }, 7000);
+      // Three modules, downloaded one after the other.
+      var sim = [{ name: 'Compliance', version: '1.2.6', pct: 0 }, { name: 'Player', version: '0.1.1', pct: 0 }, { name: 'Your welcome', version: '1.0.4', pct: 0 }];
+      setTimeout(function () { emit('install', { state: 'running', modules: JSON.parse(JSON.stringify(sim)) }); }, 5400);
+      var t = 5800;
+      sim.forEach(function (m) {
+        for (var p = 10; p <= 100; p += 10) (function (pp) {
+          setTimeout(function () {
+            m.pct = pp; m.done = pp === 100;
+            emit('install', { state: 'running', modules: JSON.parse(JSON.stringify(sim)) });
+          }, t);
+          t += 350;
+        })(p);
+      });
+      setTimeout(function () { emit('install', { state: 'done', modules: JSON.parse(JSON.stringify(sim)) }); }, t + 300);
     }
   }
 

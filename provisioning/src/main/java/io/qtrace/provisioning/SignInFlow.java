@@ -80,7 +80,13 @@ final class SignInFlow {
                     l.approved(certificate);
                 }
                 l.installing();
-                ModuleInstaller.installModulesNow(qupath, quitDialog).thenAccept(l::installed);
+                ModuleInstaller.installModulesNow(qupath, quitDialog, (module, title, version, fraction) -> {
+                    try {
+                        l.installStep(module, title, version, fraction);
+                    } catch (LinkageError older) {
+                        // A Core from before the progress hook: the window just shows no progress.
+                    }
+                }).thenAccept(l::installed);
             } catch (DeviceFlowClient.DeviceFlowException e) {
                 if (e.outcome() == DeviceFlowClient.Outcome.CANCELLED) return;
                 log.info(TAG + "sign in ended: {} ({})", e.outcome(), e.getMessage());

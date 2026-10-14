@@ -134,16 +134,34 @@ final class TrunkPlayer {
                 url = verificationUrl;
                 w.emit("device", Map.of("state", "waiting", "code", code, "url", url));
             }
-            public void approved(Path certificate) { w.emit("device", Map.of("state", "approved", "code", code)); }
+            public void approved(Path certificate) {
+                // The header names whom the certificate certifies, as soon as it is saved.
+                CertificateWho.Who who = CertificateWho.of(QTraceUpdater.licenseJwt());
+                w.emit("device", who == null
+                    ? Map.of("state", "approved", "code", code)
+                    : Map.of("state", "approved", "code", code, "name", who.name(), "institution", who.institution()));
+            }
             public void signedInToAccount(String name) {
                 w.emit("device", Map.of("state", "account", "name", name == null ? "" : name, "code", code));
             }
+            // Each module of the installation, in the order it was announced, with how far its download is.
+            private final Map<String, Map<String, Object>> rows = new java.util.LinkedHashMap<>();
             public void installing() {
                 w.gotoSlide("install");
                 w.emit("install", Map.of("state", "running"));
             }
+            public void installStep(String module, String title, String version, double fraction) {
+                synchronized (rows) {
+                    rows.put(module, Map.of("name", title, "version", version, "pct", Math.max(0, Math.round(fraction * 100)),
+                        "done", fraction >= 1, "failed", fraction < 0));
+                    w.emit("install", Map.of("state", "running", "modules", List.copyOf(rows.values())));
+                }
+            }
             public void installed(int modules) {
-                w.emit("install", Map.of("state", "done", "count", modules));
+                synchronized (rows) {
+                    w.emit("install", rows.isEmpty() ? Map.of("state", "done", "count", modules)
+                        : Map.of("state", "done", "count", modules, "modules", List.copyOf(rows.values())));
+                }
             }
             public void failed(String message) {
                 w.emit("device", Map.of("state", "failed", "message", message, "code", code));

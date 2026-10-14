@@ -228,22 +228,40 @@ final class ModuleInstaller {
      * provisioning player's "Quit QuPath now"): no post-install dialog for this session's installs.
      */
     static CompletableFuture<Integer> installModulesNow(QuPathGUI qupath, boolean quitDialog) {
+        return installModulesNow(qupath, quitDialog, null);
+    }
+
+    /** One module of an installation going on: how much is downloaded (0..1, 1 = installed, -1 = failed). */
+    @FunctionalInterface
+    interface Progress { void step(String module, String title, String version, double fraction); }
+
+    /** Same, telling {@code progress} (may be null) about every module as it downloads. */
+    static CompletableFuture<Integer> installModulesNow(QuPathGUI qupath, boolean quitDialog, Progress progress) {
         if (!quitDialog) quietInstall = true;
         openTasks.incrementAndGet();
         return CompletableFuture.supplyAsync(() -> {
             int count = 0;
             try {
                 String jwt = QTraceUpdater.bearer();
-                List<ModuleUpdates.Offer> remote = new ArrayList<>(openModules().stream().map(ModuleUpdates.Card::offer).toList());
+                List<ModuleUpdates.Card> open = openModules();
+                java.util.Map<String, String> titles = new java.util.HashMap<>();
+                for (ModuleUpdates.Card c : open) if (c.title() != null && !c.title().isBlank()) titles.put(c.offer().module(), c.title());
+                List<ModuleUpdates.Offer> remote = new ArrayList<>(open.stream().map(ModuleUpdates.Card::offer).toList());
                 if (jwt != null) {
                     remote = ModuleUpdates.merge(remote, ModuleUpdates.parse(
                         new String(QTraceUpdater.httpGetBytes(MODULES_URL, jwt), StandardCharsets.UTF_8), true));
                 }
                 Path dir = QTraceUpdater.extensionsDir(QTraceUpdater.class);
-                for (ModuleUpdates.Offer o : ModuleUpdates.pending(remote, ModuleUpdates.localVersions(dir))) {
+                List<ModuleUpdates.Offer> todo = ModuleUpdates.pending(remote, ModuleUpdates.localVersions(dir));
+                // The whole list first, so that the window shows every module waiting its turn.
+                for (ModuleUpdates.Offer o : todo) report(progress, o, titles, 0);
+                for (ModuleUpdates.Offer o : todo) {
                     openTasks.incrementAndGet();
                     final String bearer = o.licensed() ? jwt : null;
-                    downloadAndInstall(qupath, o.module(), o.version(), o.sha256(), () -> QTraceUpdater.httpGetBytes(o.url(), bearer));
+                    boolean[] failed = {false};
+                    downloadAndInstall(qupath, o.module(), o.version(), o.sha256(),
+                        () -> downloadWithProgress(o.url(), bearer, f -> report(progress, o, titles, f * 0.98)), () -> failed[0] = true);
+                    report(progress, o, titles, failed[0] ? -1 : 1);
                     count++;
                 }
                 log.info(TAG + "install now: {} module(s) from /api/modules{}", count, jwt == null ? "/open" : " and /api/modules/open");
@@ -254,6 +272,15 @@ final class ModuleInstaller {
             }
             return count;
         });
+    }
+
+    private static void report(Progress progress, ModuleUpdates.Offer o, java.util.Map<String, String> titles, double fraction) {
+        if (progress == null) return;
+        progress.step(o.module(), titles.getOrDefault(o.module(), UpdateBatch.moduleLabel(o.module())), o.version(), fraction);
+    }
+
+    static byte[] downloadWithProgress(String url, String bearer, java.util.function.DoubleConsumer fraction) throws Exception {
+        return DownloadProgress.get(url, bearer, fraction);
     }
 
     // ── Shared install flow ─────────────────────────────────────────────────────
@@ -324,6 +351,11 @@ final class ModuleInstaller {
 
     private static void downloadAndInstall(QuPathGUI qupath, String module, String remoteVer,
                                            String expectedSha256, Downloader downloader) {
+        downloadAndInstall(qupath, module, remoteVer, expectedSha256, downloader, () -> {});
+    }
+
+    private static void downloadAndInstall(QuPathGUI qupath, String module, String remoteVer,
+                                           String expectedSha256, Downloader downloader, Runnable onFailure) {
         try {
             byte[] data = downloader.download();
             if (data == null || data.length == 0) throw new Exception("empty download");
@@ -343,6 +375,7 @@ final class ModuleInstaller {
             }
         } catch (Exception e) {
             log.warn(TAG + "{}: install of {} failed", module, remoteVer, e);
+            onFailure.run();
             error(qupath, QTraceI18n.t("update.failed").replace("{0}", e.getMessage()));
         } finally {
             taskDone(qupath);

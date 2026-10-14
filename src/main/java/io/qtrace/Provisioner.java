@@ -84,6 +84,16 @@ public interface Provisioner {
          */
         default void signedInToAccount(String name) {}
         void installing();
+        /**
+         * One module of the installation, as it goes: how much of it is downloaded (0 to 1; 1 means
+         * installed, -1 failed). Optional: a listener that does not draw progress ignores it, and a
+         * provisioning module older than this method simply never calls it.
+         *
+         * @param module  the module id ("player")
+         * @param title   what to call it on screen
+         * @param version the version being installed
+         */
+        default void installStep(String module, String title, String version, double fraction) {}
         void installed(int modules);
         void failed(String message);
     }
