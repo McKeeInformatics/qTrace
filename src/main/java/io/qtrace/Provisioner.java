@@ -45,6 +45,17 @@ public interface Provisioner {
     CompletableFuture<List<OpenModule>> provisionOpenModules();
 
     /**
+     * Settles once the startup check of the modules has nothing left to do: true when it
+     * installed an update (QuPath is to be reopened), false otherwise — nothing new, offline, the
+     * user answered Later or Ignore. Updates come before the welcomes: the welcome module waits
+     * for it and leaves its windows for the next start when this is true. A provisioning module
+     * older than this method says false at once.
+     */
+    default CompletableFuture<Boolean> startupUpdates() {
+        return CompletableFuture.completedFuture(false);
+    }
+
+    /**
      * Every module this workstation is served, with its card — the open ones and, with a
      * certificate, the ones it includes. Blocking; what could not be fetched is simply absent.
      * Read by the welcome module to present a tool, and what a new version brings.

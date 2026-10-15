@@ -72,6 +72,10 @@ final class ModuleInstaller {
     private static final List<UpdateBatch.Item> offered = new ArrayList<>();
     // installModulesNow(qupath, false): its caller shows the restart itself.
     private static volatile boolean quietInstall;
+    /** {@link io.qtrace.Provisioner#startupUpdates()}: settles once, at the end of the first check. */
+    private static final CompletableFuture<Boolean> startupUpdates = new CompletableFuture<>();
+
+    static CompletableFuture<Boolean> startupUpdates() { return startupUpdates; }
 
     // Overridable for the local update simulator (tools/update-sim/), like Core's own calls.
     // www.qtrace.ca (not the apex) — qtrace.ca 308-redirects to www, and a cross-host redirect
@@ -166,6 +170,7 @@ final class ModuleInstaller {
     static void checkModules(QuPathGUI qupath) {
         if (!QTraceConfig.get().isUpdateCheckEnabled()) {
             log.info(TAG + "modules check skipped: update check disabled in config");
+            startupUpdates.complete(false);
             return;
         }
         openTasks.incrementAndGet();
@@ -319,6 +324,7 @@ final class ModuleInstaller {
     private static void promptUpdates(QuPathGUI qupath, UpdateBatch batch) {
         if (batch.wasSkipped(QTraceConfig.get().getDismissedUpdateVersion())) {
             log.info(TAG + "{} skipped by the user earlier", batch.signature());
+            startupUpdates.complete(false);
             return;
         }
         log.info(TAG + "offering {}", batch.signature());
@@ -340,10 +346,11 @@ final class ModuleInstaller {
 
             Optional<ButtonType> result = alert.showAndWait();
             log.info(TAG + "update prompt: user chose {}", result.map(ButtonType::getText).orElse("<closed>"));
-            if (result.isEmpty() || result.get() == later) return;
+            if (result.isEmpty() || result.get() == later) { startupUpdates.complete(false); return; }
             if (result.get() == ignore) {
                 QTraceConfig.get().setDismissedUpdateVersion(batch.signature());
                 QTraceConfig.get().save();
+                startupUpdates.complete(false);
                 return;
             }
             // Install → every extension, one after the other, in the background; the last
@@ -406,10 +413,11 @@ final class ModuleInstaller {
         }
         String installed;
         synchronized (installedThisSession) {
-            if (installedThisSession.isEmpty()) return;
+            if (installedThisSession.isEmpty()) { startupUpdates.complete(false); return; }
             installed = String.join(", ", installedThisSession);
             installedThisSession.clear();
         }
+        startupUpdates.complete(true);
         if (quietInstall) { quietInstall = false; return; }
         promptQuit(qupath, installed);
     }

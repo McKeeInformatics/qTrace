@@ -58,6 +58,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Entry point of the welcome module (Qtrace-Load-Order 40, loader.md § 17): every welcome
@@ -137,6 +138,27 @@ public class WelcomeExtension implements QuPathExtension {
      * read keep their gold square either way. {@code mayShow} false: nothing opens.
      */
     private static void startup(QuPathGUI qupath, boolean mayShow) {
+        // Updates come first: once the startup check of the modules is over, an update installed
+        // (QuPath is to be reopened) leaves every welcome window for the next start, news included.
+        CompletableFuture<Boolean> updates;
+        try {
+            Provisioner p = Provisioners.current();
+            updates = p == null ? CompletableFuture.completedFuture(false) : p.startupUpdates().copy();
+        } catch (LinkageError e) { // a Core older than startupUpdates()
+            updates = CompletableFuture.completedFuture(false);
+        }
+        updates.completeOnTimeout(false, UPDATES_WAIT_SECONDS, TimeUnit.SECONDS)
+            .exceptionally(e -> false)
+            .thenAccept(updated -> Platform.runLater(() -> {
+                if (updated) log.info(TAG + "an update waits for QuPath to be reopened: welcomes left for the next start");
+                else showAtStartup(qupath, mayShow);
+            }));
+    }
+
+    /** How long the welcomes wait for the startup check of the modules before showing anyway. */
+    private static final int UPDATES_WAIT_SECONDS = 45;
+
+    private static void showAtStartup(QuPathGUI qupath, boolean mayShow) {
         Map<String, String> updated = ModuleNews.updatedSinceLastShown();
         // Shown now or left for the menu: either way these versions are not news next time.
         ModuleNews.markShown();

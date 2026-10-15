@@ -73,6 +73,11 @@ final class ProvisioningService implements Provisioner {
      * question nor a dialog: the window that asked offers the restart.
      */
     @Override
+    public CompletableFuture<Boolean> startupUpdates() {
+        return ModuleInstaller.startupUpdates();
+    }
+
+    @Override
     public CompletableFuture<List<OpenModule>> provisionOpenModules() {
         CompletableFuture<List<OpenModule>> done = new CompletableFuture<>();
         CompletableFuture.supplyAsync(ProvisioningService::openModules)
