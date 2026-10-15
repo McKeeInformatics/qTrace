@@ -40,7 +40,8 @@ body {
 .who strong { color: var(--green); font-weight: 600; }
 .who .shield { vertical-align: -3px; margin-right: 6px; }
 
-.stage { position: relative; overflow: auto; }
+/* overflow-x hidden: a slide slides in from the right, it must not show a scroll bar while it does */
+.stage { position: relative; overflow-x: hidden; overflow-y: auto; }
 .slide {
   display: none; grid-template-columns: 1.35fr 1fr; gap: 28px;
   padding: 28px; align-items: center; min-height: 100%;
