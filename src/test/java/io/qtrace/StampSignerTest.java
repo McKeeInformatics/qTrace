@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -68,6 +69,21 @@ class StampSignerTest {
         String signature = StampSigner.signPayload(unsigned.canonicalPayload());
         assertNotNull(signature);
         assertTrue(StampSigner.verify(unsigned.canonicalPayload(), pubKeyB64url, signature));
+    }
+
+    @Test
+    void replayStamp_machineJoinsThePayloadOnlyWhenKnown() {
+        ReplayStamp before = new ReplayStamp(
+            "Dr. Test", Instant.parse("2026-08-11T10:00:00Z"), "sourcehash123", "loghash456",
+            "0.7.0", "OK", 3, 3, 0, 0, 0, List.of(), null, "pub");
+        assertFalse(before.canonicalPayload().contains("machine"));
+        ReplayStamp now = before.withSignature(null);
+        assertEquals(before.canonicalPayload(), now.canonicalPayload());
+        ReplayStamp withMachine = new ReplayStamp(
+            "Dr. Test", Instant.parse("2026-08-11T10:00:00Z"), "sourcehash123", "loghash456",
+            "0.7.0", "OK", 3, 3, 0, 0, 0, List.of(), null, "pub", "bench-01");
+        assertTrue(withMachine.canonicalPayload().contains("\"machine\":\"bench-01\""));
+        assertEquals("bench-01", withMachine.withSignature("sig").machine());
     }
 
     private static Path writeKeyFile(Path dir, KeyPair keyPair) throws Exception {

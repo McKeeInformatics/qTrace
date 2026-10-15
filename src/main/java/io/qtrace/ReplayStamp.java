@@ -56,8 +56,25 @@ public record ReplayStamp(
     int     stepsSkippedUser,
     List<Integer> excludedSteps,   // step indices unchecked by the user before this run
     String  signature,
-    String  validatorKeyPub
+    String  validatorKeyPub,
+    String  machine                // host the replay ran on; null/blank on logs written before it existed
 ) {
+    /** The form before {@code machine} existed — same payload as before (the field is left out when blank). */
+    public ReplayStamp(String replayer, Instant timestamp, String sourceQtraceHash, String logHash,
+            String qupathVersion, String resultStatus, int stepsTotal, int stepsOk, int stepsFailed,
+            int stepsSkippedIncompat, int stepsSkippedUser, List<Integer> excludedSteps,
+            String signature, String validatorKeyPub) {
+        this(replayer, timestamp, sourceQtraceHash, logHash, qupathVersion, resultStatus, stepsTotal, stepsOk,
+            stepsFailed, stepsSkippedIncompat, stepsSkippedUser, excludedSteps, signature, validatorKeyPub, null);
+    }
+
+    /** Same stamp, carrying the signature. */
+    public ReplayStamp withSignature(String sig) {
+        return new ReplayStamp(replayer, timestamp, sourceQtraceHash, logHash, qupathVersion, resultStatus,
+            stepsTotal, stepsOk, stepsFailed, stepsSkippedIncompat, stepsSkippedUser, excludedSteps,
+            sig, validatorKeyPub, machine);
+    }
+
     /** RFC 8785 (JCS) canonical JSON payload that is signed — same convention as ValidationStamp. */
     public String canonicalPayload() {
         Map<String, String> fields = new LinkedHashMap<>();
@@ -75,6 +92,8 @@ public record ReplayStamp(
         fields.put("excluded_steps",          excludedSteps == null || excludedSteps.isEmpty()
             ? "" : excludedSteps.stream().sorted().map(String::valueOf).collect(Collectors.joining(",")));
         fields.put("validator_key_pub",       nvl(validatorKeyPub));
+        // Only when known: a stamp made before the field existed keeps its exact payload.
+        if (machine != null && !machine.isBlank()) fields.put("machine", machine);
         return CanonicalJson.of(fields);
     }
 

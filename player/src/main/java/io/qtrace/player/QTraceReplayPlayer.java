@@ -2037,9 +2037,9 @@ class QTraceReplayPlayer {
         boolean userPaused = !playing;
         if (userPaused || cursor >= rows.size()) {
             Platform.runLater(() -> {
-                if (!userPaused) exportTargetTrace();
+                // The log is finished first: the trace written next names it, with its fingerprint.
                 // A pause isn't the end of the run: the log stays open so ▶ can resume it.
-                if (!userPaused) onRunFinished();
+                if (!userPaused) { onRunFinished(); exportTargetTrace(); }
                 if (onFinished != null && !userPaused) {
                     onFinished.run(); // batch continues — playing stays true across the handoff
                 } else {
@@ -2095,8 +2095,8 @@ class QTraceReplayPlayer {
                 // batch never silently moves on to the next target after a declined failure.
                 playing = false; playBtn.setText("▶"); setTransportEnabled(true); setRunningOverlay(false);
                 targetFilterToChecked = false; activeTargetRow = null; rebuildTargetNodes();
-                exportTargetTrace();
                 onRunFinished();
+                exportTargetTrace();
                 lastImageCount = currentBatchIndex != null ? currentBatchIndex : 1;
                 activeBatch = null;
                 setPhase(MiniPlayerStatus.Phase.DONE, null);
@@ -2470,6 +2470,9 @@ class QTraceReplayPlayer {
             logArea.appendText("\n=== Run finished — " + pendingStamp.resultStatus()
                 + " (" + pendingStamp.stepsFailed() + " error(s)) — log: " + logWriter.logPath() + " ===\n");
             stampBtn.setDisable(false);
+            // The trace of the image this run just played gets the log's name and fingerprint.
+            if (recorderImage != null && logger.getCurrentImageData() == recorderImage)
+                logWriter.linkInto(logger.getReplayedFrom());
         } catch (Exception e) {
             logArea.appendText("(finalize failed: " + e.getMessage() + ")\n");
         }

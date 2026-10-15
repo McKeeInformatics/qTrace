@@ -25,6 +25,8 @@ import io.qtrace.ReplayStamp;
 import io.qtrace.StampSigner;
 import io.qtrace.chain.Hashing;
 
+import com.google.gson.JsonObject;
+
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.file.Files;
@@ -57,6 +59,10 @@ public class ReplayLogWriter implements AutoCloseable {
     private final Writer writer;
     private final Instant startedAt;
     private final List<Integer> excludedSteps;
+
+    private final String machine = hostName();
+    /** SHA-256 of the log through its summary (what the stamp signs as {@code log_hash}); set by {@link #finishUnsigned}. */
+    private String summaryHash;
 
     private int stepsOk, stepsFailed, stepsSkippedIncompat, stepsSkippedUser;
 
@@ -92,6 +98,7 @@ public class ReplayLogWriter implements AutoCloseable {
         writeLine("source_hash    : " + sourceQtraceHash);
         writeLine("qupath_version : " + qupathVersion);
         writeLine("qtrace_version : " + QTraceController.VERSION);
+        writeLine("machine        : " + machine);
         if (targetImageName != null) writeLine("target_image   : " + targetImageName);
         if (batchTargets != null && !batchTargets.isEmpty()) {
             writeLine("batch_position : " + batchPosition + "/" + batchTargets.size());
@@ -106,6 +113,25 @@ public class ReplayLogWriter implements AutoCloseable {
     }
 
     public Path logPath() { return logPath; }
+
+    /** Hash of the log as it stood at the end of its summary — stable: what is appended later (batch note, stamp) is not in it. Null before the summary. */
+    public String summaryHash() { return summaryHash; }
+
+    /**
+     * Ties the .qtrace about to be written to this log: {@code log_file} and {@code log_sha256}
+     * go into its {@code replayed_from}. Needs the summary written ({@link #finishUnsigned}) —
+     * until then only the file name is known, and the hash is left out.
+     */
+    public void linkInto(JsonObject replayedFrom) {
+        if (replayedFrom == null) return;
+        replayedFrom.addProperty("log_file", logPath.getFileName().toString());
+        if (summaryHash != null) replayedFrom.addProperty("log_sha256", summaryHash);
+    }
+
+    static String hostName() {
+        try { return java.net.InetAddress.getLocalHost().getHostName(); }
+        catch (Exception e) { return "unknown"; }
+    }
 
     /**
      * Marks, at the tail of this (about-to-be-closed) image's log, the moment the Target
@@ -166,13 +192,14 @@ public class ReplayLogWriter implements AutoCloseable {
         flush();
 
         String logHash = Hashing.sha256Hex(logPath);
+        this.summaryHash = logHash;
         String validatorKeyPub = QTracePluginManager.isEntitled()
             ? QTracePluginManager.getEntitled().getActiveLicenseInfo().validatorKey()
             : null;
         return new ReplayStamp(
             replayer, endedAt, sourceQtraceHash, logHash, qupathVersion, resultStatus,
             total, stepsOk, stepsFailed, stepsSkippedIncompat, stepsSkippedUser,
-            excludedSteps, null, validatorKeyPub);
+            excludedSteps, null, validatorKeyPub, machine);
     }
 
     /**
@@ -186,11 +213,7 @@ public class ReplayLogWriter implements AutoCloseable {
      */
     public ReplayStamp appendSignedStamp(ReplayStamp unsigned) throws IOException {
         String signature = StampSigner.signPayload(unsigned.canonicalPayload());
-        ReplayStamp result = signature == null ? null : new ReplayStamp(
-            unsigned.replayer(), unsigned.timestamp(), unsigned.sourceQtraceHash(), unsigned.logHash(),
-            unsigned.qupathVersion(), unsigned.resultStatus(), unsigned.stepsTotal(), unsigned.stepsOk(),
-            unsigned.stepsFailed(), unsigned.stepsSkippedIncompat(), unsigned.stepsSkippedUser(),
-            unsigned.excludedSteps(), signature, unsigned.validatorKeyPub());
+        ReplayStamp result = signature == null ? null : unsigned.withSignature(signature);
 
         writeLine("");
         writeLine("=== ReplayStamp ===");
