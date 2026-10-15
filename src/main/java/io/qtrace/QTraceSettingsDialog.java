@@ -374,9 +374,30 @@ public class QTraceSettingsDialog {
         HBox langRow = new HBox(8, langLabel, langBox);
         langRow.setAlignment(Pos.CENTER_LEFT);
 
+        // ── Upload: the Player's execution logs sent with a record ──────────────
+        Label upLogsHelp = new Label(QTraceI18n.t("settings.uploadlogs.help"));
+        upLogsHelp.setTextFill(Color.web(TEXT_SUB));
+        upLogsHelp.setFont(Font.font("System", 11));
+        upLogsHelp.setWrapText(true);
+        ToggleGroup upLogsGroup = new ToggleGroup();
+        String[] upLogsModes = {"full", "summary", "off"};
+        RadioButton[] upLogsButtons = new RadioButton[upLogsModes.length];
+        for (int i = 0; i < upLogsModes.length; i++) {
+            RadioButton rb = new RadioButton(QTraceI18n.t("settings.uploadlogs." + upLogsModes[i]));
+            rb.setId("upload-logs-" + upLogsModes[i]);
+            rb.setToggleGroup(upLogsGroup);
+            rb.setTextFill(Color.web(TEXT_SUB));
+            rb.setWrapText(true);
+            rb.setTooltip(hintTooltip(QTraceI18n.t("settings.uploadlogs." + upLogsModes[i] + ".hint")));
+            rb.setSelected(upLogsModes[i].equals(cfg.getUploadReplayLogs()));
+            upLogsButtons[i] = rb;
+        }
+
         VBox captureBox = new VBox(10,
             subTitle("General"),
             chkDetectionNote, chkUnstampedReminder, chkHideSkipped,
+            subTitle("Upload"),
+            upLogsHelp, upLogsButtons[0], upLogsButtons[1], upLogsButtons[2],
             subTitle("Security"),
             chkReportConfirm, langRow, pseudoRow);
         captureBox.setPadding(new Insets(4, 20, 8, 20));
@@ -528,6 +549,8 @@ public class QTraceSettingsDialog {
             cfg.setPromptDetectionNote(chkDetectionNote.isSelected());
             cfg.setPromptUnstampedReminder(chkUnstampedReminder.isSelected());
             cfg.setHideSkippedReplaySteps(chkHideSkipped.isSelected());
+            for (int i = 0; i < upLogsModes.length; i++)
+                if (upLogsButtons[i].isSelected()) cfg.setUploadReplayLogs(upLogsModes[i]);
             cfg.setAutosaveEnabled(chkAutosave.isSelected());
             cfg.setShowPanelAtStartup(chkPanelAtStartup.isSelected());
             cfg.setShowModuleNewsAtStartup(chkModuleNews.isSelected());

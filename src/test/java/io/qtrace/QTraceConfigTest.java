@@ -30,6 +30,22 @@ class QTraceConfigTest {
     }
 
     @Test
+    void uploadReplayLogs_isFullUnlessChosen_andUnknownValuesMeanFull() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        QTraceConfig cfg = gson.fromJson("{}", QTraceConfig.class);
+        assertEquals("full", cfg.getUploadReplayLogs());
+        cfg.setUploadReplayLogs("summary");
+        assertEquals("summary", gson.fromJson(gson.toJson(cfg), QTraceConfig.class).getUploadReplayLogs());
+        cfg.setUploadReplayLogs("off");
+        assertEquals("off", gson.fromJson(gson.toJson(cfg), QTraceConfig.class).getUploadReplayLogs());
+        cfg.setUploadReplayLogs("  SUMMARY ");
+        assertEquals("summary", cfg.getUploadReplayLogs());
+        cfg.setUploadReplayLogs("everything");
+        assertEquals("full", cfg.getUploadReplayLogs());
+        assertEquals("full", gson.fromJson("{\"uploadReplayLogs\":\"nonsense\"}", QTraceConfig.class).getUploadReplayLogs());
+    }
+
+    @Test
     void installId_isMadeOnce_andSurvivesTheConfigFile() {
         com.google.gson.Gson gson = new com.google.gson.Gson();
         QTraceConfig cfg = gson.fromJson("{}", QTraceConfig.class);

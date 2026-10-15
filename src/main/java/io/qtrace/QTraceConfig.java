@@ -93,6 +93,8 @@ public class QTraceConfig {
     // Live autosave of the capture + unstamped sessions — null = on by default
     private Boolean autosaveEnabled;
     private Boolean hideSkippedReplaySteps;
+    // What the Upload sends of the Player's execution logs: "full" | "summary" | "off" (null / unknown = full)
+    private String  uploadReplayLogs;
 
     // Random id of this qTrace installation (this user account on this machine), made once.
     // Lets qtrace.ca tell an account's workstations apart without the machine's name.
@@ -320,6 +322,14 @@ public class QTraceConfig {
     /** After a module was updated: its new version is presented at the next start (default), or only on demand. */
     public boolean isShowModuleNewsAtStartup()           { return showModuleNewsAtStartup == null || showModuleNewsAtStartup; }
     public void    setShowModuleNewsAtStartup(boolean b) { this.showModuleNewsAtStartup = b; }
+
+    /** What the Upload brings of the replay execution logs linked to a record: full (default), summary or off. */
+    public String getUploadReplayLogs()                  { return normalizeUploadReplayLogs(uploadReplayLogs); }
+    public void   setUploadReplayLogs(String mode)       { this.uploadReplayLogs = normalizeUploadReplayLogs(mode); }
+    public static String normalizeUploadReplayLogs(String mode) {
+        String m = mode == null ? "" : mode.strip().toLowerCase(java.util.Locale.ROOT);
+        return m.equals("summary") || m.equals("off") ? m : "full";
+    }
 
     public boolean isAutosaveEnabled()                   { return autosaveEnabled == null || autosaveEnabled; }
     public void    setAutosaveEnabled(boolean b)         { this.autosaveEnabled = b; }
