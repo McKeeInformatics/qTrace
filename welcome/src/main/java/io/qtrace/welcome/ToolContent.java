@@ -97,7 +97,7 @@ final class ToolContent {
         JsonObject s = new JsonObject();
         s.addProperty("id", "tools-done");
         s.addProperty("eyebrow", "All set");
-        s.addProperty("title", "Ready when you are");
+        s.addProperty("title", "Ready, you are");
         s.addProperty("text", "Find these again any time from Extensions > QTrace > Your tools…. "
             + "A gold square on a button of the panel means its welcome is still to be read.");
         s.addProperty("visual", "done");

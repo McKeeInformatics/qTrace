@@ -115,7 +115,7 @@ final class WelcomeSequence {
         JsonElement last = slides.get(slides.size() - 1);
         if (!closing(last)) return;
         JsonObject slide = last.getAsJsonObject();
-        slide.addProperty("title", "Ready when you are");
+        slide.addProperty("title", "Ready, you are");
         slide.addProperty("text", "Find all of this again any time from Extensions > QTrace: "
             + "Welcome…, Your tools… and What's new….");
     }

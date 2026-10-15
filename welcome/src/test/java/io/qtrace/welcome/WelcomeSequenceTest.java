@@ -96,7 +96,7 @@ class WelcomeSequenceTest {
     @Test
     void afterSeveralWelcomesTheClosingSlideSpeaksForAllOfThem() {
         JsonObject closing = last(WelcomeSequence.of(ORG, TOOLS, NEWS));
-        assertEquals("Ready when you are", closing.get("title").getAsString());
+        assertEquals("Ready, you are", closing.get("title").getAsString());
         String text = closing.get("text").getAsString();
         for (String menu : List.of("Welcome…", "Your tools…", "What's new…")) assertTrue(text.contains(menu), text);
     }
