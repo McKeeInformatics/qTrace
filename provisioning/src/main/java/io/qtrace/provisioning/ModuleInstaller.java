@@ -127,7 +127,7 @@ final class ModuleInstaller {
         return new ArrayList<>(byModule.values());
     }
     @FunctionalInterface
-    interface Downloader { byte[] download() throws Exception; }
+    interface Downloader { byte[] download(java.util.function.DoubleConsumer fraction) throws Exception; }
 
     // ── What this workstation is served ─────────────────────────────────────────
 
@@ -204,7 +204,7 @@ final class ModuleInstaller {
                 for (ModuleUpdates.Offer o : ModuleUpdates.pending(remote, local)) {
                     openTasks.incrementAndGet();
                     final String bearer = o.licensed() ? jwt : null;
-                    Downloader dl = () -> QTraceUpdater.httpGetBytes(o.url(), bearer);
+                    Downloader dl = f -> downloadWithProgress(o.url(), bearer, f);
                     promptAndInstall(qupath, o.module(), local.getOrDefault(o.module(), "0"), o.version(), o.sha256(), dl);
                     taskDone(qupath);
                 }
@@ -265,7 +265,7 @@ final class ModuleInstaller {
                     final String bearer = o.licensed() ? jwt : null;
                     boolean[] failed = {false};
                     downloadAndInstall(qupath, o.module(), o.version(), o.sha256(),
-                        () -> downloadWithProgress(o.url(), bearer, f -> report(progress, o, titles, f * 0.98)), () -> failed[0] = true);
+                        f -> downloadWithProgress(o.url(), bearer, f), f -> report(progress, o, titles, f * 0.98), () -> failed[0] = true);
                     report(progress, o, titles, failed[0] ? -1 : 1);
                     if (!failed[0]) {
                         try {
@@ -353,25 +353,38 @@ final class ModuleInstaller {
                 startupUpdates.complete(false);
                 return;
             }
-            // Install → every extension, one after the other, in the background; the last
-            // one to finish brings the single post-install message.
+            // Install → every extension, one after the other, in the background. With the
+            // welcome module's install window, it shows them arriving and offers the restart;
+            // without it, the last one to finish brings the single post-install message.
+            UpdateWindow.Window window;
+            try {
+                window = UpdateWindow.open();
+            } catch (LinkageError olderCore) {
+                window = null;   // a Core from before InstallWindow
+            }
+            if (window != null) quietInstall = true;
+            final UpdateWindow.Window shown = window;
             openTasks.addAndGet(batch.items().size());
             CompletableFuture.runAsync(() -> {
-                for (UpdateBatch.Item it : batch.items())
-                    downloadAndInstall(qupath, it.module(), it.remoteVer(), it.sha256(), it.downloader());
+                if (shown != null)
+                    for (UpdateBatch.Item it : batch.items()) shown.step(it.module(), UpdateBatch.moduleLabel(it.module()), it.remoteVer(), 0);
+                for (UpdateBatch.Item it : batch.items()) {
+                    boolean[] failed = {false};
+                    downloadAndInstall(qupath, it.module(), it.remoteVer(), it.sha256(), it.downloader(),
+                        f -> { if (shown != null) shown.step(it.module(), UpdateBatch.moduleLabel(it.module()), it.remoteVer(), f * 0.98); },
+                        () -> failed[0] = true);
+                    if (shown != null) shown.step(it.module(), UpdateBatch.moduleLabel(it.module()), it.remoteVer(), failed[0] ? -1 : 1);
+                }
+                if (shown != null) shown.done(batch.items().size());
             });
         }));
     }
 
-    private static void downloadAndInstall(QuPathGUI qupath, String module, String remoteVer,
-                                           String expectedSha256, Downloader downloader) {
-        downloadAndInstall(qupath, module, remoteVer, expectedSha256, downloader, () -> {});
-    }
-
-    private static void downloadAndInstall(QuPathGUI qupath, String module, String remoteVer,
-                                           String expectedSha256, Downloader downloader, Runnable onFailure) {
+    /** @param fraction told how much is downloaded, 0 to 1 */
+    private static void downloadAndInstall(QuPathGUI qupath, String module, String remoteVer, String expectedSha256,
+                                           Downloader downloader, java.util.function.DoubleConsumer fraction, Runnable onFailure) {
         try {
-            byte[] data = downloader.download();
+            byte[] data = downloader.download(fraction);
             if (data == null || data.length == 0) throw new Exception("empty download");
             String actual = sha256Hex(data);
             log.info(TAG + "{}: downloaded {} bytes, sha256={}", module, data.length, actual);
@@ -413,7 +426,11 @@ final class ModuleInstaller {
         }
         String installed;
         synchronized (installedThisSession) {
-            if (installedThisSession.isEmpty()) { startupUpdates.complete(false); return; }
+            if (installedThisSession.isEmpty()) {
+                quietInstall = false;   // nothing arrived: the install is over all the same, the next one is not quiet
+                startupUpdates.complete(false);
+                return;
+            }
             installed = String.join(", ", installedThisSession);
             installedThisSession.clear();
         }

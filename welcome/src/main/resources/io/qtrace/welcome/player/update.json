@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "branch": "update",
+  "kind": "update",
+  "title": "Updating qTrace",
+  "slides": [
+    {
+      "id": "install",
+      "eyebrow": "Update",
+      "title": "Installing your updates",
+      "text": "qTrace downloads the new versions you accepted, then asks you to restart QuPath once.",
+      "visual": "install",
+      "done": {
+        "title": "Updates downloaded",
+        "text": "Every new version has been delivered. It starts the next time you open QuPath."
+      },
+      "partial": {
+        "title": "Some updates did not arrive",
+        "text": "The ones marked ! could not be downloaded. The others have been delivered and start the next time you open QuPath."
+      },
+      "actions": [
+        { "label": "Quit & Relaunch QuPath now", "action": "quit", "primary": true },
+        { "label": "Later", "action": "close" }
+      ]
+    }
+  ]
+}

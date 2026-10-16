@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class UpdateBatchTest {
 
     private static UpdateBatch.Item item(String module, String from, String to) {
-        return new UpdateBatch.Item(module, from, to, null, () -> new byte[0]);
+        return new UpdateBatch.Item(module, from, to, null, f -> new byte[0]);
     }
 
     @Test

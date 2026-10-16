@@ -28,6 +28,8 @@ body {
 }
 .player { height: 100%; display: grid; grid-template-columns: 100%; grid-template-rows: auto 1fr auto; }
 .player.final .bar { display: none; }
+/* A content of one page (an update's install window): no line to follow, nothing to skip. */
+.player.single .bar { display: none; }
 
 .top { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--navy-b); }
 .brand { font-weight: 700; letter-spacing: .02em; }

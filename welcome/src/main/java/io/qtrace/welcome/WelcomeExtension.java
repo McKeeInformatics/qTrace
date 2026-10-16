@@ -94,6 +94,12 @@ public class WelcomeExtension implements QuPathExtension {
         welcome.setOnAction(e -> playWelcome(qupath));
         menu.addAll(0, List.of(welcome, tools, news));
         ToolWelcomes.register(module -> playTools(qupath, Set.of(module)));
+        try {
+            // An accepted update shows its modules arriving, as Getting started's install page does.
+            UpdateInstallWindow.register(qupath);
+        } catch (LinkageError olderCore) {
+            // A Core from before InstallWindow: the update ends with its plain message.
+        }
 
         // While Getting started is to be shown it is the only window that opens by itself.
         boolean gettingStarted = addGettingStarted(qupath);

@@ -133,9 +133,11 @@
     }).join('');
     var total = mods ? Math.round(mods.reduce(function (s, m) { return s + (i.state === 'done' || m.done ? 100 : (m.pct || 0)); }, 0) / mods.length)
                      : (i.state === 'done' ? 100 : i.state === 'running' ? 55 : 0);
-    return '<div class="device"><div class="checks' + (mods && mods.length > 3 ? ' cols' : '') + '">' +
+    // An update installs what the user accepted: no certificate nor account behind it.
+    var first = content && content.kind === 'update' ? '' :
       '<div class="check ' + (i.state === 'idle' ? 'wait' : 'ok') + '"><span class="dot">' + (i.state === 'idle' ? '' : '✓') +
-      '</span><span>' + (account ? esc(signedInLine()) : 'Certificate saved') + '</span></div>' + rows +
+      '</span><span>' + (account ? esc(signedInLine()) : 'Certificate saved') + '</span></div>';
+    return '<div class="device"><div class="checks' + (mods && mods.length > 3 ? ' cols' : '') + '">' + first + rows +
       '</div><div class="progress"><i style="width:' + total + '%"></i></div></div>';
   }
 
@@ -541,6 +543,7 @@
         }).join('') + '</div>';
     }
     $('track').classList.toggle('has-branch', !!onBranch.length && L.attach > -1);
+    document.querySelector('.player').classList.toggle('single', visible().length < 2);
     $('track').innerHTML = html;
     refreshInstallCopy();
     document.title = content.title || 'qTrace';
@@ -703,7 +706,12 @@
     // The restart is offered once every module has arrived; the line says so at its arrival.
     Array.prototype.forEach.call(el.querySelectorAll('[data-act="quit"]'), function (b) { b.disabled = i.state !== 'done'; });
     $('track').classList.toggle('deployed', i.state === 'done' && !failed);
-    if (i.state === 'done' && !failed) {
+    // A content may say it its own way (an update: s.done, s.partial).
+    var said = i.state === 'done' && s ? (failed ? s.partial : s.done) : null;
+    if (said) {
+      h.textContent = said.title;
+      p.textContent = said.text;
+    } else if (i.state === 'done' && !failed) {
       h.textContent = 'Modules Download completed';
       p.textContent = 'Every module you are subscribed to has been delivered. They start the next time you open QuPath.';
     } else if (i.state === 'done') {
