@@ -145,7 +145,7 @@
       "id": "ready",
       "eyebrow": "All set",
       "title": "qTrace is on board",
-      "text": "qTrace already records your work in QuPath: open a project and work as usual. Whenever you want your results signed with your certified identity, sign in from Extensions > QTrace > Getting started.",
+      "text": "qTrace already records your work in QuPath: open a project and work as usual. Whenever you want your results signed with your certified identity, sign in from Extensions > QTrace > Help > Getting started.",
       "visual": "done",
       "actions": [
         {

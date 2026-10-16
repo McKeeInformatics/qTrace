@@ -777,7 +777,7 @@ public class QTraceSettingsDialog {
             return section;
         }
         if (cfg.getLicensePath().isBlank()) {
-            status.setText("No certificate loaded — sign in from Extensions > QTrace > Getting started, or load your .qtlicense file in the Certificate section.");
+            status.setText("No certificate loaded — sign in from Extensions > QTrace > Help > Getting started, or load your .qtlicense file in the Certificate section.");
             return section;
         }
 

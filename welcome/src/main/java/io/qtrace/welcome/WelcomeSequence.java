@@ -116,8 +116,7 @@ final class WelcomeSequence {
         if (!closing(last)) return;
         JsonObject slide = last.getAsJsonObject();
         slide.addProperty("title", "Ready, you are");
-        slide.addProperty("text", "Find all of this again any time from Extensions > QTrace: "
-            + "Welcome…, Your tools… and What's new….");
+        slide.addProperty("text", "Find your tools again any time from Extensions > QTrace > Help > Your tools….");
     }
 
     /** The button that closes the last slide reads the same after every welcome. */

@@ -85,8 +85,7 @@ final class NewsContent {
         s.addProperty("id", "news-done");
         s.addProperty("eyebrow", "All set");
         s.addProperty("title", "You are up to date");
-        s.addProperty("text", "Find this again any time from Extensions > QTrace > What's new…, "
-            + "and choose in Settings whether it shows by itself after an update.");
+        s.addProperty("text", "Choose in Settings whether this shows by itself after an update.");
         s.addProperty("visual", "done");
         JsonArray actions = new JsonArray();
         JsonObject close = new JsonObject();

@@ -98,7 +98,7 @@ final class ToolContent {
         s.addProperty("id", "tools-done");
         s.addProperty("eyebrow", "All set");
         s.addProperty("title", "Ready, you are");
-        s.addProperty("text", "Find these again any time from Extensions > QTrace > Your tools…. "
+        s.addProperty("text", "Find these again any time from Extensions > QTrace > Help > Your tools…. "
             + "A gold square on a button of the panel means its welcome is still to be read.");
         s.addProperty("visual", "done");
         JsonArray actions = new JsonArray();

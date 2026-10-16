@@ -26,7 +26,7 @@ import com.google.gson.JsonObject;
  * organization's and the tools': what a user can do on the very first start, whoever they are,
  * with or without a certificate. Today one closing slide: the bug and feature request button is the
  * panel's own, shown by the Core tool welcome. Read once
- * ({@link WelcomeExtension#CORE_REVISION}); played again from Extensions > QTrace > Welcome….
+ * ({@link WelcomeExtension#CORE_REVISION}).
  * Pure JSON, no JavaFX: unit-tested.
  */
 final class CoreContent {
@@ -50,7 +50,7 @@ final class CoreContent {
         s.addProperty("eyebrow", "All set");
         s.addProperty("title", "qTrace is on board");
         s.addProperty("text", "You can start using it now: open a project and work as usual, qTrace records in the background. "
-            + "This welcome stays available from Extensions > QTrace > Welcome.");
+            + "Help is in Extensions > QTrace > Help.");
         s.addProperty("visual", "done");
         JsonArray actions = new JsonArray();
         JsonObject close = new JsonObject();

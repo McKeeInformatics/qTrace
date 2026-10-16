@@ -98,8 +98,6 @@ final class WelcomeDialog {
             root.getChildren().add(steps);
         }
 
-        root.getChildren().add(muted("Reopen this window from Extensions > QTrace > Welcome…"));
-
         Button close = new Button("Close");
         close.setCancelButton(true);
         close.setOnAction(e -> stage.close());

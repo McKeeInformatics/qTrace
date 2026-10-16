@@ -89,7 +89,7 @@ record RecordSource(String certId, String token, boolean local) {
     /** What to tell the user when qtrace.ca refuses a record, or null for any other failure. */
     static String refusal(int status) {
         return switch (status) {
-            case 401 -> "Sign in to qtrace.ca from Extensions > QTrace > Getting started to open this record.";
+            case 401 -> "Sign in to qtrace.ca from Extensions > QTrace > Help > Getting started to open this record.";
             case 403 -> "You don't have access to this record or workflow. Ask its owner to share it with you.";
             case 404, 410 -> "Record not found: check the ID, or ask for a new share link.";
             default -> null;

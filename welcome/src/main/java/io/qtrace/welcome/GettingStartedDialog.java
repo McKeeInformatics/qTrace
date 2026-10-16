@@ -103,7 +103,7 @@ final class GettingStartedDialog {
             text("Already have a qtrace.ca account? Sign in: your certificate is installed automatically."),
             network,
             new VBox(8, signIn, create, coreOnly),
-            muted("You can reopen this window from Extensions > QTrace > Getting started…"));
+            muted("You can reopen this window from Extensions > QTrace > Help > Getting started…"));
 
         Set<String> checked = ConcurrentHashMap.newKeySet();
         Set<String> down = ConcurrentHashMap.newKeySet();
@@ -191,7 +191,7 @@ final class GettingStartedDialog {
             text(modules > 0
                 ? "Restart QuPath to finish. Your welcome will be waiting for you."
                 : "Restart QuPath to activate it. If Compliance is still missing afterwards, "
-                  + "check your connection and use Extensions > QTrace > Bug or Feature Request…"),
+                  + "check your connection and report it with the panel's Bug or Feature Request button"),
             close);
     }
 

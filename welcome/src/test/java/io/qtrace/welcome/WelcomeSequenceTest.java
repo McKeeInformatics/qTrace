@@ -98,7 +98,7 @@ class WelcomeSequenceTest {
         JsonObject closing = last(WelcomeSequence.of(ORG, TOOLS, NEWS));
         assertEquals("Ready, you are", closing.get("title").getAsString());
         String text = closing.get("text").getAsString();
-        for (String menu : List.of("Welcome…", "Your tools…", "What's new…")) assertTrue(text.contains(menu), text);
+        assertTrue(text.contains("Extensions > QTrace > Help > Your tools…"), text);
     }
 
     @Test

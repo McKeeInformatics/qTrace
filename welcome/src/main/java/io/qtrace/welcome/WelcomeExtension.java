@@ -66,9 +66,9 @@ import java.util.concurrent.TimeUnit;
  * <ul>
  * <li>Getting started, until the user signed in or chose to go on without an account; what its
  *     buttons do is the provisioning module's work (Core {@link Provisioners});</li>
- * <li>the organization's welcome, once, with a certificate (Welcome…);</li>
- * <li>the welcome of each tool when it first shows in the panel (Your tools…);</li>
- * <li>what the new version of an updated module brings (What's new…).</li>
+ * <li>the organization's welcome, once, with a certificate;</li>
+ * <li>the welcome of each tool when it first shows in the panel (Help › Your tools…);</li>
+ * <li>what the new version of an updated module brings, once after an update.</li>
  * </ul>
  */
 public class WelcomeExtension implements QuPathExtension {
@@ -78,6 +78,8 @@ public class WelcomeExtension implements QuPathExtension {
     private static final String SERVER = System.getProperty("qtrace.update.server", "https://www.qtrace.ca");
     private static final Path STATE = Path.of(System.getProperty("user.home"), ".qTrace", "welcome.json");
 
+    private static final String HELP_MENU = "Extensions>QTrace>Help";
+
     private static boolean installed;
 
     @Override
@@ -85,14 +87,10 @@ public class WelcomeExtension implements QuPathExtension {
         if (installed) return;
         installed = true;
 
-        List<MenuItem> menu = qupath.getMenu("Extensions>QTrace", true).getItems();
+        // Extensions › QTrace › Help, after Core's Open panel, Settings and About.
         MenuItem tools = new MenuItem("Your tools…");
         tools.setOnAction(e -> playTools(qupath, ModuleNews.installed().keySet()));
-        MenuItem news = new MenuItem("What's new…");
-        news.setOnAction(e -> playNews(qupath));
-        MenuItem welcome = new MenuItem("Welcome…");
-        welcome.setOnAction(e -> playWelcome(qupath));
-        menu.addAll(0, List.of(welcome, tools, news));
+        qupath.getMenu(HELP_MENU, true).getItems().add(tools);
         ToolWelcomes.register(module -> playTools(qupath, Set.of(module)));
         try {
             // An accepted update shows its modules arriving, as Getting started's install page does.
@@ -109,7 +107,7 @@ public class WelcomeExtension implements QuPathExtension {
     // ── Getting started: the first window of a workstation without a certificate ──
 
     /**
-     * Extensions > QTrace > Getting started… reopens it at any time. At startup it shows by
+     * Extensions > QTrace > Help > Getting started… reopens it at any time. At startup it shows by
      * itself on a workstation with no certificate, until the user signed in or went on without
      * an account.
      *
@@ -120,7 +118,7 @@ public class WelcomeExtension implements QuPathExtension {
         if (provisioner == null) return false;
         MenuItem item = new MenuItem("Getting started…");
         item.setOnAction(e -> new TrunkPlayer(qupath, provisioner).show());
-        qupath.getMenu("Extensions>QTrace", true).getItems().add(0, item);
+        qupath.getMenu(HELP_MENU, true).getItems().add(0, item);
         // The greyed Upload of a workstation without an account opens it too, where one signs in.
         UploadInvite.register(() -> new TrunkPlayer(qupath, provisioner).showAt(TrunkPlayer.ACCOUNT));
         if (!provisioner.gettingStartedPending()) return false;
@@ -232,18 +230,8 @@ public class WelcomeExtension implements QuPathExtension {
 
     // ── On demand: each welcome alone, from the menu or a gold square ────────────
 
-    /** Extensions > QTrace > Welcome… — the organization's or the standard welcome, then the base one. */
-    private static void playWelcome(QuPathGUI qupath) {
-        CompletableFuture.supplyAsync(WelcomeExtension::fetch).exceptionally(e -> null).thenAccept(json -> {
-            Platform.runLater(() -> {
-                if (PlayerBridge.webViewAvailable()) play(qupath, "Welcome to qTrace", WelcomeSequence.of(json, CoreContent.of()), () -> {});
-                else if (json != null) new WelcomeDialog(qupath).show(WelcomeSpec.parse(json, WelcomeDialog.ACTIONS));
-            });
-        });
-    }
-
     /**
-     * Plays the welcome of these tools, among the ones that have one (Your tools…, or the click
+     * Plays the welcome of these tools, among the ones that have one (Help › Your tools…, or the click
      * on a button with a gold square). Closing the window is reading: the square goes away.
      */
     private static void playTools(QuPathGUI qupath, Set<String> modules) {
@@ -251,17 +239,6 @@ public class WelcomeExtension implements QuPathExtension {
         String json = WelcomeSequence.of(ToolContent.of(toolItems(shown)));
         if (json == null || !PlayerBridge.webViewAvailable()) return;
         play(qupath, toolsTitle(shown), json, () -> markRead(shown));
-    }
-
-    /** Extensions > QTrace > What's new… — what the installed versions bring; says so when there is nothing. */
-    private static void playNews(QuPathGUI qupath) {
-        CompletableFuture.supplyAsync(() -> NewsContent.of(newsItems(moduleCards(), ModuleNews.installed())))
-            .exceptionally(e -> null)
-            .thenAccept(news -> Platform.runLater(() -> {
-                String json = WelcomeSequence.of(news);
-                if (json == null || !PlayerBridge.webViewAvailable()) nothingNew(qupath);
-                else play(qupath, "What's new in qTrace", json, () -> {});
-            }));
     }
 
     private static List<ModuleUpdates.Card> toolCards(Set<String> modules) {
@@ -296,15 +273,6 @@ public class WelcomeExtension implements QuPathExtension {
             out.add(new NewsContent.Item(c.offer().module(), c.title(), installed, c.icon(), c.whatsNew()));
         }
         return out;
-    }
-
-    private static void nothingNew(QuPathGUI qupath) {
-        javafx.scene.control.Alert a = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
-        if (qupath.getStage() != null) a.initOwner(qupath.getStage());
-        a.setTitle("qTrace — What's new");
-        a.setHeaderText("Nothing new to show");
-        a.setContentText("No note was published for the versions installed here, or qtrace.ca could not be reached.");
-        a.show();
     }
 
     /**

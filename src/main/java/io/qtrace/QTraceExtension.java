@@ -95,17 +95,10 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         // ── Extensions menu ────────────────────────────────────────────────────
         var menu = qupath.getMenu("Extensions>QTrace", true);
 
-        MenuItem openPanel   = new MenuItem("Panel");
+        // Open panel, Settings, About; the welcome module adds Help (Getting started, Your tools).
+        // Every tool is reached from the panel: no tool entry here.
+        MenuItem openPanel   = new MenuItem("Open panel");
         openPanel.setOnAction(e -> controller.showPanel());
-
-        MenuItem dashboard   = new MenuItem("Dashboard");
-        dashboard.setOnAction(e -> controller.showDashboard());
-        showWithDashboard(dashboard, "menu");
-
-        // There only once a module has brought the player (Players) — it can load after this menu.
-        MenuItem player      = new MenuItem("Player");
-        player.setOnAction(e -> controller.openReplayDialog());
-        showWithPlayer(player, "menu");
 
         MenuItem preferences = new MenuItem("Settings...");
         preferences.setOnAction(e -> controller.showPreferences());
@@ -113,10 +106,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         MenuItem about       = new MenuItem("About QTrace...");
         about.setOnAction(e -> controller.showAbout());
 
-        MenuItem report      = new MenuItem(QTraceI18n.t("report.menu"));
-        report.setOnAction(e -> IssueReportDialog.show(qupath));
-
-        menu.getItems().addAll(openPanel, dashboard, player, new SeparatorMenuItem(), preferences, report, about);
+        menu.getItems().addAll(openPanel, preferences, about);
 
         // ── Toolbar button (added on FX thread after QuPath finishes layout) ───
         Platform.runLater(() -> addToolbarButton(qupath));
