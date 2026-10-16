@@ -32,6 +32,7 @@ import io.qtrace.QTraceConfig;
 import com.google.gson.*;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -136,6 +137,9 @@ public class QTraceCommitGraph implements VersionGraph.Window {
     // The window's frame, for a window built on this one: the bar at the top (title, buttons,
     // Open last), what sits above the panes, the pane of the list (title, list, footer).
     protected final HBox header;
+    private final Button openBtn;
+    private final BorderPane root;
+    private final SplitPane graphAndSteps;
     protected final VBox top;
     protected final VBox timelinePane;
 
@@ -167,7 +171,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         headerLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
         headerLabel.setTextFill(Color.web(TEXT_MAIN));
 
-        Button openBtn = new Button(QTraceI18n.t("graph.open"));
+        openBtn = new Button(QTraceI18n.t("graph.open"));
         openBtn.setId("graph-open-button"); // looked up by the screenshot harness — see ScreenshotHarness
         styleButton(openBtn);
         openBtn.setOnAction(e -> chooseFile());
@@ -245,11 +249,12 @@ public class QTraceCommitGraph implements VersionGraph.Window {
             + "-fx-border-color: " + BORDER + "; -fx-border-width: 1 0 0 0;");
 
         SplitPane split = new SplitPane(scroll, timelinePane);
+        graphAndSteps = split;
         split.setOrientation(javafx.geometry.Orientation.VERTICAL);
         split.setDividerPositions(0.34);
         split.setStyle("-fx-background-color: " + BG_BASE + "; -fx-box-border: transparent;");
 
-        BorderPane root = new BorderPane();
+        root = new BorderPane();
         top = new VBox(header);
         root.setTop(top);
         // The detail panel is as wide as the reader wants it: a script needs more room than a commit's few lines. It keeps its width when the window is resized.
@@ -266,6 +271,21 @@ public class QTraceCommitGraph implements VersionGraph.Window {
     }
 
     // ── Public API ─────────────────────────────────────────────────────────────
+
+    /**
+     * The window's content for another window to show (the Dashboard's Version tab): the
+     * window itself is never shown, and the content reads what it is given, without a chooser.
+     */
+    Parent embedded() {
+        header.getChildren().remove(openBtn);
+        // Shorter than the window: the graph keeps the height of its drawing (and its scroll bar), the steps get the rest.
+        graphAndSteps.heightProperty().addListener((o, was, h) -> {
+            if (h.doubleValue() > 0)
+                graphAndSteps.setDividerPositions(Math.min(0.6, (canvas.getHeight() + 20) / h.doubleValue()));
+        });
+        stage.getScene().setRoot(new Pane());
+        return root;
+    }
 
     public void setHost(VersionGraph.Host host) { this.host = host; }
 

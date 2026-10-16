@@ -19,6 +19,7 @@
 
 package io.qtrace.versiongraph;
 
+import io.qtrace.VersionGraph;
 import io.qtrace.VersionGraphs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,10 +43,21 @@ public class VersionGraphExtension implements QuPathExtension {
         if (installed) return;
         installed = true;
         try {
-            VersionGraphs.register("versiongraph", host -> {
-                QTraceCommitGraph window = new QTraceCommitGraph(qupath);
-                window.setHost(host);
-                return window;
+            VersionGraphs.register("versiongraph", new VersionGraph() {
+                @Override public Window create(Host host) {
+                    QTraceCommitGraph window = new QTraceCommitGraph(qupath);
+                    window.setHost(host);
+                    return window;
+                }
+
+                @Override public View view() {
+                    QTraceCommitGraph graph = new QTraceCommitGraph(qupath);
+                    javafx.scene.Node content = graph.embedded();
+                    return new View() {
+                        @Override public javafx.scene.Node node() { return content; }
+                        @Override public void show(java.io.File record) { graph.load(record); }
+                    };
+                }
             });
             log.info(TAG + "loaded: the Version window is available");
         } catch (LinkageError e) {

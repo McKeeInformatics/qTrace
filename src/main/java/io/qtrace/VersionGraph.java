@@ -32,6 +32,22 @@ public interface VersionGraph {
     /** A new Version window, not shown yet. Called on the FX thread. */
     Window create(Host host);
 
+    /**
+     * The Version window's content, to show inside another window (the Dashboard's Version
+     * tab). It only reads the record it is given: no capture in progress, no −/+ on the steps.
+     * Null when the module that brings the Version window predates it. Called on the FX thread.
+     */
+    default View view() { return null; }
+
+    /** The Version window's content inside another window. Every method is called on the FX thread. */
+    interface View {
+        /** What the other window places in its layout, once. */
+        javafx.scene.Node node();
+
+        /** Shows the history of a .qtrace; null empties the view. */
+        void show(File record);
+    }
+
     /** One Version window. Every method is called on the FX thread. */
     interface Window {
         /**
