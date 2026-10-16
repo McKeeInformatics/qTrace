@@ -43,26 +43,23 @@ public class VersionGraphExtension implements QuPathExtension {
         if (installed) return;
         installed = true;
         try {
-            VersionGraphs.register("versiongraph", new VersionGraph() {
-                @Override public Window create(Host host) {
-                    QTraceCommitGraph window = new QTraceCommitGraph(qupath);
-                    window.setHost(host);
-                    return window;
-                }
-
-                @Override public View view() {
-                    QTraceCommitGraph graph = new QTraceCommitGraph(qupath);
-                    javafx.scene.Node content = graph.embedded();
-                    return new View() {
-                        @Override public javafx.scene.Node node() { return content; }
-                        @Override public void show(java.io.File record) { graph.load(record); }
-                    };
-                }
-            });
+            VersionGraphs.register("versiongraph", coreHasView()
+                ? new VersionGraphProvider(qupath)
+                : host -> VersionGraphProvider.window(qupath, host));
             log.info(TAG + "loaded: the Version window is available");
         } catch (LinkageError e) {
             // A Core published before VersionGraphs existed: nothing to plug into, nothing breaks.
             log.warn(TAG + "this qTrace Core is too old for the Version window module — update qTrace Core");
+        }
+    }
+
+    /** A Core published before the Dashboard's Version tab has no {@link VersionGraph.View}: the window alone then. */
+    private static boolean coreHasView() {
+        try {
+            Class.forName("io.qtrace.VersionGraph$View", false, VersionGraph.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
         }
     }
 
