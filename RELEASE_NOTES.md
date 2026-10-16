@@ -1,3 +1,28 @@
+## What's new in v1.2.8
+
+### New — Updates show their installation
+After **Install** in the update message, a window shows each extension arriving with its own progress bar. Once they are all there, **Quit & Relaunch QuPath now** closes QuPath and reopens it by itself; **Later** leaves the new versions for the next time you open QuPath.
+
+### New — A Version tab in the Dashboard
+With the Dashboard and Version Graph extensions, a **Version** tab under the image list shows the selected image's history as the **Version(s)** window draws it: the graph of its sessions, its steps, and a commit's details when you click it.
+
+### Changed — Import is now an extension
+The **Import** button, which writes a stamped record for every image of the project, now comes with the **qTrace Import** extension, given to the organizations that use it. **Reset** stays in Core.
+
+### Changed — Getting started
+- Getting started is a tour of your panel along a line of stations, with the sign-in on a branch of its own.
+- Each extension being installed has its own progress bar, and **Quit & Relaunch QuPath now** is offered once they have all arrived.
+- The welcome windows open tall enough to need no scroll bar.
+- When an update was just installed at startup, the welcomes wait for the next start.
+
+### Changed
+- An extension installed but not started yet shows its button greyed in the panel and the mini-panel until QuPath restarts.
+- On a workstation with no account, **About** offers to create one.
+- **Settings › Preferences › Upload** chooses what **Upload** sends of the Player's execution logs: the full logs (default), a summary, or nothing.
+- A bug report or a feature request can be sent from an account without an identity certificate.
+
+---
+
 ## What's new in v1.2.7
 
 ### New — Sign in with a qtrace.ca account, with or without a certificate
