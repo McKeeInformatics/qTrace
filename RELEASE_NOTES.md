@@ -1,3 +1,11 @@
+## What's new in v1.2.9
+
+### New — Import asks for the context of the file
+After **File › Import objects from file…** picks its file, a **Context of this import** window asks what the file is and where it comes from. The context is required: **Import** stays disabled until it is filled. You can also attach the scripts or configuration files that generated the file. They are archived next to the record and pushed with it, and they are never run on replay. Cancel or Esc cancels the import.
+
+### New — The import window shows sizes and the total
+Each attached script shows its size, and a **Total** line gives what the import archives: the imported file plus every script. It updates as you add or remove scripts.
+
 ## What's new in v1.2.8
 
 ### New — Updates show their installation
