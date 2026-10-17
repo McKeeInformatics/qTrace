@@ -1712,7 +1712,12 @@ public class QTraceController {
         var fileMenu = qupath.getMenu("File", false);
         if (fileMenu == null) return;
         javafx.scene.control.MenuItem item = findMenuItemByText(fileMenu.getItems(), "import objects from file");
-        if (item == null) return;
+        if (item == null) {
+            // QuPath gives this action no id and exposes no accessor (FileMenuActions.OBJECT_IMPORT is a
+            // field of an inner class), so the menu text is the only handle - say so if it ever changes.
+            ActivityLog.add(QTraceI18n.t("import.hook.missing"));
+            return;
+        }
 
         item.setOnAction(e -> {
             javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
@@ -1729,6 +1734,17 @@ public class QTraceController {
             ImageData<BufferedImage> imageData = qupath.getImageData();
             if (imageData == null) return;
 
+            // Mandatory context, optional generator scripts - asked before anything is read, and
+            // cancelling here cancels the import.
+            ImportContext declared = ImportContextDialog.show(qupath.getStage(), file).orElse(null);
+            if (declared == null) return;
+            for (File gen : declared.generatorFiles()) {
+                if (!java.nio.file.Files.isReadable(gen.toPath())) {
+                    ActivityLog.add(QTraceI18n.f("import.context.unreadable", gen.getName()));
+                    return;
+                }
+            }
+
             int before = imageData.getHierarchy().getAllObjects(false).size();
             logger.setImportInProgress(true);
             boolean ok;
@@ -1739,7 +1755,7 @@ public class QTraceController {
             }
             if (ok) {
                 int after = imageData.getHierarchy().getAllObjects(false).size();
-                logger.recordFileImport(file, Math.max(0, after - before));
+                logger.recordFileImport(file, Math.max(0, after - before), declared);
                 syncPanelState();
             }
         });
@@ -1796,7 +1812,8 @@ public class QTraceController {
             for (ClassifierRecord clf : classifiers)
                 ActivityLog.add("  · classifiers/" + clf.name + ".json");
             for (ImportedObjectFileRecord imp : importedFiles)
-                ActivityLog.add("  · imports/" + imp.companionFilename);
+                for (ImportedObjectFileRecord.Companion c : imp.companions())
+                    ActivityLog.add("  · imports/" + c.filename());
             if (lastThumbnailPath != null) ActivityLog.add("  · thumbnail.jpg");
             if (lastGeojsonPath != null) ActivityLog.add("  · " + lastGeojsonPath.getFileName());
             panel.setPushEnabled(false);

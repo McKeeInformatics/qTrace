@@ -1260,7 +1260,7 @@ public class ActionLogger implements WorkflowListener {
      * and adds a single scriptable step to the workflow history so it flows through
      * the normal capturedSteps pipeline like any other step.
      */
-    public void recordFileImport(java.io.File file, int objectCount) {
+    public void recordFileImport(java.io.File file, int objectCount, ImportContext declared) {
         if (currentImageData == null || file == null) return;
         try {
             byte[] rawBytes = Files.readAllBytes(file.toPath());
@@ -1275,14 +1275,24 @@ public class ActionLogger implements WorkflowListener {
                 : "";
             String companionFilename = imageBase + ".import_" + importCounter + origExt;
 
+            List<ImportAttachment> attachments = new ArrayList<>();
+            for (java.io.File gen : declared.generatorFiles()) {
+                byte[] genBytes = Files.readAllBytes(gen.toPath());
+                attachments.add(new ImportAttachment(gen.getName(),
+                    ImportAttachment.companionFilename(companionFilename, attachments.size() + 1, gen.getName()),
+                    computeSha256Bytes(genBytes), genBytes));
+            }
+
             ImportedObjectFileRecord record = new ImportedObjectFileRecord(
                 file.getName(), companionFilename, file.getAbsolutePath(),
-                rawBytes, sha256, objectCount, Instant.now(), user);
+                rawBytes, sha256, objectCount, Instant.now(), user, declared.context(), attachments);
             knownImportedFiles.put(companionFilename, record);
             notifyChanged();
 
+            String contextComment = declared.context().lines()
+                .map(l -> "// Context: " + l + "\n").collect(Collectors.joining());
             String fragment =
-                "// Replay: import objects from file (" + record.name + ")\n" +
+                "// Replay: import objects from file (" + record.name + ")\n" + contextComment +
                 "def _srcDir_" + importCounter + " = (binding.hasVariable('_qtraceSourceDir')) ? binding.getVariable('_qtraceSourceDir') : null\n" +
                 "def _importFile_" + importCounter + " = _srcDir_" + importCounter
                     + " ? new File(_srcDir_" + importCounter + " as String, \"" + companionFilename + "\") : null\n" +
@@ -1299,7 +1309,8 @@ public class ActionLogger implements WorkflowListener {
 
             if (panel != null) {
                 ActivityLog.add("[Import] " + record.name + " — " + objectCount + " object(s), sha256 "
-                    + sha256.substring(0, 16) + "...");
+                    + sha256.substring(0, 16) + "..." + (attachments.isEmpty() ? ""
+                        : ", " + attachments.size() + " generator file(s)"));
             }
         } catch (Exception e) {
             ActivityLog.add("WARNING: could not capture file import — " + e.getMessage());

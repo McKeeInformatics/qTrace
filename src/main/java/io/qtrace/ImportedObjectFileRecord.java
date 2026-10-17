@@ -20,6 +20,8 @@
 package io.qtrace;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Provenance record for one "Import objects from file" event
@@ -42,10 +44,23 @@ public class ImportedObjectFileRecord {
     public final int     objectCount;
     public final Instant importedAt;
     public final String  importedByUser;
+    public final String  context;             // what the file is and where it comes from, written by the user
+    private final List<ImportAttachment> attachments; // scripts / configs that generated it; null in an older draft
+
+    /** A file written next to the .qtrace and pushed with it. */
+    public record Companion(String filename, byte[] content) {}
 
     public ImportedObjectFileRecord(String name, String companionFilename, String sourcePath,
                                      byte[] content, String sha256, int objectCount,
                                      Instant importedAt, String importedByUser) {
+        this(name, companionFilename, sourcePath, content, sha256, objectCount, importedAt, importedByUser,
+            "", List.of());
+    }
+
+    public ImportedObjectFileRecord(String name, String companionFilename, String sourcePath,
+                                     byte[] content, String sha256, int objectCount,
+                                     Instant importedAt, String importedByUser,
+                                     String context, List<ImportAttachment> attachments) {
         this.name               = name;
         this.companionFilename  = companionFilename;
         this.sourcePath         = sourcePath;
@@ -54,5 +69,25 @@ public class ImportedObjectFileRecord {
         this.objectCount        = objectCount;
         this.importedAt         = importedAt;
         this.importedByUser     = importedByUser;
+        this.context            = context == null ? "" : context;
+        this.attachments        = attachments == null ? List.of() : List.copyOf(attachments);
+    }
+
+    public List<ImportAttachment> attachments() {
+        return attachments == null ? List.of() : attachments;
+    }
+
+    /** The imported file, then its attachments: everything this event writes and uploads. */
+    public List<Companion> companions() {
+        List<Companion> all = new ArrayList<>();
+        all.add(new Companion(companionFilename, content));
+        for (ImportAttachment a : attachments()) all.add(new Companion(a.companionFilename, a.content));
+        return all;
+    }
+
+    public long totalBytes() {
+        long total = content.length;
+        for (ImportAttachment a : attachments()) total += a.content.length;
+        return total;
     }
 }

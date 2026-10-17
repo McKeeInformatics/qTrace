@@ -56,7 +56,8 @@ class CaptureStateCodecTest {
         s.knownObjectClassifiers.add(oc);
 
         s.knownImportedFiles.put("regions.geojson", new ImportedObjectFileRecord("regions.geojson",
-            "img.import_1.geojson", "/tmp/regions.geojson", new byte[]{1, 2, 3, (byte) 0xff}, "sha", 4, T, "romain"));
+            "img.import_1.geojson", "/tmp/regions.geojson", new byte[]{1, 2, 3, (byte) 0xff}, "sha", 4, T, "romain",
+            "drawn by model X", List.of(new io.qtrace.ImportAttachment("gen.py", "img.import_1.gen_1.gen.py", "s", new byte[]{5, 6}))));
         s.currentAlignment = new AlignmentRecord(T, "romain", "warpy", "affine",
             new double[]{1, 0, 5, 0, 1, 6}, "row_major", "mh", "moving", "file:/m", "ref", "file:/r", "w.json", "1", "2");
         s.measurementMapRecords.add(new MeasurementMapRecord("Area", "Viridis", 0.0, 10.0, T));
@@ -114,6 +115,10 @@ class CaptureStateCodecTest {
         ImportedObjectFileRecord imp = out.knownImportedFiles.get("regions.geojson");
         assertArrayEquals(new byte[]{1, 2, 3, (byte) 0xff}, imp.content);
         assertEquals(T, imp.importedAt);
+        assertEquals("drawn by model X", imp.context);
+        assertEquals(1, imp.attachments().size());
+        assertEquals("img.import_1.gen_1.gen.py", imp.attachments().get(0).companionFilename);
+        assertArrayEquals(new byte[]{5, 6}, imp.attachments().get(0).content);
 
         assertArrayEquals(new double[]{1, 0, 5, 0, 1, 6}, out.currentAlignment.matrix);
         assertEquals("row_major", out.currentAlignment.matrixLayout);

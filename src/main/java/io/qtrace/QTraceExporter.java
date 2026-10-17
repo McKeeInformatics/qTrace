@@ -642,7 +642,8 @@ public class QTraceExporter {
         JsonArray arr = new JsonArray();
         for (ImportedObjectFileRecord rec : logger.getImportedFiles().values()) {
             try {
-                Files.write(outputDir.resolve(rec.companionFilename), rec.content);
+                for (ImportedObjectFileRecord.Companion c : rec.companions())
+                    Files.write(outputDir.resolve(c.filename()), c.content());
             } catch (IOException e) {
                 continue; // skip metadata entry too — a dangling reference is worse than an omission
             }
@@ -654,6 +655,17 @@ public class QTraceExporter {
             io.addProperty("n_objects",         rec.objectCount);
             io.addProperty("imported_at",       rec.importedAt.toString());
             io.addProperty("imported_by",       rec.importedByUser);
+            io.addProperty("context",           rec.context);
+            JsonArray generators = new JsonArray();
+            for (ImportAttachment a : rec.attachments()) {
+                JsonObject g = new JsonObject();
+                g.addProperty("original_filename", a.name);
+                g.addProperty("companion_file",    a.companionFilename);
+                g.addProperty("sha256",            a.sha256);
+                g.addProperty("size_bytes",        a.content.length);
+                generators.add(g);
+            }
+            io.add("generator_files", generators);
             arr.add(io);
         }
         return arr;
