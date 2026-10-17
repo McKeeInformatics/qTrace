@@ -77,7 +77,7 @@ public final class ImportContextDialog {
         scripts.setCellFactory(lv -> new javafx.scene.control.ListCell<>() {
             @Override protected void updateItem(File f, boolean empty) {
                 super.updateItem(f, empty);
-                setText(empty || f == null ? null : f.getName());
+                setText(empty || f == null ? null : f.getName() + "  ·  " + ByteSize.format(f.length()));
                 setTooltip(empty || f == null ? null : new javafx.scene.control.Tooltip(f.getAbsolutePath()));
             }
         });
@@ -95,7 +95,18 @@ public final class ImportContextDialog {
         });
         remove.setOnAction(e -> scripts.getItems().remove(scripts.getSelectionModel().getSelectedItem()));
 
-        VBox body = new VBox(6, intro, fieldLbl, context, scriptsLbl, scriptsHint, scripts, new HBox(8, add, remove));
+        // The total is what this import archives: the imported file plus every script, updated as the list changes.
+        Label totalLbl = new Label();
+        totalLbl.setStyle(fieldLbl.getStyle());
+        Runnable refreshTotal = () -> {
+            long total = imported.length();
+            for (File f : scripts.getItems()) total += f.length();
+            totalLbl.setText(QTraceI18n.f("import.context.total", ByteSize.format(total), scripts.getItems().size()));
+        };
+        scripts.getItems().addListener((javafx.collections.ListChangeListener<File>) c -> refreshTotal.run());
+        refreshTotal.run();
+
+        VBox body = new VBox(6, intro, fieldLbl, context, scriptsLbl, scriptsHint, scripts, new HBox(8, add, remove), totalLbl);
         body.setPadding(new Insets(14, 20, 8, 20));
         body.setPrefWidth(460);
         DialogLook.apply(dialog, QTraceI18n.t("import.context.title"),
