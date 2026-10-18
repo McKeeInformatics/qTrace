@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CertificateCheckTest {
 
     private static final Path FIXTURE =
-        Path.of("..", "tools", "qtrace-verify", "tests", "fixtures", "cert-v1.1.qtcert");
+        Path.of("..", "tools", "cert-vectors", "certificates", "cert-v1.1.qtcert");
 
     @TempDir Path exportDir;
     private Path certPath, chainLog;
