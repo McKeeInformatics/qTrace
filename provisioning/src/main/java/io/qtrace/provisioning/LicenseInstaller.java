@@ -23,10 +23,11 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import io.qtrace.SecretFiles;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 /**
  * Writes the .qtlicense received through "Sign in" — the same JSON envelope
@@ -50,11 +51,11 @@ public final class LicenseInstaller {
         if (!env.has("jwt") || env.get("jwt").getAsString().isBlank())
             throw new IllegalArgumentException("License envelope without jwt");
 
-        Files.createDirectories(qtraceDir);
+        SecretFiles.ensurePrivateDir(qtraceDir);
         Path target = qtraceDir.resolve(FILE);
         if (Files.exists(target))
-            Files.copy(target, qtraceDir.resolve(FILE + ".bak"), StandardCopyOption.REPLACE_EXISTING);
-        Files.writeString(target, new GsonBuilder().setPrettyPrinting().create().toJson(env));
+            SecretFiles.copy(target, qtraceDir.resolve(FILE + ".bak"));
+        SecretFiles.write(target, new GsonBuilder().setPrettyPrinting().create().toJson(env));
         return target;
     }
 }

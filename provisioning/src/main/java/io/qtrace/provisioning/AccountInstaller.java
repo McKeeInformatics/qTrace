@@ -22,11 +22,11 @@ package io.qtrace.provisioning;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import io.qtrace.Account;
+import io.qtrace.SecretFiles;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 /**
  * Writes the account token received through "Sign in" for a basic account (no identity
@@ -43,11 +43,11 @@ public final class AccountInstaller {
         JsonObject env = new JsonObject();
         env.addProperty("jwt", jwt.strip());
 
-        Files.createDirectories(qtraceDir);
+        SecretFiles.ensurePrivateDir(qtraceDir);
         Path target = qtraceDir.resolve(Account.FILE);
         if (Files.exists(target))
-            Files.copy(target, qtraceDir.resolve(Account.FILE + ".bak"), StandardCopyOption.REPLACE_EXISTING);
-        Files.writeString(target, new GsonBuilder().setPrettyPrinting().create().toJson(env));
+            SecretFiles.copy(target, qtraceDir.resolve(Account.FILE + ".bak"));
+        SecretFiles.write(target, new GsonBuilder().setPrettyPrinting().create().toJson(env));
         return target;
     }
 }

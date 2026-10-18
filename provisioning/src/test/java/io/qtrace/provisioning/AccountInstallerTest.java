@@ -2,6 +2,9 @@ package io.qtrace.provisioning;
 
 import io.qtrace.Account;
 import org.junit.jupiter.api.Test;
+import java.nio.file.attribute.PosixFilePermissions;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
@@ -40,5 +43,15 @@ class AccountInstallerTest {
         AccountInstaller.write("new.new.new", home);
         assertEquals("new.new.new", Account.jwt(home));
         assertTrue(Files.readString(home.resolve("qtrace.qtaccount.bak")).contains("old.old.old"));
+    }
+
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void theTokenAndItsBackupAreReadableByTheirOwnerOnly() throws Exception {
+        Path dir = home.resolve(".qTrace");
+        AccountInstaller.write("old.old.old", dir);
+        AccountInstaller.write("new.new.new", dir);
+        assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(dir.resolve("qtrace.qtaccount"))));
+        assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(dir.resolve("qtrace.qtaccount.bak"))));
     }
 }

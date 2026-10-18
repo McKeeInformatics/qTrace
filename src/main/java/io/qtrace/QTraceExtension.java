@@ -68,6 +68,9 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         if (installed) return;
         installed = true;
 
+        // Files written by earlier versions were readable by every user of the machine.
+        SecretFiles.tightenAll(Account.defaultDir());
+
         // Best-effort cleanup of superseded JARs left by a previous auto-update — only for a
         // direct install; under the qTrace loader, the loader keeps/cleans module versions.
         if (!QTraceUpdater.loaderMode()) {
