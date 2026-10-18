@@ -119,6 +119,33 @@ class CertificateCheckTest {
     }
 
     @Test
+    void unknownCertificateFormatAsksForAnUpdateNotAnInvalidSignature() throws Exception {
+        // A certificate newer than this Core, file, chain line and .qtrace reference all consistent.
+        JsonObject cert = JsonParser.parseString(Files.readString(certPath)).getAsJsonObject();
+        cert.addProperty("qtcert_version", "1.2");
+        Files.writeString(certPath, cert.toString());
+        String sha = Hashing.sha256Hex(certPath);
+        Files.writeString(chainLog, "{\"chain_position\":1,\"certificate_id\":\"" + certId
+            + "\",\"certificate_sha256\":\"" + sha + "\",\"parent_sha256\":null}\n");
+        root.getAsJsonArray("sessions").get(0).getAsJsonObject().getAsJsonArray("external_files")
+            .get(0).getAsJsonObject().addProperty("sha256", sha);
+        List<Finding> f = check();
+        assertEquals(1, f.size(), f.toString());
+        assertTrue(f.get(0).subject().endsWith(" format"), f.toString());
+        assertEquals("unsupported (qtcert_version \"1.2\") - update qTrace to check it", f.get(0).current());
+    }
+
+    @Test
+    void versionThatIsNotAStringIsUnsupportedAndNeverThrows() {
+        JsonObject cert = new JsonObject();
+        cert.add("qtcert_version", new JsonObject());
+        assertEquals(CertificateCheck.Format.UNSUPPORTED, CertificateCheck.format(cert));
+        assertEquals(CertificateCheck.Verdict.UNSUPPORTED, CertificateCheck.verify(cert));
+        JsonObject odd = JsonParser.parseString("{\"validator\":{\"validator_id\":{}},\"signature\":[1]}").getAsJsonObject();
+        assertEquals(CertificateCheck.Verdict.INVALID, CertificateCheck.verify(odd));
+    }
+
+    @Test
     void traceWithoutCertificateReferenceIsNotChecked() {
         root.getAsJsonArray("sessions").get(0).getAsJsonObject().remove("external_files");
         assertEquals(List.of(), check());
