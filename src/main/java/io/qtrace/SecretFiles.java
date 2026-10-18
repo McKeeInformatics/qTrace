@@ -43,7 +43,7 @@ import java.util.Set;
 
 /**
  * Writes the files that hold a bearer secret (the identity certificate, an account token, the
- * signing key) so that only their owner can read them: whoever copies a {@code .qtlicense} can
+ * signing key, the proxy password) so that only their owner can read them: whoever copies a {@code .qtlicense} can
  * upload in the holder's name for a year.
  *
  * <ul>
@@ -65,7 +65,8 @@ public final class SecretFiles {
     public static final List<String> NAMES = List.of(
         "qtrace.qtlicense", "qtrace.qtlicense.bak",
         "qtrace.qtaccount", "qtrace.qtaccount.bak",
-        "qtrace-signing.key");
+        "qtrace-signing.key",
+        "qtrace-proxy.secret"); // the proxy password of Settings › Network (io.qtrace.net)
 
     private static final Set<PosixFilePermission> FILE_MODE = PosixFilePermissions.fromString("rw-------");
     private static final Set<PosixFilePermission> DIR_MODE  = PosixFilePermissions.fromString("rwx------");

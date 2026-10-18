@@ -112,6 +112,15 @@ public class QTraceConfig {
     private Integer snapshotLargeIntervalSec;
     private Boolean snapshotLargeKeyStepsOnly;
 
+    // Network (Settings › Network) - see io.qtrace.net. The proxy password is never stored here:
+    // it lives in ~/.qTrace/qtrace-proxy.secret, readable by its owner only (SecretFiles).
+    private String  networkProxyMode;          // "system" (null) | "none" | "manual"
+    private String  networkProxyHost;
+    private Integer networkProxyPort;
+    private String  networkProxyUser;
+    private Boolean networkTrustSystemStore;   // null = yes
+    private String  networkInstitutionCa;      // qTrace's own copy of the root certificate IT gave
+
     private QTraceConfig() {}
 
     public static QTraceConfig get() {
@@ -369,6 +378,21 @@ public class QTraceConfig {
             intervalSec != null ? intervalSec : io.qtrace.draft.SnapshotPolicy.DEFAULT_INTERVAL_S,
             Boolean.TRUE.equals(keyStepsOnly));
     }
+
+    // ── Network ──────────────────────────────────────────────────────────────
+
+    public String  getNetworkProxyMode()              { return io.qtrace.net.NetworkSettings.ProxyMode.parse(networkProxyMode).id(); }
+    public void    setNetworkProxyMode(String m)      { this.networkProxyMode = io.qtrace.net.NetworkSettings.ProxyMode.parse(m).id(); }
+    public String  getNetworkProxyHost()              { return networkProxyHost != null ? networkProxyHost : ""; }
+    public void    setNetworkProxyHost(String h)      { this.networkProxyHost = blank(h); }
+    public int     getNetworkProxyPort()              { return networkProxyPort != null ? networkProxyPort : 0; }
+    public void    setNetworkProxyPort(int p)         { this.networkProxyPort = p > 0 ? p : null; }
+    public String  getNetworkProxyUser()              { return networkProxyUser != null ? networkProxyUser : ""; }
+    public void    setNetworkProxyUser(String u)      { this.networkProxyUser = blank(u); }
+    public boolean isNetworkTrustSystemStore()        { return networkTrustSystemStore == null || networkTrustSystemStore; }
+    public void    setNetworkTrustSystemStore(boolean b) { this.networkTrustSystemStore = b; }
+    public String  getNetworkInstitutionCa()          { return networkInstitutionCa != null ? networkInstitutionCa : ""; }
+    public void    setNetworkInstitutionCa(String p)  { this.networkInstitutionCa = blank(p); }
 
     // ── Raw string getters (for the dialog text fields) ───────────────────────
 
