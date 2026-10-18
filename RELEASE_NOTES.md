@@ -1,3 +1,11 @@
+## What's new in v1.2.10
+
+### Security — Your licence and account files are readable by you alone
+The files that hold your licence, your qtrace.ca sign-in and your signing key are now created readable and writable by your own user account only, in a folder that only you can open (on Windows, through the file's access rights). They are written in one step, so an interrupted write can no longer leave a half-written file. Files left by an earlier version are tightened the next time QuPath starts.
+
+### Changed — A certificate from a newer qTrace asks for an update
+A certificate in a format this version does not know is no longer reported as having an invalid signature. The **🔍 Why?** window says the format is not supported and asks you to update qTrace.
+
 ## What's new in v1.2.9
 
 ### New — Import asks for the context of the file
