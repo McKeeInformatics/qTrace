@@ -19,6 +19,7 @@
 
 package io.qtrace.provisioning;
 
+import io.qtrace.net.QTraceHttp;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.URI;
@@ -40,7 +41,7 @@ final class DownloadProgress {
      * at most once per percent. Same headers as {@code QTraceUpdater.httpGetBytes}.
      */
     static byte[] get(String url, String bearer, DoubleConsumer fraction) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
+        HttpClient client = QTraceHttp.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             // NORMAL, not ALWAYS: never follow an https → http downgrade with a bearer attached.
             .followRedirects(HttpClient.Redirect.NORMAL).build();

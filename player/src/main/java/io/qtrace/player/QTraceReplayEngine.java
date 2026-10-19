@@ -19,6 +19,7 @@
 
 package io.qtrace.player;
 
+import io.qtrace.net.QTraceHttp;
 import io.qtrace.QTraceController;
 import io.qtrace.QTraceUpdater;
 import io.qtrace.StampIntegrity;
@@ -794,7 +795,7 @@ public class QTraceReplayEngine {
      * a signed storage URL, and the licence presented to qtrace.ca must not travel there.
      */
     private static String fetchUrl(String url, int redirectsLeft) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder()
+        HttpClient client = QTraceHttp.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
@@ -820,9 +821,9 @@ public class QTraceReplayEngine {
     }
 
     private static HttpClient newClient() {
-        return HttpClient.newBuilder()
+        return QTraceHttp.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(java.net.http.HttpClient.Redirect.ALWAYS)
+            .followRedirects(java.net.http.HttpClient.Redirect.NORMAL) // never an https → http downgrade
             .build();
     }
 

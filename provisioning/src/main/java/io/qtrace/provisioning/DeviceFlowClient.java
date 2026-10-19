@@ -19,6 +19,7 @@
 
 package io.qtrace.provisioning;
 
+import io.qtrace.net.QTraceHttp;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -64,7 +65,7 @@ public final class DeviceFlowClient {
 
     private final String server;
     private final Sleeper sleeper;
-    private final HttpClient http = HttpClient.newBuilder()
+    private final HttpClient http = QTraceHttp.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
         .followRedirects(HttpClient.Redirect.NORMAL).build();
 

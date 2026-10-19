@@ -19,6 +19,7 @@
 
 package io.qtrace.provisioning;
 
+import io.qtrace.net.QTraceHttp;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.qtrace.Account;
@@ -127,7 +128,7 @@ final class CertificateArrival {
                 .header("Authorization", "Bearer " + accountJwt)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{}", StandardCharsets.UTF_8)).build();
-            HttpResponse<String> r = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
+            HttpResponse<String> r = QTraceHttp.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
                 .send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             return r.statusCode() == 200 ? r.body() : null;
         } catch (InterruptedException e) {

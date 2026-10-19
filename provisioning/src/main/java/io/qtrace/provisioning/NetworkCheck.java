@@ -19,6 +19,7 @@
 
 package io.qtrace.provisioning;
 
+import io.qtrace.net.QTraceHttp;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -39,7 +40,7 @@ public final class NetworkCheck {
 
     /** Names (keys of {@code targets}) that could not be reached. */
     public static List<String> unreachable(Map<String, String> targets) {
-        HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
+        HttpClient http = QTraceHttp.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
         List<String> out = new ArrayList<>();
         targets.forEach((name, url) -> {
             try {
