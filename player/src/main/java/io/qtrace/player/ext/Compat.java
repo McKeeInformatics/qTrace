@@ -20,15 +20,15 @@
 package io.qtrace.player.ext;
 
 public enum Compat {
-    FULL("🟢 Full", "#a6e3a1",
+    FULL("🟢 Full", "-qt-green",
         "Steps are fully captured and embedded in the replay script.\n" +
         "Replay executes identically on a new machine — no manual intervention required."),
-    PARTIAL("🟡 Partial", "#f9e2af",
+    PARTIAL("🟡 Partial", "-qt-yellow",
         "Steps are captured and embedded in the replay script.\n" +
         "External resources (model files, servers, credentials) must be present.\n" +
         "qTrace pre-flight dialog flags missing requirements.\n" +
         "One-time setup on the replay machine is needed."),
-    NOT_SCRIPTABLE("🔴 Not scriptable", "#f38ba8",
+    NOT_SCRIPTABLE("🔴 Not scriptable", "-qt-red",
         "Extension is purely interactive — no WorkflowStep events are emitted.\n" +
         "qTrace cannot capture mouse clicks or brush strokes.\n" +
         "Manual re-annotation required on the replay machine.");

@@ -1029,11 +1029,11 @@ public class ActionLogger implements WorkflowListener {
         dlg.setResizable(false);
 
         Label headLbl = new Label(heading);
-        headLbl.setTextFill(Color.web("#cdd6f4"));
+        Theme.text(headLbl, "-qt-text-main");
         headLbl.setFont(Font.font("System", FontWeight.BOLD, 13));
 
         Label promptLbl = new Label("Note (optional) — e.g. \"merged artifact, two clearly distinct nuclei\"");
-        promptLbl.setTextFill(Color.web("#a6adc8"));
+        Theme.text(promptLbl, "-qt-text-sub");
         promptLbl.setFont(Font.font("System", 11));
         promptLbl.setWrapText(true);
 
@@ -1041,10 +1041,10 @@ public class ActionLogger implements WorkflowListener {
         noteFld.setPromptText("Add a justification…");
         noteFld.setPrefWidth(380);
         noteFld.setStyle(
-            "-fx-background-color: #181825;"
-          + "-fx-text-fill: #cdd6f4;"
-          + "-fx-prompt-text-fill: #6c7086;"
-          + "-fx-border-color: #313244;"
+            "-fx-background-color: -qt-bg-surface;"
+          + "-fx-text-fill: -qt-text-main;"
+          + "-fx-prompt-text-fill: -qt-text-muted;"
+          + "-fx-border-color: -qt-border;"
           + "-fx-border-radius: 4;"
           + "-fx-background-radius: 4;"
         );
@@ -1053,15 +1053,15 @@ public class ActionLogger implements WorkflowListener {
         btnSave.setFont(Font.font("System", FontWeight.BOLD, 12));
         btnSave.setPadding(new Insets(5, 16, 5, 16));
         btnSave.setStyle(
-            "-fx-background-color: #89b4fa;"
-          + "-fx-text-fill: #1e1e2e;"
+            "-fx-background-color: -qt-blue;"
+          + "-fx-text-fill: -qt-bg-base;"
           + "-fx-background-radius: 6;"
           + "-fx-cursor: hand;"
         );
 
         Button btnSkip = new Button("Skip");
         btnSkip.setFont(Font.font("System", 12));
-        btnSkip.setTextFill(Color.web("#a6adc8"));
+        Theme.text(btnSkip, "-qt-text-sub");
         btnSkip.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: transparent;");
 
         HBox btnRow = new HBox(8, btnSkip, btnSave);
@@ -1069,7 +1069,7 @@ public class ActionLogger implements WorkflowListener {
 
         VBox root = new VBox(10, headLbl, promptLbl, noteFld, btnRow);
         root.setPadding(new Insets(20));
-        root.setStyle("-fx-background-color: #1e1e2e;");
+        root.setStyle("-fx-background-color: -qt-bg-base;");
         root.setPrefWidth(420);
 
         btnSave.setOnAction(e -> { dlg.close(); onDone.accept(noteFld.getText().strip()); });
@@ -2455,14 +2455,14 @@ public class ActionLogger implements WorkflowListener {
         dlg.setResizable(true);
 
         Label headLbl = new Label("Confirm images used to train \"" + classifierName + "\"");
-        headLbl.setTextFill(Color.web("#cdd6f4"));
+        Theme.text(headLbl, "-qt-text-main");
         headLbl.setFont(Font.font("System", FontWeight.BOLD, 13));
 
         Label promptLbl = new Label(
             "qTrace found annotations in other project images. Confirm every image that "
           + "contributed to this classifier's training set — an incomplete list makes the "
           + "provenance record inaccurate. Pre-checked boxes are only a suggestion.");
-        promptLbl.setTextFill(Color.web("#a6adc8"));
+        Theme.text(promptLbl, "-qt-text-sub");
         promptLbl.setFont(Font.font("System", 11));
         promptLbl.setWrapText(true);
         promptLbl.setMaxWidth(420);
@@ -2476,7 +2476,7 @@ public class ActionLogger implements WorkflowListener {
         CheckBox currentCb = new CheckBox(currentImageName + "  (active image — certain)");
         currentCb.setSelected(true);
         currentCb.setDisable(true);
-        currentCb.setStyle("-fx-text-fill: #a6e3a1; -fx-font-size: 11;");
+        currentCb.setStyle("-fx-text-fill: -qt-green; -fx-font-size: 11;");
         listBox.getChildren().add(currentCb);
 
         for (ProjectImageEntry<BufferedImage> entry : entries) {
@@ -2485,7 +2485,7 @@ public class ActionLogger implements WorkflowListener {
             boolean isCandidate = candidateNames.contains(imgName);
             CheckBox cb = new CheckBox(imgName + (isCandidate ? "  (matching annotations found)" : ""));
             cb.setSelected(isCandidate);
-            cb.setStyle("-fx-text-fill:" + (isCandidate ? "#f9e2af" : "#a6adc8") + "; -fx-font-size: 11;");
+            cb.setStyle("-fx-text-fill:" + (isCandidate ? "-qt-yellow" : "-qt-text-sub") + "; -fx-font-size: 11;");
             checkboxes.put(imgName, cb);
             listBox.getChildren().add(cb);
         }
@@ -2493,18 +2493,18 @@ public class ActionLogger implements WorkflowListener {
         ScrollPane scroll = new ScrollPane(listBox);
         scroll.setFitToWidth(true);
         VBox.setVgrow(scroll, Priority.ALWAYS);
-        scroll.setStyle("-fx-background: #181825; -fx-background-color: #181825;");
+        scroll.setStyle("-fx-background: -qt-bg-surface; -fx-background-color: -qt-bg-surface;");
 
         Button btnSelectAll = new Button("Select All");
         btnSelectAll.setFont(Font.font("System", 11));
-        btnSelectAll.setTextFill(Color.web("#a6adc8"));
-        btnSelectAll.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: #313244; -fx-border-radius: 4;");
+        Theme.text(btnSelectAll, "-qt-text-sub");
+        btnSelectAll.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: -qt-border; -fx-border-radius: 4;");
         btnSelectAll.setOnAction(e -> checkboxes.values().forEach(cb -> cb.setSelected(true)));
 
         Button btnUnselectAll = new Button("Unselect All");
         btnUnselectAll.setFont(Font.font("System", 11));
-        btnUnselectAll.setTextFill(Color.web("#a6adc8"));
-        btnUnselectAll.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: #313244; -fx-border-radius: 4;");
+        Theme.text(btnUnselectAll, "-qt-text-sub");
+        btnUnselectAll.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: -qt-border; -fx-border-radius: 4;");
         btnUnselectAll.setOnAction(e -> checkboxes.values().forEach(cb -> cb.setSelected(false)));
 
         HBox selectRow = new HBox(8, btnSelectAll, btnUnselectAll);
@@ -2514,11 +2514,11 @@ public class ActionLogger implements WorkflowListener {
         filterFld.setPromptText("Filter image names…");
         filterFld.setFont(Font.font("System", 11));
         filterFld.setStyle(
-            "-fx-background-color: #181825;"
-          + "-fx-text-fill: #cdd6f4;"
-          + "-fx-prompt-text-fill: #6c7086;"
+            "-fx-background-color: -qt-bg-surface;"
+          + "-fx-text-fill: -qt-text-main;"
+          + "-fx-prompt-text-fill: -qt-text-muted;"
           + "-fx-background-radius: 4;"
-          + "-fx-border-color: #313244;"
+          + "-fx-border-color: -qt-border;"
           + "-fx-border-radius: 4;"
         );
         filterFld.textProperty().addListener((obs, oldVal, newVal) -> {
@@ -2532,8 +2532,8 @@ public class ActionLogger implements WorkflowListener {
 
         Button btnImportList = new Button("Import list");
         btnImportList.setFont(Font.font("System", 11));
-        btnImportList.setTextFill(Color.web("#a6adc8"));
-        btnImportList.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: #313244; -fx-border-radius: 4;");
+        Theme.text(btnImportList, "-qt-text-sub");
+        btnImportList.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-border-color: -qt-border; -fx-border-radius: 4;");
         btnImportList.setOnAction(e -> {
             javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
             fc.setTitle("Import training image list (CSV)");
@@ -2585,8 +2585,8 @@ public class ActionLogger implements WorkflowListener {
         btnConfirm.setFont(Font.font("System", FontWeight.BOLD, 12));
         btnConfirm.setPadding(new Insets(5, 16, 5, 16));
         btnConfirm.setStyle(
-            "-fx-background-color: #89b4fa;"
-          + "-fx-text-fill: #1e1e2e;"
+            "-fx-background-color: -qt-blue;"
+          + "-fx-text-fill: -qt-bg-base;"
           + "-fx-background-radius: 6;"
           + "-fx-cursor: hand;"
         );
@@ -2596,7 +2596,7 @@ public class ActionLogger implements WorkflowListener {
 
         VBox root = new VBox(10, headLbl, promptLbl, selectRow, filterRow, scroll, btnRow);
         root.setPadding(new Insets(20));
-        root.setStyle("-fx-background-color: #1e1e2e;");
+        root.setStyle("-fx-background-color: -qt-bg-base;");
         root.setPrefWidth(460);
         root.setPrefHeight(480);
 

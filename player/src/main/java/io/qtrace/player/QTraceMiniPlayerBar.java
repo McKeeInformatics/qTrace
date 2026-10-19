@@ -19,6 +19,7 @@
 
 package io.qtrace.player;
 
+import io.qtrace.Theme;
 import io.qtrace.ActionLogger;
 import io.qtrace.ViewerOverlay;
 import io.qtrace.player.ext.Compat;
@@ -59,14 +60,14 @@ import qupath.lib.gui.QuPathGUI;
  */
 final class QTraceMiniPlayerBar {
 
-    private static final String BG       = "#1e1e2e";
-    private static final String BORDER   = "#313244";
-    private static final String TEXT     = "#cdd6f4";
-    private static final String TEXT_SUB = "#a6adc8";
-    private static final String MUTED    = "#6c7086";
-    private static final String BLUE     = "#89b4fa";
-    private static final String GREEN    = "#a6e3a1";
-    private static final String RED      = "#f38ba8";
+    private static final String BG       = "-qt-bg-base";
+    private static final String BORDER   = "-qt-border";
+    private static final String TEXT     = "-qt-text-main";
+    private static final String TEXT_SUB = "-qt-text-sub";
+    private static final String MUTED    = "-qt-text-muted";
+    private static final String BLUE     = "-qt-blue";
+    private static final String GREEN    = "-qt-green";
+    private static final String RED      = "-qt-red";
 
     private static final double MIN_WIDTH = 360;  // below this the controls no longer fit on one line
     private static final double EDGE = 6;         // px from the left/right border that resize the pill
@@ -298,7 +299,7 @@ final class QTraceMiniPlayerBar {
 
         Label handle = new Label("⠿");
         handle.setFont(Font.font("System", 16));
-        handle.setTextFill(Color.web(MUTED));
+        Theme.text(handle, MUTED);
         handle.setCursor(javafx.scene.Cursor.MOVE);
         handle.setTooltip(new Tooltip("Drag to move the player"));
         handle.setOnMousePressed(this::startDrag);
@@ -333,7 +334,7 @@ final class QTraceMiniPlayerBar {
         box.setPrefWidth(pillWidth);
         box.setMaxWidth(pillWidth);
         installEdgeResize(box);
-        box.setStyle("-fx-background-color: rgba(30,30,46,0.94); -fx-background-radius: 10;"
+        box.setStyle("-fx-background-color: -qt-glass94; -fx-background-radius: 10;"
             + "-fx-border-color: " + BORDER + "; -fx-border-radius: 10;"
             + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.45), 12, 0, 0, 3);");
         return box;
@@ -362,7 +363,7 @@ final class QTraceMiniPlayerBar {
         Compat compat = player.compatOverall();
         compatDot.setVisible(compat != null);
         if (compat != null) {
-            compatDot.setTextFill(Color.web(compat.color));
+            Theme.text(compatDot, compat.color);
             Tooltip.install(compatDot, new Tooltip(compat.label + " — click for details"));
         }
 
@@ -371,12 +372,12 @@ final class QTraceMiniPlayerBar {
         boolean loading = st.phase() == MiniPlayerStatus.Phase.LOADING;
         spinner.setVisible(loading);
         spinner.setManaged(loading);
-        statusLabel.setTextFill(Color.web(switch (st.phase()) {
+        Theme.text(statusLabel, switch (st.phase()) {
             case DONE, READY -> GREEN;
             case FAILED, LOAD_ERROR -> RED;
             case RUNNING, LOADING -> BLUE;
             default -> TEXT_SUB;
-        }));
+        });
         statusLabel.setFont(Font.font("System",
             st.phase() == MiniPlayerStatus.Phase.DONE ? FontWeight.BOLD : FontWeight.NORMAL, 11));
     }
@@ -405,7 +406,7 @@ final class QTraceMiniPlayerBar {
 
     private void showPopup(javafx.scene.Node anchor, String text) {
         Label label = new Label(text);
-        label.setTextFill(Color.web(TEXT));
+        Theme.text(label, TEXT);
         label.setFont(Font.font("System", 11));
         showAbove(popupWith(label), anchor);
     }
@@ -448,7 +449,7 @@ final class QTraceMiniPlayerBar {
         // -fx-text-base-color / -fx-mark-color: QuPath's modena styles a MenuButton's label and
         // arrow from these looked-up colours, not from -fx-text-fill — without them "Open" and
         // "Current" rendered grey-on-dark, nearly invisible.
-        c.setStyle("-fx-background-color: #181825; -fx-text-fill: " + TEXT + "; -fx-text-base-color: " + TEXT + ";"
+        c.setStyle("-fx-background-color: -qt-bg-surface; -fx-text-fill: " + TEXT + "; -fx-text-base-color: " + TEXT + ";"
             + "-fx-mark-color: " + TEXT_SUB + "; -fx-border-color: " + BORDER + ";"
             + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 2 7 2 7;");
     }
@@ -467,7 +468,7 @@ final class QTraceMiniPlayerBar {
     }
 
     private static final String POPUP_STYLE =
-        "-fx-background-color: #181825; -fx-border-color: " + BORDER + "; -fx-border-radius: 4;"
+        "-fx-background-color: -qt-bg-surface; -fx-border-color: " + BORDER + "; -fx-border-radius: 4;"
       + "-fx-background-radius: 4; -fx-padding: 4 0 4 0; -fx-text-base-color: " + TEXT + ";"
       // the hovered entry: a lighter band, same light text
       + "-fx-selection-bar: " + BORDER + "; -fx-focused-text-base-color: " + TEXT + ";";

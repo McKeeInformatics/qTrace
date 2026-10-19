@@ -48,16 +48,16 @@ import java.nio.file.Path;
 public class QTraceSettingsDialog {
 
     // Catppuccin Mocha — matches QTracePanel
-    static final String BG_BASE    = "#1e1e2e";
-    static final String BG_SURFACE = "#181825";
-    static final String BORDER     = "#313244";
-    static final String TEXT_MAIN  = "#cdd6f4";
-    static final String TEXT_SUB   = "#a6adc8";
-    static final String TEXT_MUTED = "#6c7086";
-    static final String BLUE       = "#89b4fa";
-    static final String GREEN      = "#a6e3a1";
-    static final String ORANGE     = "#fab387";
-    static final String RED        = "#f38ba8";
+    static final String BG_BASE    = "-qt-bg-base";
+    static final String BG_SURFACE = "-qt-bg-surface";
+    static final String BORDER     = "-qt-border";
+    static final String TEXT_MAIN  = "-qt-text-main";
+    static final String TEXT_SUB   = "-qt-text-sub";
+    static final String TEXT_MUTED = "-qt-text-muted";
+    static final String BLUE       = "-qt-blue";
+    static final String GREEN      = "-qt-green";
+    static final String ORANGE     = "-qt-peach";
+    static final String RED        = "-qt-red";
     private static final String PORTAL_URL = "https://qtrace.ca/portal";
 
     public static void show(Stage owner) { show(owner, (Project<?>) null); }
@@ -112,7 +112,7 @@ public class QTraceSettingsDialog {
         // Hint
         Label hint = new Label("Leave blank to use default: " + QTraceConfig.defaultDirString()
             + "  (replay logs default to ~/.qTrace/replay-logs/, workflows to a \"workflows\" folder beside the traces)");
-        hint.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(hint, TEXT_MUTED);
         hint.setFont(Font.font("System", 10));
         hint.setWrapText(true);
         hint.setMaxWidth(440);
@@ -120,14 +120,14 @@ public class QTraceSettingsDialog {
         // ── Project Folder mode — overrides all paths above with <project>/qTrace/ ──────────
         CheckBox chkProjectFolder = new CheckBox("Use Project Folder");
         chkProjectFolder.setSelected(cfg.isUseProjectFolder());
-        chkProjectFolder.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkProjectFolder, TEXT_SUB);
 
         Label projectFolderHint = new Label(
             "When enabled (default), qTrace stores its output under <project folder>/qTrace/ — "
           + "with trace/, geoJson/, logs/ and gitTrack/ subfolders, created automatically on Save "
           + "or on Stamp — instead of the paths below, which become read-only. Falls back to the "
           + "paths below when no QuPath project is open.");
-        projectFolderHint.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(projectFolderHint, TEXT_MUTED);
         projectFolderHint.setFont(Font.font("System", 10));
         projectFolderHint.setWrapText(true);
         projectFolderHint.setMaxWidth(440);
@@ -206,13 +206,13 @@ public class QTraceSettingsDialog {
         validatorGrid.getColumnConstraints().addAll(labelCol, fieldCol);
 
         Label validatorLbl = new Label("Validator's name");
-        validatorLbl.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(validatorLbl, TEXT_SUB);
         validatorLbl.setFont(Font.font("System", FontWeight.NORMAL, 12));
         validatorGrid.add(validatorLbl, 0, 0);
         validatorGrid.add(tfValidator,  1, 0);
 
         Label emailLbl = new Label("Account email");
-        emailLbl.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(emailLbl, TEXT_SUB);
         emailLbl.setFont(Font.font("System", FontWeight.NORMAL, 12));
         TextField tfEmail = new TextField();
         tfEmail.setPromptText("—");
@@ -292,7 +292,7 @@ public class QTraceSettingsDialog {
         licenseGrid.getColumnConstraints().addAll(lcLabelCol, lcFieldCol, lcBtn1Col, lcBtn2Col);
 
         Label licenseLbl = new Label("Certificate file (.qtlicense)");
-        licenseLbl.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(licenseLbl, TEXT_SUB);
         licenseLbl.setFont(Font.font("System", FontWeight.NORMAL, 12));
         licenseGrid.add(licenseLbl,      0, 0);
         licenseGrid.add(tfLicense,       1, 0);
@@ -304,7 +304,7 @@ public class QTraceSettingsDialog {
         CheckBox chkDetectionNote = new CheckBox(
             "Prompt for a note when detections or annotations are manually deleted (or detections split)");
         chkDetectionNote.setSelected(cfg.isPromptDetectionNote());
-        chkDetectionNote.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkDetectionNote, TEXT_SUB);
         chkDetectionNote.setWrapText(true);
         chkDetectionNote.setTooltip(hintTooltip(
             "When disabled, corrections are logged silently with no note prompt. "
@@ -313,7 +313,7 @@ public class QTraceSettingsDialog {
         CheckBox chkUnstampedReminder = new CheckBox(
             "Prompt for a note if modifications not stamped has been detected when you are closing an image");
         chkUnstampedReminder.setSelected(cfg.isPromptUnstampedReminder());
-        chkUnstampedReminder.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkUnstampedReminder, TEXT_SUB);
         chkUnstampedReminder.setWrapText(true);
         chkUnstampedReminder.setTooltip(hintTooltip(
             "When disabled, closing or switching away from an image with unstamped modifications "
@@ -321,48 +321,67 @@ public class QTraceSettingsDialog {
 
         CheckBox chkHideSkipped = new CheckBox(QTraceI18n.t("settings.replay.hideskipped"));
         chkHideSkipped.setSelected(cfg.isHideSkippedReplaySteps());
-        chkHideSkipped.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkHideSkipped, TEXT_SUB);
         chkHideSkipped.setWrapText(true);
         chkHideSkipped.setTooltip(hintTooltip(QTraceI18n.t("settings.replay.hideskipped.hint")));
 
         CheckBox chkAutosave = new CheckBox(QTraceI18n.t("settings.autosave"));
         chkAutosave.setSelected(cfg.isAutosaveEnabled());
-        chkAutosave.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkAutosave, TEXT_SUB);
         chkAutosave.setWrapText(true);
         chkAutosave.setTooltip(hintTooltip(QTraceI18n.t("settings.autosave.hint")));
 
         CheckBox chkPanelAtStartup = new CheckBox(QTraceI18n.t("settings.panel.startup"));
         chkPanelAtStartup.setId("panel-startup-checkbox"); // looked up by the screenshot harness
         chkPanelAtStartup.setSelected(cfg.isShowPanelAtStartup());
-        chkPanelAtStartup.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkPanelAtStartup, TEXT_SUB);
         chkPanelAtStartup.setWrapText(true);
         chkPanelAtStartup.setTooltip(hintTooltip(QTraceI18n.t("settings.panel.startup.hint")));
 
         CheckBox chkModuleNews = new CheckBox(QTraceI18n.t("settings.modulenews.startup"));
         chkModuleNews.setId("module-news-checkbox"); // looked up by the screenshot harness
         chkModuleNews.setSelected(cfg.isShowModuleNewsAtStartup());
-        chkModuleNews.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkModuleNews, TEXT_SUB);
         chkModuleNews.setWrapText(true);
         chkModuleNews.setTooltip(hintTooltip(QTraceI18n.t("settings.modulenews.startup.hint")));
+
+        // ── Theme (Dark / Light / Auto) ─────────────────────────────────────────
+        Label themeHelp = new Label(QTraceI18n.t("settings.theme.help"));
+        Theme.text(themeHelp, TEXT_SUB);
+        themeHelp.setFont(Font.font("System", 11));
+        themeHelp.setWrapText(true);
+        ToggleGroup themeGroup = new ToggleGroup();
+        String[] themeModes = {"dark", "light", "auto"};
+        RadioButton[] themeButtons = new RadioButton[themeModes.length];
+        for (int i = 0; i < themeModes.length; i++) {
+            RadioButton rb = new RadioButton(QTraceI18n.t("settings.theme." + themeModes[i]));
+            rb.setId("theme-" + themeModes[i]); // looked up by the screenshot harness
+            rb.setToggleGroup(themeGroup);
+            Theme.text(rb, TEXT_SUB);
+            rb.setWrapText(true);
+            rb.setTooltip(hintTooltip(QTraceI18n.t("settings.theme." + themeModes[i] + ".hint")));
+            rb.setSelected(themeModes[i].equals(cfg.getTheme()));
+            themeButtons[i] = rb;
+        }
 
         // ── Security (activity report) — folded into Preferences ────────────────
         CheckBox chkReportConfirm = new CheckBox(QTraceI18n.t("settings.security.confirm"));
         chkReportConfirm.setSelected(cfg.isReportConfirmBeforeSend());
-        chkReportConfirm.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkReportConfirm, TEXT_SUB);
         chkReportConfirm.setWrapText(true);
         chkReportConfirm.setTooltip(hintTooltip(QTraceI18n.t("settings.security.confirm.hint")));
 
         CheckBox chkPseudonymize = new CheckBox(QTraceI18n.t("settings.security.pseudonymize"));
         chkPseudonymize.setDisable(true);   // shown now, implemented later
-        chkPseudonymize.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(chkPseudonymize, TEXT_MUTED);
         Label pseudoSoon = new Label(QTraceI18n.t("report.confirm.soon"));
-        pseudoSoon.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(pseudoSoon, TEXT_MUTED);
         pseudoSoon.setFont(Font.font("System", 10));
         HBox pseudoRow = new HBox(8, chkPseudonymize, pseudoSoon);
         pseudoRow.setAlignment(Pos.CENTER_LEFT);
 
         Label langLabel = new Label(QTraceI18n.t("settings.security.language"));
-        langLabel.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(langLabel, TEXT_SUB);
         langLabel.setFont(Font.font("System", FontWeight.NORMAL, 12));
         ComboBox<String> langBox = new ComboBox<>();
         for (String[] l : ReportLanguages.LANGS) langBox.getItems().add(l[0]);
@@ -376,7 +395,7 @@ public class QTraceSettingsDialog {
 
         // ── Upload: the Player's execution logs sent with a record ──────────────
         Label upLogsHelp = new Label(QTraceI18n.t("settings.uploadlogs.help"));
-        upLogsHelp.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(upLogsHelp, TEXT_SUB);
         upLogsHelp.setFont(Font.font("System", 11));
         upLogsHelp.setWrapText(true);
         ToggleGroup upLogsGroup = new ToggleGroup();
@@ -386,7 +405,7 @@ public class QTraceSettingsDialog {
             RadioButton rb = new RadioButton(QTraceI18n.t("settings.uploadlogs." + upLogsModes[i]));
             rb.setId("upload-logs-" + upLogsModes[i]);
             rb.setToggleGroup(upLogsGroup);
-            rb.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(rb, TEXT_SUB);
             rb.setWrapText(true);
             rb.setTooltip(hintTooltip(QTraceI18n.t("settings.uploadlogs." + upLogsModes[i] + ".hint")));
             rb.setSelected(upLogsModes[i].equals(cfg.getUploadReplayLogs()));
@@ -404,7 +423,7 @@ public class QTraceSettingsDialog {
 
         // ── Autosave (live draft + image copy for crash recovery) ───────────────
         Label snapIntro = new Label(QTraceI18n.t("settings.snapshot.intro"));
-        snapIntro.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(snapIntro, TEXT_SUB);
         snapIntro.setFont(Font.font("System", 11));
         snapIntro.setWrapText(true);
 
@@ -413,7 +432,7 @@ public class QTraceSettingsDialog {
         RadioButton rbCustom = new RadioButton(QTraceI18n.t("settings.snapshot.custom"));
         for (RadioButton rb : new RadioButton[]{rbAuto, rbCustom}) {
             rb.setToggleGroup(snapMode);
-            rb.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(rb, TEXT_SUB);
             rb.setWrapText(true);
         }
         (cfg.isSnapshotCustom() ? rbCustom : rbAuto).setSelected(true);
@@ -430,14 +449,14 @@ public class QTraceSettingsDialog {
         }
         CheckBox chkKeyOnly = new CheckBox(QTraceI18n.t("settings.snapshot.keyOnly"));
         chkKeyOnly.setSelected(cfg.isSnapshotLargeKeyStepsOnly());
-        chkKeyOnly.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkKeyOnly, TEXT_SUB);
         chkKeyOnly.setWrapText(true);
         chkKeyOnly.setTooltip(hintTooltip(QTraceI18n.t("settings.snapshot.keyOnly.hint")));
 
         Label lblThreshold = new Label(QTraceI18n.t("settings.snapshot.threshold"));
         Label lblInterval  = new Label(QTraceI18n.t("settings.snapshot.interval"));
         for (Label l : new Label[]{lblThreshold, lblInterval}) {
-            l.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(l, TEXT_SUB);
             l.setFont(Font.font("System", 12));
             l.setWrapText(true);
         }
@@ -452,7 +471,7 @@ public class QTraceSettingsDialog {
         Label consequences = new Label();
         consequences.setWrapText(true);
         consequences.setFont(Font.font("System", 11));
-        consequences.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(consequences, TEXT_SUB);
         consequences.setPadding(new Insets(8, 10, 8, 10));
         consequences.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-background-radius: 6;"
             + "-fx-border-color: " + BORDER + "; -fx-border-radius: 6;");
@@ -565,6 +584,8 @@ public class QTraceSettingsDialog {
             cfg.setAutosaveEnabled(chkAutosave.isSelected());
             cfg.setShowPanelAtStartup(chkPanelAtStartup.isSelected());
             cfg.setShowModuleNewsAtStartup(chkModuleNews.isSelected());
+            for (int i = 0; i < themeModes.length; i++)
+                if (themeButtons[i].isSelected()) cfg.setTheme(themeModes[i]);
             if (rbCustom.isSelected())
                 cfg.setSnapshotSettings(true, spThreshold.getValue(), spInterval.getValue(), chkKeyOnly.isSelected());
             else
@@ -577,6 +598,7 @@ public class QTraceSettingsDialog {
                 return;
             }
             cfg.save();
+            Theme.setMode(Theme.Mode.parse(cfg.getTheme()));
             if (chkProjectFolder.isSelected() && projectBaseDir != null) {
                 try { QTraceConfig.createProjectDirs(projectBaseDir); } catch (IOException ignored) {}
             }
@@ -597,15 +619,14 @@ public class QTraceSettingsDialog {
         VBox pagePreferences = captureBox;
         VBox pageAutosave    = autosaveBox;
 
-        Label appearanceSoon = new Label("Theme customization — coming soon.");
-        appearanceSoon.setTextFill(Color.web(TEXT_MUTED));
-        appearanceSoon.setFont(Font.font("System", 11));
-        VBox pageAppearance = new VBox(12, chkPanelAtStartup, chkModuleNews, appearanceSoon);
+        VBox pageAppearance = new VBox(12, subTitle(QTraceI18n.t("settings.theme.title")), themeHelp,
+            themeButtons[0], themeButtons[1], themeButtons[2],
+            subTitle(QTraceI18n.t("settings.startup.title")), chkPanelAtStartup, chkModuleNews);
         pageAppearance.setPadding(new Insets(4, 20, 8, 20));
 
         // ── Content area: title bar + scrollable page ────────────────────────────
         Label headerLbl = new Label();
-        headerLbl.setTextFill(Color.web(TEXT_MAIN));
+        Theme.text(headerLbl, TEXT_MAIN);
         headerLbl.setFont(Font.font("System", FontWeight.BOLD, 13));
         headerLbl.setPadding(new Insets(12, 20, 12, 20));
         headerLbl.setMaxWidth(Double.MAX_VALUE);
@@ -667,9 +688,9 @@ public class QTraceSettingsDialog {
             scrollPane.setContent(entry.page());
             for (NavEntry other : entries) {
                 boolean selected = other == entry;
-                other.navLabel().setTextFill(Color.web(selected ? TEXT_MAIN : TEXT_SUB));
+                Theme.text(other.navLabel(), selected ? TEXT_MAIN : TEXT_SUB);
                 other.navLabel().setStyle("-fx-cursor: hand; -fx-background-color: "
-                    + (selected ? "#242438" : "transparent") + ";");
+                    + (selected ? "-qt-nav-selected" : "transparent") + ";");
             }
         };
         for (NavEntry entry : entries) entry.navLabel().setOnMouseClicked(e -> selectEntry.accept(entry));
@@ -701,7 +722,7 @@ public class QTraceSettingsDialog {
 
     private static void addRow(GridPane grid, int row, String label, TextField field, Stage dlg) {
         Label lbl = new Label(label);
-        lbl.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(lbl, TEXT_SUB);
         lbl.setFont(Font.font("System", FontWeight.NORMAL, 12));
 
         Button browse = flatButton("Browse…", TEXT_MUTED);
@@ -742,7 +763,7 @@ public class QTraceSettingsDialog {
 
     static Button flatButton(String text, String color) {
         Button btn = new Button(text);
-        btn.setTextFill(Color.web(color));
+        Theme.text(btn, color);
         btn.setFont(Font.font("System", 12));
         btn.setStyle(
             "-fx-background-color: transparent;"
@@ -775,7 +796,7 @@ public class QTraceSettingsDialog {
 
     private static VBox buildDigitalIdentityCard(QTraceConfig cfg) {
         Label status = new Label("Loading digital identity…");
-        status.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(status, TEXT_MUTED);
         status.setFont(Font.font("System", 11));
         status.setWrapText(true);
 
@@ -821,7 +842,7 @@ public class QTraceSettingsDialog {
                 g.add(idFieldLabel("Anchor tx"), 0, row);
                 Label txLbl = monoValue(info.anchorTxHashShort());
                 if (info.explorerUrl() != null) {
-                    txLbl.setTextFill(Color.web(BLUE));
+                    Theme.text(txLbl, BLUE);
                     txLbl.setStyle(txLbl.getStyle() + "-fx-cursor: hand; -fx-underline: true;");
                     txLbl.setOnMouseClicked(e -> BrowserOpener.open(info.explorerUrl()));
                 }
@@ -838,7 +859,7 @@ public class QTraceSettingsDialog {
             Label badgeState = new Label(info.identityPublic()
                 ? "✓ Public badge enabled" + (info.badgeUrl() != null ? "  —  " + info.badgeUrl() : "")
                 : "Public badge disabled — enable it on qtrace.ca to share your on-chain identity.");
-            badgeState.setTextFill(Color.web(info.identityPublic() ? GREEN : TEXT_MUTED));
+            Theme.text(badgeState, info.identityPublic() ? GREEN : TEXT_MUTED);
             badgeState.setFont(Font.font("System", 11));
             badgeState.setWrapText(true);
             badgeState.setMaxWidth(440);
@@ -851,14 +872,14 @@ public class QTraceSettingsDialog {
 
     private static Label idFieldLabel(String text) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(l, TEXT_MUTED);
         l.setFont(Font.font("System", 11));
         return l;
     }
 
     private static Label monoValue(String text) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(TEXT_MAIN));
+        Theme.text(l, TEXT_MAIN);
         l.setFont(Font.font("Monospaced", 11));
         l.setWrapText(true);
         l.setMaxWidth(380);
@@ -867,7 +888,7 @@ public class QTraceSettingsDialog {
 
     private static HBox buildCredentialsRow() {
         Label lbl = new Label("Professional registry, diplomas and ORCID are managed on the portal.");
-        lbl.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(lbl, TEXT_MUTED);
         lbl.setFont(Font.font("System", 11));
         lbl.setWrapText(true);
 
@@ -894,7 +915,7 @@ public class QTraceSettingsDialog {
 
     static Label subTitle(String text) {
         Label lbl = new Label(text.toUpperCase());
-        lbl.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(lbl, TEXT_MUTED);
         lbl.setFont(Font.font("System", FontWeight.BOLD, 10));
         lbl.setStyle("-fx-letter-spacing: 0.6;");
         VBox.setMargin(lbl, new Insets(6, 0, -2, 0));
@@ -941,31 +962,31 @@ public class QTraceSettingsDialog {
                 tfValidator.setTooltip(new Tooltip(QTraceI18n.t("stamp.account.tooltip")));
                 tfEmail.setText(account.email());
             }
-            statusLbl.setTextFill(Color.web(TEXT_MUTED));
+            Theme.text(statusLbl, TEXT_MUTED);
             return;
         }
         try {
             QTracePlugin plugin = QTracePluginManager.get();
             if (plugin == null) {
                 statusLbl.setText("Compliance plugin not installed.");
-                statusLbl.setTextFill(Color.web(ORANGE));
+                Theme.text(statusLbl, ORANGE);
                 return;
             }
             String token = java.nio.file.Files.readString(java.nio.file.Path.of(path)).strip();
             io.qtrace.LicenseInfo info = plugin.validateLicense(token);
             if (info == null) {
                 statusLbl.setText("Invalid or corrupted certificate file.");
-                statusLbl.setTextFill(Color.web(RED));
+                Theme.text(statusLbl, RED);
                 return;
             }
             if (info.expired()) {
                 statusLbl.setText("Certificate expired — renew it from " + PORTAL_URL);
-                statusLbl.setTextFill(Color.web(ORANGE));
+                Theme.text(statusLbl, ORANGE);
                 return;
             }
             statusLbl.setText("✓ Verified — " + info.name() + " · " + info.institution()
                 + " · valid until " + info.expiresAtFormatted());
-            statusLbl.setTextFill(Color.web(GREEN));
+            Theme.text(statusLbl, GREEN);
             // Certified identity — bound to the license, not freely editable.
             tfValidator.setText(info.name());
             tfValidator.setEditable(false);
@@ -976,7 +997,7 @@ public class QTraceSettingsDialog {
                 ? info.email() : "(older certificate, regenerate it to include your email)");
         } catch (Exception ex) {
             statusLbl.setText("Could not read the certificate file.");
-            statusLbl.setTextFill(Color.web(RED));
+            Theme.text(statusLbl, RED);
         }
     }
 }

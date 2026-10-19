@@ -17,12 +17,12 @@ import javafx.scene.layout.VBox;
 public final class DialogLook {
 
     // Catppuccin Mocha — matches QTraceSettingsDialog / QTracePanel
-    public static final String BG_BASE    = "#1e1e2e";
-    public static final String BG_SURFACE = "#181825";
-    public static final String TEXT_MAIN  = "#cdd6f4";
-    public static final String TEXT_SUB   = "#a6adc8";
-    public static final String BLUE       = "#89b4fa";
-    public static final String RED        = "#f38ba8";
+    public static final String BG_BASE    = "-qt-bg-base";
+    public static final String BG_SURFACE = "-qt-bg-surface";
+    public static final String TEXT_MAIN  = "-qt-text-main";
+    public static final String TEXT_SUB   = "-qt-text-sub";
+    public static final String BLUE       = "-qt-blue";
+    public static final String RED        = "-qt-red";
 
     private DialogLook() {}
 

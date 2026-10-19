@@ -45,8 +45,8 @@ public final class TourHighlight {
 
     private static final String BASE_STYLE = "qtrace.tour.style";
     private static final String BASE_OPACITY = "qtrace.tour.opacity";
-    private static final String ON_STYLE = "-fx-border-color: #a6e3a1; -fx-border-width: 2; -fx-border-radius: 6;"
-        + " -fx-background-color: rgba(166,227,161,0.14); -fx-background-radius: 6;";
+    private static final String ON_STYLE = "-fx-border-color: -qt-green; -fx-border-width: 2; -fx-border-radius: 6;"
+        + " -fx-background-color: -qt-green-faint; -fx-background-radius: 6;";
     private static final double OFF_OPACITY = 0.3;
 
     /** The full panel's buttons already carry these ids (screenshot harness). */

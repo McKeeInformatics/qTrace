@@ -19,6 +19,7 @@
 
 package io.qtrace.player;
 
+import io.qtrace.Theme;
 import io.qtrace.QTraceController;
 
 import javafx.application.Platform;
@@ -49,14 +50,14 @@ import java.util.stream.Collectors;
  */
 class QTraceReplayDialog {
 
-    private static final String BG       = "#1e1e2e";
-    private static final String SURFACE  = "#181825";
-    private static final String BORDER   = "#313244";
-    private static final String TEXT     = "#cdd6f4";
-    private static final String MUTED    = "#6c7086";
-    private static final String BLUE     = "#89b4fa";
-    private static final String GREEN    = "#a6e3a1";
-    private static final String RED      = "#f38ba8";
+    private static final String BG       = "-qt-bg-base";
+    private static final String SURFACE  = "-qt-bg-surface";
+    private static final String BORDER   = "-qt-border";
+    private static final String TEXT     = "-qt-text-main";
+    private static final String MUTED    = "-qt-text-muted";
+    private static final String BLUE     = "-qt-blue";
+    private static final String GREEN    = "-qt-green";
+    private static final String RED      = "-qt-red";
 
     private final QuPathGUI qupath;
     private TextArea logArea;
@@ -96,7 +97,7 @@ class QTraceReplayDialog {
         runBtn = new Button("▶   Run");
         runBtn.setMaxWidth(Double.MAX_VALUE);
         runBtn.setFont(Font.font("System", FontWeight.BOLD, 13));
-        runBtn.setTextFill(Color.web(TEXT));
+        Theme.text(runBtn, TEXT);
         runBtn.setStyle(
             "-fx-background-color: " + BLUE + ";"
           + "-fx-background-radius: 4;"
@@ -104,7 +105,7 @@ class QTraceReplayDialog {
           + "-fx-padding: 7 0 7 0;"
         );
         runBtn.setOnMouseEntered(e -> runBtn.setStyle(
-            "-fx-background-color: #74c7ec;"
+            "-fx-background-color: -qt-sky;"
           + "-fx-background-radius: 4;"
           + "-fx-cursor: hand;"
           + "-fx-padding: 7 0 7 0;"
@@ -235,7 +236,7 @@ class QTraceReplayDialog {
 
     private static Label label(String text, String color, int size, FontWeight weight) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(color));
+        Theme.text(l, color);
         l.setFont(Font.font("System", weight, size));
         return l;
     }

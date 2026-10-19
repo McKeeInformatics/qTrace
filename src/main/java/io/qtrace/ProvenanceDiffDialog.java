@@ -52,13 +52,13 @@ import java.util.List;
  */
 public final class ProvenanceDiffDialog {
 
-    private static final String BG       = "#1e1e2e";
-    private static final String SURFACE  = "#181825";
-    private static final String TEXT     = "#cdd6f4";
-    private static final String MUTED    = "#6c7086";
-    private static final String GREEN    = "#a6e3a1";
-    private static final String PEACH    = "#fab387";
-    private static final String RED      = "#f38ba8";
+    private static final String BG       = "-qt-bg-base";
+    private static final String SURFACE  = "-qt-bg-surface";
+    private static final String TEXT     = "-qt-text-main";
+    private static final String MUTED    = "-qt-text-muted";
+    private static final String GREEN    = "-qt-green";
+    private static final String PEACH    = "-qt-peach";
+    private static final String RED      = "-qt-red";
 
     private ProvenanceDiffDialog() {}
 
@@ -84,7 +84,7 @@ public final class ProvenanceDiffDialog {
         // Same bottom row as Settings: a discreet Cancel at the right; Esc does the same.
         javafx.scene.control.Button cancel = new javafx.scene.control.Button("Cancel");
         cancel.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;"
-            + "-fx-text-fill: #a6adc8; -fx-cursor: hand; -fx-font-size: 12;");
+            + "-fx-text-fill: -qt-text-sub; -fx-cursor: hand; -fx-font-size: 12;");
         cancel.setOnAction(e -> stage.close());
         javafx.scene.layout.HBox buttons = new javafx.scene.layout.HBox(cancel);
         buttons.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
@@ -240,7 +240,7 @@ public final class ProvenanceDiffDialog {
     private static Label label(String text, String color, int size, FontWeight weight) {
         Label l = new Label(text);
         l.setWrapText(true);
-        l.setTextFill(Color.web(color));
+        Theme.text(l, color);
         l.setFont(Font.font("System", weight, size));
         return l;
     }

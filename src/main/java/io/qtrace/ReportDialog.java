@@ -47,11 +47,11 @@ import java.util.function.Consumer;
  */
 public class ReportDialog {
 
-    private static final String BG_BASE   = "#1e1e2e";
-    private static final String BG_CARD   = "#24273a";
-    private static final String BORDER    = "#313244";
-    private static final String TEXT_MAIN = "#cdd6f4";
-    private static final String BLUE      = "#89b4fa";
+    private static final String BG_BASE   = "-qt-bg-base";
+    private static final String BG_CARD   = "-qt-bg-card";
+    private static final String BORDER    = "-qt-border";
+    private static final String TEXT_MAIN = "-qt-text-main";
+    private static final String BLUE      = "-qt-blue";
 
     /**
      * @param owner    owner window (may be null)

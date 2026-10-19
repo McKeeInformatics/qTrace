@@ -47,14 +47,14 @@ import javafx.stage.Window;
  */
 public class ReportConfirmDialog {
 
-    private static final String BG_BASE   = "#1e1e2e";
-    private static final String BG_CARD   = "#24273a";
-    private static final String BORDER    = "#313244";
-    private static final String TEXT_MAIN = "#cdd6f4";
-    private static final String TEXT_SUB  = "#a6adc8";
-    private static final String TEXT_MUTED= "#6c7086";
-    private static final String BLUE      = "#89b4fa";
-    private static final String GREEN     = "#a6e3a1";
+    private static final String BG_BASE   = "-qt-bg-base";
+    private static final String BG_CARD   = "-qt-bg-card";
+    private static final String BORDER    = "-qt-border";
+    private static final String TEXT_MAIN = "-qt-text-main";
+    private static final String TEXT_SUB  = "-qt-text-sub";
+    private static final String TEXT_MUTED= "-qt-text-muted";
+    private static final String BLUE      = "-qt-blue";
+    private static final String GREEN     = "-qt-green";
 
     public static final class Result {
         public boolean send = false;
@@ -82,7 +82,7 @@ public class ReportConfirmDialog {
 
         Label notice = new Label(QTraceI18n.t("report.confirm.notice"));
         notice.setWrapText(true);
-        notice.setTextFill(javafx.scene.paint.Color.web(TEXT_SUB));
+        Theme.text(notice, TEXT_SUB);
 
         TextArea area = new TextArea(digestPretty);
         area.setEditable(false);
@@ -95,7 +95,7 @@ public class ReportConfirmDialog {
         VBox.setVgrow(area, Priority.ALWAYS);
 
         Label langLabel = new Label(QTraceI18n.t("report.confirm.language"));
-        langLabel.setTextFill(javafx.scene.paint.Color.web(TEXT_SUB));
+        Theme.text(langLabel, TEXT_SUB);
         ComboBox<String> langBox = new ComboBox<>();
         for (String[] l : ReportLanguages.LANGS) langBox.getItems().add(l[0]);
         langBox.setConverter(new StringConverter<>() {
@@ -108,15 +108,15 @@ public class ReportConfirmDialog {
 
         CheckBox pseudonymize = new CheckBox(QTraceI18n.t("report.confirm.pseudonymize"));
         pseudonymize.setDisable(true);   // shown now, implemented later
-        pseudonymize.setTextFill(javafx.scene.paint.Color.web(TEXT_MUTED));
+        Theme.text(pseudonymize, TEXT_MUTED);
         Label soon = new Label(QTraceI18n.t("report.confirm.soon"));
-        soon.setTextFill(javafx.scene.paint.Color.web(TEXT_MUTED));
+        Theme.text(soon, TEXT_MUTED);
         soon.setFont(Font.font("System", 10));
         HBox pseudoRow = new HBox(8, pseudonymize, soon);
         pseudoRow.setAlignment(Pos.CENTER_LEFT);
 
         CheckBox dontAsk = new CheckBox(QTraceI18n.t("report.confirm.dontask"));
-        dontAsk.setTextFill(javafx.scene.paint.Color.web(TEXT_SUB));
+        Theme.text(dontAsk, TEXT_SUB);
 
         Button cancel = new Button(QTraceI18n.t("report.confirm.cancel"));
         cancel.setStyle(buttonStyle(TEXT_SUB));

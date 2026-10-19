@@ -19,6 +19,7 @@
 
 package io.qtrace.player;
 
+import io.qtrace.Theme;
 import io.qtrace.player.ext.Compat;
 import io.qtrace.player.ext.ExtensionHandlerRegistry;
 import io.qtrace.player.ext.InstanSegHandler;
@@ -114,14 +115,14 @@ class QTracePreflightDialog {
         return (allPresent && allFull) ? Compat.FULL : Compat.PARTIAL;
     }
 
-    private static final String BG      = "#1e1e2e";
-    private static final String BORDER  = "#313244";
-    private static final String TEXT    = "#cdd6f4";
-    private static final String MUTED   = "#6c7086";
-    private static final String BLUE    = "#89b4fa";
-    private static final String GREEN   = "#a6e3a1";
-    private static final String YELLOW  = "#f9e2af";
-    private static final String RED     = "#f38ba8";
+    private static final String BG      = "-qt-bg-base";
+    private static final String BORDER  = "-qt-border";
+    private static final String TEXT    = "-qt-text-main";
+    private static final String MUTED   = "-qt-text-muted";
+    private static final String BLUE    = "-qt-blue";
+    private static final String GREEN   = "-qt-green";
+    private static final String YELLOW  = "-qt-yellow";
+    private static final String RED     = "-qt-red";
 
     private static final String FALLBACK_URL =
         "https://qupath.readthedocs.io/en/stable/docs/intro/extensions.html";
@@ -273,10 +274,10 @@ class QTracePreflightDialog {
         // Open Script Editor button
         Button openBtn = new Button("Open Script Editor  ▶");
         openBtn.setFont(Font.font("System", FontWeight.BOLD, 13));
-        openBtn.setTextFill(Color.web(TEXT));
+        Theme.text(openBtn, TEXT);
         String btnStyle = "-fx-background-color: " + BLUE + "; -fx-background-radius: 4;"
             + " -fx-cursor: hand; -fx-padding: 7 16 7 16;";
-        String btnHover = "-fx-background-color: #74c7ec; -fx-background-radius: 4;"
+        String btnHover = "-fx-background-color: -qt-sky; -fx-background-radius: 4;"
             + " -fx-cursor: hand; -fx-padding: 7 16 7 16;";
         openBtn.setStyle(btnStyle);
         openBtn.setOnMouseEntered(e -> openBtn.setStyle(btnHover));
@@ -317,9 +318,9 @@ class QTracePreflightDialog {
         if (installable) {
             Button installBtn = new Button("Install →");
             installBtn.setFont(Font.font("System", FontWeight.BOLD, 10));
-            installBtn.setTextFill(Color.web(TEXT));
-            String s  = "-fx-background-color: #45475a; -fx-background-radius: 3; -fx-cursor: hand; -fx-padding: 2 8 2 8;";
-            String sh = "-fx-background-color: #585b70; -fx-background-radius: 3; -fx-cursor: hand; -fx-padding: 2 8 2 8;";
+            Theme.text(installBtn, TEXT);
+            String s  = "-fx-background-color: -qt-btn; -fx-background-radius: 3; -fx-cursor: hand; -fx-padding: 2 8 2 8;";
+            String sh = "-fx-background-color: -qt-btn-hover; -fx-background-radius: 3; -fx-cursor: hand; -fx-padding: 2 8 2 8;";
             installBtn.setStyle(s);
             installBtn.setOnMouseEntered(e -> installBtn.setStyle(sh));
             installBtn.setOnMouseExited(e -> installBtn.setStyle(s));
@@ -480,7 +481,7 @@ class QTracePreflightDialog {
 
     private static Label styledLabel(String text, String color, int size, FontWeight weight) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(color));
+        Theme.text(l, color);
         l.setFont(Font.font("System", weight, size));
         return l;
     }

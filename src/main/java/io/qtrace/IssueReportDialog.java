@@ -56,14 +56,14 @@ import java.util.List;
 public final class IssueReportDialog {
 
     // Catppuccin Mocha — matches QTraceSettingsDialog / QTracePanel
-    private static final String BG_BASE    = "#1e1e2e";
-    private static final String BG_SURFACE = "#181825";
-    private static final String BORDER     = "#313244";
-    private static final String TEXT_MAIN  = "#cdd6f4";
-    private static final String TEXT_SUB   = "#a6adc8";
-    private static final String TEXT_MUTED = "#6c7086";
-    private static final String BLUE       = "#89b4fa";
-    private static final String RED        = "#f38ba8";
+    private static final String BG_BASE    = "-qt-bg-base";
+    private static final String BG_SURFACE = "-qt-bg-surface";
+    private static final String BORDER     = "-qt-border";
+    private static final String TEXT_MAIN  = "-qt-text-main";
+    private static final String TEXT_SUB   = "-qt-text-sub";
+    private static final String TEXT_MUTED = "-qt-text-muted";
+    private static final String BLUE       = "-qt-blue";
+    private static final String RED        = "-qt-red";
     private static final String FIELD =
         "-fx-background-color: " + BG_SURFACE + "; -fx-control-inner-background: " + BG_SURFACE + ";"
       + "-fx-text-fill: " + TEXT_MAIN + "; -fx-prompt-text-fill: " + TEXT_MUTED + ";"

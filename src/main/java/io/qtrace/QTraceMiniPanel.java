@@ -83,7 +83,7 @@ public final class QTraceMiniPanel {
         column = new VBox(3);
         column.setAlignment(Pos.TOP_CENTER);
         column.setPadding(new Insets(6, 5, 6, 5));
-        column.setStyle("-fx-background-color: rgba(30,30,46,0.94); -fx-background-radius: 10;"
+        column.setStyle("-fx-background-color: -qt-glass94; -fx-background-radius: 10;"
             + "-fx-border-color: " + QTracePanel.BORDER + "; -fx-border-radius: 10;"
             + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.45), 12, 0, 0, 3);");
         layer = new Pane(column);
@@ -157,7 +157,7 @@ public final class QTraceMiniPanel {
 
         Label handle = new Label("⠿");
         handle.setFont(Font.font("System", 16));
-        handle.setTextFill(Color.web(QTracePanel.TEXT_MUTED));
+        Theme.text(handle, QTracePanel.TEXT_MUTED);
         handle.setCursor(Cursor.MOVE);
         handle.setTooltip(tip("Drag to move the panel"));
         handle.setOnMousePressed(this::startDrag);
@@ -171,15 +171,15 @@ public final class QTraceMiniPanel {
         nodes.add(top);
 
         // Passive capture status — a red dot (blinking) while recording, grey pause bars when paused.
-        captureDot = new Circle(6, Color.web(QTracePanel.RED));
-        javafx.scene.shape.Rectangle bar1 = new javafx.scene.shape.Rectangle(3.5, 12, Color.web(QTracePanel.TEXT_MUTED));
-        javafx.scene.shape.Rectangle bar2 = new javafx.scene.shape.Rectangle(3.5, 12, Color.web(QTracePanel.TEXT_MUTED));
+        captureDot = new Circle(6, Theme.web(QTracePanel.RED));
+        javafx.scene.shape.Rectangle bar1 = new javafx.scene.shape.Rectangle(3.5, 12, Theme.web(QTracePanel.TEXT_MUTED));
+        javafx.scene.shape.Rectangle bar2 = new javafx.scene.shape.Rectangle(3.5, 12, Theme.web(QTracePanel.TEXT_MUTED));
         javafx.scene.layout.HBox bars = new javafx.scene.layout.HBox(3.5, bar1, bar2);
         bars.setAlignment(Pos.CENTER);
         pauseIcon = bars;
         // ▶ Start — shown instead while no project is open: one click lists the recent projects.
         javafx.scene.shape.Polygon play = new javafx.scene.shape.Polygon(0, 0, 13, 7.5, 0, 15);
-        play.setFill(Color.web(QTracePanel.GREEN));
+        Theme.fill(play, QTracePanel.GREEN);
         startIcon = play;
         resumeSpinner = spinner(15, QTracePanel.GREEN);
         resumeSpinner.setVisible(false);
@@ -215,14 +215,14 @@ public final class QTraceMiniPanel {
         });
         nodes.add(integrityBadge);
 
-        Color teal = Color.web(QTracePanel.CTA_TEAL);
+        Color teal = Theme.web(QTracePanel.CTA_TEAL);
         stampBtn = button(c -> panel.scaledIcon(panel.iconStamp(teal), ICON), "btn.stamp.caption", teal);
         TourHighlight.tag(stampBtn, "stamp");
         stampBtn.setOnAction(e -> controller.recordTrace());
 
         // Workspace & Analyse — same rule as the panel's toolbar: only when licensed & active,
         // except Replay, which is there as soon as a module brings the player.
-        Color workspace = Color.web(QTracePanel.GROUP_WORKSPACE);
+        Color workspace = Theme.web(QTracePanel.GROUP_WORKSPACE);
         boolean licensed = QTracePluginManager.isEntitled();
         // A module that arrived but does not run yet (it starts after the restart) has its button greyed.
         boolean playerWait = Players.entitled() == null && PendingModules.awaiting("player");
@@ -262,7 +262,7 @@ public final class QTraceMiniPanel {
             if (versionsWait) pendingLook(versionsBtn, "Version(s)");
         }
 
-        Color tools = Color.web(QTracePanel.GROUP_TOOLS);
+        Color tools = Theme.web(QTracePanel.GROUP_TOOLS);
         // Dashboard: there once a module has brought it (Dashboards).
         Button dashboardBtn = Dashboards.entitled() == null ? null
             : button(QTracePanel.welcomeMarked("dashboard", icon(panel::iconDashboard)), "btn.dashboard.caption", tools);
@@ -273,7 +273,7 @@ public final class QTraceMiniPanel {
             : button(QTracePanel.welcomeMarked("import", icon(panel::iconImport)), "btn.import.caption", tools);
         if (importBtn != null) importBtn.setOnAction(e -> QTracePanel.welcomeFirst("import", controller::startBatchExport));
         if (importBtn != null) TourHighlight.tag(importBtn, "import");
-        resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Color.web(QTracePanel.RED));
+        resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Theme.web(QTracePanel.RED));
         TourHighlight.tag(resetBtn, "reset");
         resetBtn.setOnAction(e -> panel.confirmReset());
 
@@ -313,7 +313,7 @@ public final class QTraceMiniPanel {
             nodes.add(resetBtn);
         }
 
-        Color admin = Color.web(QTracePanel.GROUP_ADMIN);
+        Color admin = Theme.web(QTracePanel.GROUP_ADMIN);
         nodes.add(separator());
         Button settingsBtn = titled(glyph("⚙"), "Settings", admin);
         TourHighlight.tag(settingsBtn, "settings");
@@ -348,7 +348,7 @@ public final class QTraceMiniPanel {
 
     private void addModuleButtons(List<Node> nodes, List<PanelExtensions.Entry> entries) {
         for (PanelExtensions.Entry entry : entries) {
-            Color hover = Color.web(PanelExtensions.DASHBOARD.equals(entry.anchor()) ? QTracePanel.GROUP_TOOLS : QTracePanel.GROUP_WORKSPACE);
+            Color hover = Theme.web(PanelExtensions.DASHBOARD.equals(entry.anchor()) ? QTracePanel.GROUP_TOOLS : QTracePanel.GROUP_WORKSPACE);
             Button b = titled(QTracePanel.welcomeMarked(entry.module(), icon(QTracePanel.moduleIcon(entry))), entry.label(), hover);
             TourHighlight.tag(b, entry.module());
             b.setOnAction(e -> QTracePanel.welcomeFirst(entry.module(), () -> QTracePanel.runModuleEntry(entry)));
@@ -378,7 +378,7 @@ public final class QTraceMiniPanel {
         if (alert) {
             boolean corrupted = QTracePanel.integrityCorrupted(state);
             integrityBadge.setText(corrupted ? "⛔" : "⚠");
-            integrityBadge.setTextFill(Color.web(corrupted ? QTracePanel.RED : QTracePanel.PEACH));
+            Theme.text(integrityBadge, corrupted ? QTracePanel.RED : QTracePanel.PEACH);
             integrityBadge.setTooltip(tip(QTracePanel.integrityMessage(state) + " — click for details"));
         }
 
@@ -386,7 +386,7 @@ public final class QTraceMiniPanel {
         boolean canStamp = panel.isStampEnabled();
         if (stampBtn != null && stampBtn.isDisable() == canStamp)
             stampBtn.setGraphic(panel.scaledIcon(panel.iconStamp(
-                Color.web(canStamp ? QTracePanel.CTA_TEAL : QTracePanel.TEXT_MUTED)), ICON));
+                Theme.web(canStamp ? QTracePanel.CTA_TEAL : QTracePanel.TEXT_MUTED)), ICON));
         enable(stampBtn, canStamp);
         if (!uploadInvite) enable(uploadBtn, panel.isPushEnabled());
         if (uploadSlot != null && !uploadInvite) {

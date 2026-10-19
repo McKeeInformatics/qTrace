@@ -19,6 +19,7 @@
 
 package io.qtrace.player;
 
+import io.qtrace.Theme;
 import io.qtrace.ActionLogger;
 import io.qtrace.QTraceConfig;
 import io.qtrace.QTraceController;
@@ -70,21 +71,21 @@ import java.util.stream.Collectors;
 class QTraceReplayPlayer {
 
     // ── Catppuccin Mocha — same palette as QTraceDashboard, same tone ───────────
-    private static final String BG        = "#1e1e2e";
-    private static final String SURFACE   = "#181825";
-    private static final String BORDER    = "#313244";
-    private static final String TEXT      = "#cdd6f4";
-    private static final String TEXT_SUB  = "#a6adc8";
-    private static final String MUTED     = "#6c7086";
-    private static final String BLUE      = "#89b4fa";
-    private static final String GREEN     = "#a6e3a1";
-    private static final String GREEN_SOFT = "#28352c"; // active-target row background
-    private static final String PEACH     = "#fab387";
-    private static final String RED       = "#f38ba8";
-    private static final String PACKET    = "#cba6f7";   // a workflow's packets, as in the Version window
-    private static final String ROW_ALT   = "#20202e";
-    private static final String GOLD      = "#d4a84b";
-    private static final String GOLD_BG   = "#0e0c08";
+    private static final String BG        = "-qt-bg-base";
+    private static final String SURFACE   = "-qt-bg-surface";
+    private static final String BORDER    = "-qt-border";
+    private static final String TEXT      = "-qt-text-main";
+    private static final String TEXT_SUB  = "-qt-text-sub";
+    private static final String MUTED     = "-qt-text-muted";
+    private static final String BLUE      = "-qt-blue";
+    private static final String GREEN     = "-qt-green";
+    private static final String GREEN_SOFT = "-qt-green-soft"; // active-target row background
+    private static final String PEACH     = "-qt-peach";
+    private static final String RED       = "-qt-red";
+    private static final String PACKET    = "-qt-mauve";   // a workflow's packets, as in the Version window
+    private static final String ROW_ALT   = "-qt-row-alt";
+    private static final String GOLD      = "-qt-gold";
+    private static final String GOLD_BG   = "-qt-gold-bg";
 
     private final QuPathGUI qupath;
     private final ActionLogger logger;
@@ -249,7 +250,7 @@ class QTraceReplayPlayer {
         Button browseBtn = new Button("📂 Browse");
         browseBtn.setId("browse-button"); // looked up by the screenshot harness — see PlayerScreenshotHarness
         browseBtn.setFont(Font.font("System", 12));
-        browseBtn.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(browseBtn, TEXT_SUB);
         browseBtn.setStyle(
             "-fx-background-color: " + SURFACE + "; -fx-border-color: " + BORDER + ";"
           + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 5 9 5 9;");
@@ -273,7 +274,7 @@ class QTraceReplayPlayer {
         toMiniBtn = new Button("⤡");
         toMiniBtn.setId("to-mini-button");
         toMiniBtn.setFont(Font.font("System", 13));
-        toMiniBtn.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(toMiniBtn, TEXT_SUB);
         toMiniBtn.setStyle(
             "-fx-background-color: " + SURFACE + "; -fx-border-color: " + BORDER + ";"
           + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 4 9 4 9;");
@@ -287,7 +288,7 @@ class QTraceReplayPlayer {
         for (io.qtrace.PlayerSource source : moduleSources()) {
             Button sourceBtn = new Button(source.label());
             sourceBtn.setFont(browseBtn.getFont());
-            sourceBtn.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(sourceBtn, TEXT_SUB);
             sourceBtn.setStyle(browseBtn.getStyle());
             sourceBtn.setOnAction(e -> chooseFromSource(source));
             inputRow.getChildren().add(sourceBtn);
@@ -335,7 +336,7 @@ class QTraceReplayPlayer {
 
         Button exportCodeBtn = new Button("</> Export Code");
         exportCodeBtn.setFont(Font.font("System", 10));
-        exportCodeBtn.setTextFill(Color.web(MUTED));
+        Theme.text(exportCodeBtn, MUTED);
         exportCodeBtn.setStyle(
             "-fx-background-color: " + BG + "; -fx-border-color: " + BORDER + ";"
           + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 3 8 3 8;");
@@ -385,7 +386,7 @@ class QTraceReplayPlayer {
         // step-by-step technical detail in the Console above it.
         milestoneLabel = new Label();
         milestoneLabel.setFont(Font.font("System", 10));
-        milestoneLabel.setTextFill(Color.web(MUTED));
+        Theme.text(milestoneLabel, MUTED);
         HBox.setHgrow(milestoneLabel, Priority.ALWAYS);
         resetMilestone();
 
@@ -1022,11 +1023,11 @@ class QTraceReplayPlayer {
 
     private VBox buildTargetImagesPanel() {
         targetChevron = new Label("▾");
-        targetChevron.setTextFill(Color.web(MUTED));
+        Theme.text(targetChevron, MUTED);
         targetChevron.setFont(Font.font("System", 10));
 
         targetHeaderText = new Label();
-        targetHeaderText.setTextFill(Color.web(MUTED));
+        Theme.text(targetHeaderText, MUTED);
         targetHeaderText.setFont(Font.font("System", FontWeight.BOLD, 11));
 
         HBox tLeft = new HBox(6, targetChevron, targetHeaderText);
@@ -1040,7 +1041,7 @@ class QTraceReplayPlayer {
 
         Button refreshBtn = new Button("🔄 Rescan");
         refreshBtn.setFont(Font.font("System", 10));
-        refreshBtn.setTextFill(Color.web(MUTED));
+        Theme.text(refreshBtn, MUTED);
         refreshBtn.setStyle(
             "-fx-background-color: " + BG + "; -fx-border-color: " + BORDER + ";"
           + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 3 8 3 8;");
@@ -1061,7 +1062,7 @@ class QTraceReplayPlayer {
 
         Button selectAllBtn = new Button("Select all");
         selectAllBtn.setFont(Font.font("System", 10));
-        selectAllBtn.setTextFill(Color.web(MUTED));
+        Theme.text(selectAllBtn, MUTED);
         selectAllBtn.setStyle(
             "-fx-background-color: " + BG + "; -fx-border-color: " + BORDER + ";"
           + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 3 8 3 8;");
@@ -1212,7 +1213,7 @@ class QTraceReplayPlayer {
 
             Label nameLbl = new Label(row.displayName());
             boolean active = row == activeTargetRow;
-            nameLbl.setTextFill(Color.web(active ? GREEN : TEXT));
+            Theme.text(nameLbl, active ? GREEN : TEXT);
             nameLbl.setFont(Font.font("System", active ? FontWeight.BOLD : FontWeight.NORMAL, 11));
             nameLbl.setWrapText(true);
             HBox.setHgrow(nameLbl, Priority.ALWAYS);
@@ -1228,7 +1229,7 @@ class QTraceReplayPlayer {
 
         if (!filter.isEmpty() && targetRowsBox.getChildren().isEmpty()) {
             Label empty = new Label("No image matches \"" + targetFilterField.getText().strip() + "\"");
-            empty.setTextFill(Color.web(MUTED));
+            Theme.text(empty, MUTED);
             empty.setFont(Font.font("System", 11));
             empty.setPadding(new Insets(8, 10, 8, 10));
             targetRowsBox.getChildren().add(empty);
@@ -1255,7 +1256,7 @@ class QTraceReplayPlayer {
 
     private VBox buildPrecheckPanel() {
         precheckChevron = new Label("▾");
-        precheckChevron.setTextFill(Color.web(MUTED));
+        Theme.text(precheckChevron, MUTED);
         precheckChevron.setFont(Font.font("System", 10));
 
         precheckHeaderText = new Label();
@@ -1271,7 +1272,7 @@ class QTraceReplayPlayer {
 
         Button recheckBtn = new Button("🔄 Check my config");
         recheckBtn.setFont(Font.font("System", 10));
-        recheckBtn.setTextFill(Color.web(MUTED));
+        Theme.text(recheckBtn, MUTED);
         recheckBtn.setStyle(
             "-fx-background-color: " + BG + "; -fx-border-color: " + BORDER + ";"
           + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 3 8 3 8;");
@@ -1426,7 +1427,7 @@ class QTraceReplayPlayer {
 
         boolean allOk = extensionsOk && modelsOk && versionOk && classifiersOk;
         precheckHeaderText.setText(allOk ? "✓ Check OK" : "⚠ Check your configuration");
-        precheckHeaderText.setTextFill(Color.web(allOk ? GREEN : PEACH));
+        Theme.text(precheckHeaderText, allOk ? GREEN : PEACH);
 
         if (!allOk) precheckExpanded = true; // reserve found → open itself, no extra click needed
         applyPrecheckExpanded();
@@ -1438,12 +1439,12 @@ class QTraceReplayPlayer {
         dotLbl.setMinWidth(18);
 
         Label labelLbl = new Label(label);
-        labelLbl.setTextFill(Color.web(TEXT));
+        Theme.text(labelLbl, TEXT);
         labelLbl.setFont(Font.font("System", FontWeight.BOLD, 10));
         labelLbl.setMinWidth(90);
 
         Label detailLbl = new Label(detail);
-        detailLbl.setTextFill(Color.web(color));
+        Theme.text(detailLbl, color);
         detailLbl.setFont(Font.font("System", 10));
         detailLbl.setWrapText(true);
         HBox.setHgrow(detailLbl, Priority.ALWAYS);
@@ -1472,12 +1473,12 @@ class QTraceReplayPlayer {
 
         Label sectionTitle = new Label("Instructions");
         sectionTitle.setId("instructions-header"); // looked up by the screenshot harness — see PlayerScreenshotHarness
-        sectionTitle.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(sectionTitle, TEXT_SUB);
         sectionTitle.setFont(Font.font("System", FontWeight.BOLD, 11));
         sectionTitle.setPadding(new Insets(0, 0, 4, 2));
 
         validatedOnlyCheckBox = new CheckBox("Validated steps only");
-        validatedOnlyCheckBox.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(validatedOnlyCheckBox, TEXT_SUB);
         validatedOnlyCheckBox.setFont(Font.font("System", 11));
         Tooltip.install(validatedOnlyCheckBox, new Tooltip(
             "Leave out the instructions marked ◌ — recorded without a stamp, never validated"));
@@ -1581,7 +1582,7 @@ class QTraceReplayPlayer {
 
     /** Small vector "log file" icon — page with a folded corner, "</>" and "LOG" inside. */
     private Node buildLogIcon(String color) {
-        Color c = Color.web(color);
+        Color c = Theme.web(color);
 
         Path page = new Path(
             new MoveTo(3, 1.5), new LineTo(9.5, 1.5), new LineTo(13, 5),
@@ -1685,7 +1686,7 @@ class QTraceReplayPlayer {
             // A workflow's instructions carry no stamp by nature: they are not marked as unvalidated work.
             boolean plain = row.step.validated() || workflowLoaded;
             Label titleLbl = new Label((plain ? "" : "◌ ") + row.step.title());
-            titleLbl.setTextFill(Color.web(skipped ? MUTED : plain ? TEXT : PEACH));
+            Theme.text(titleLbl, skipped ? MUTED : plain ? TEXT : PEACH);
             titleLbl.setFont(Font.font("System", 11));
             titleLbl.setTextOverrun(OverrunStyle.ELLIPSIS);
             titleLbl.setMinWidth(0);
@@ -1704,7 +1705,7 @@ class QTraceReplayPlayer {
                 Runnable show = () -> {
                     scriptBox.setVisible(row.expanded);
                     scriptBox.setManaged(row.expanded);
-                    eye.setGraphic(eyeIcon(Color.web(row.expanded ? BLUE : MUTED)));
+                    eye.setGraphic(eyeIcon(Theme.web(row.expanded ? BLUE : MUTED)));
                     eyeTip.setText(row.expanded ? "Hide the script" : "Show the script exactly as it will be run");
                 };
                 eye.setOnAction(e -> { row.expanded = !row.expanded; show.run(); });
@@ -1829,7 +1830,7 @@ class QTraceReplayPlayer {
 
     private static Label headerLabel(String text, double width) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(MUTED));
+        Theme.text(l, MUTED);
         l.setFont(Font.font("System", FontWeight.BOLD, 9));
         l.setStyle("-fx-letter-spacing: 0.5px;");
         if (width > 0) l.setPrefWidth(width);
@@ -1844,7 +1845,7 @@ class QTraceReplayPlayer {
      */
     private static Label rowLabel(String text, String color, javafx.beans.property.DoubleProperty widthProperty) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(color));
+        Theme.text(l, color);
         l.setFont(Font.font("System", 11));
         l.setTextOverrun(OverrunStyle.ELLIPSIS);
         l.prefWidthProperty().bind(widthProperty);
@@ -2299,20 +2300,20 @@ class QTraceReplayPlayer {
             switch (result.status()) {
                 case OK -> {
                     rv.statusLabel.setText("✅ Execution completed");
-                    rv.statusLabel.setTextFill(Color.web(GREEN));
+                    Theme.text(rv.statusLabel, GREEN);
                     rv.timerLabel.setText(formatDuration(result.durationMs()));
-                    rv.timerLabel.setTextFill(Color.web(TEXT_SUB));
+                    Theme.text(rv.timerLabel, TEXT_SUB);
                 }
                 case FAILED -> {
                     rv.node.setCursor(javafx.scene.Cursor.HAND); // clickable: opens the full error
                     rv.statusLabel.setText("❌ " + (result.errorMessage() != null ? result.errorMessage() : "failed"));
-                    rv.statusLabel.setTextFill(Color.web(RED));
+                    Theme.text(rv.statusLabel, RED);
                     Tooltip.install(rv.statusLabel, new Tooltip("Click the row to see the full error"));
                     rv.timerLabel.setText(formatDuration(result.durationMs()));
-                    rv.timerLabel.setTextFill(Color.web(TEXT_SUB));
+                    Theme.text(rv.timerLabel, TEXT_SUB);
                 }
-                case SKIPPED_INCOMPATIBLE -> { rv.statusLabel.setText("Skipped (incompatible)"); rv.statusLabel.setTextFill(Color.web(PEACH)); }
-                case SKIPPED_EXCLUDED -> { rv.statusLabel.setText("Skipped (unchecked)"); rv.statusLabel.setTextFill(Color.web(MUTED)); }
+                case SKIPPED_INCOMPATIBLE -> { rv.statusLabel.setText("Skipped (incompatible)"); Theme.text(rv.statusLabel, PEACH); }
+                case SKIPPED_EXCLUDED -> { rv.statusLabel.setText("Skipped (unchecked)"); Theme.text(rv.statusLabel, MUTED); }
             }
         }
         highlightRow(row);
@@ -2363,7 +2364,7 @@ class QTraceReplayPlayer {
 
     private void refreshMilestoneLabel() {
         int pct = totalWorkUnits > 0 ? Math.min(100, (completedWorkUnits * 100) / totalWorkUnits) : 0;
-        milestoneLabel.setTextFill(Color.web(MUTED));
+        Theme.text(milestoneLabel, MUTED);
         milestoneLabel.setStyle("-fx-font-weight: normal;");
         milestoneLabel.setText(currentMilestoneText + "  —  " + pct + "%");
     }
@@ -2373,7 +2374,7 @@ class QTraceReplayPlayer {
         completedWorkUnits = totalWorkUnits;
         setPhase(MiniPlayerStatus.Phase.DONE, null);
         Platform.runLater(() -> {
-            milestoneLabel.setTextFill(Color.web(GREEN));
+            Theme.text(milestoneLabel, GREEN);
             milestoneLabel.setStyle("-fx-font-weight: bold;");
             milestoneLabel.setText("Execution completed");
         });
@@ -2543,7 +2544,7 @@ class QTraceReplayPlayer {
     private Button transportButton(String text, javafx.event.EventHandler<javafx.event.ActionEvent> action) {
         Button b = new Button(text);
         b.setFont(Font.font("System", FontWeight.BOLD, 12));
-        b.setTextFill(Color.web(TEXT));
+        Theme.text(b, TEXT);
         b.setPrefWidth(38);
         b.setStyle("-fx-background-color: " + SURFACE + "; -fx-background-radius: 3; -fx-cursor: hand;");
         b.setOnAction(action);
@@ -2558,7 +2559,7 @@ class QTraceReplayPlayer {
 
     private void applyGoldStamp() {
         stampBtn.setStyle(
-            "-fx-background-color: " + GOLD_BG + "; -fx-border-color: #4a3c1e; -fx-border-radius: 3;"
+            "-fx-background-color: " + GOLD_BG + "; -fx-border-color: -qt-gold-border; -fx-border-radius: 3;"
           + "-fx-background-radius: 3; -fx-text-fill: " + GOLD + "; -fx-cursor: default; -fx-padding: 5 10 5 10;");
     }
 
@@ -2582,7 +2583,7 @@ class QTraceReplayPlayer {
 
     private static Label label(String text, String color, int size, FontWeight weight) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(color));
+        Theme.text(l, color);
         l.setFont(Font.font("System", weight, size));
         return l;
     }

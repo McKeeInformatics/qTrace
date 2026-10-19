@@ -19,6 +19,7 @@
 
 package io.qtrace.versiongraph;
 
+import io.qtrace.Theme;
 import io.qtrace.VersionGraph;
 
 import io.qtrace.StampIntegrity;
@@ -80,18 +81,18 @@ import java.util.Map;
 public class QTraceCommitGraph implements VersionGraph.Window {
 
     // ── Catppuccin Mocha (matches QTraceDashboard / QTracePanel) ───────────────
-    protected static final String BG_BASE    = "#1e1e2e";
-    protected static final String BG_SURFACE = "#181825";
-    protected static final String BG_CARD    = "#24273a";
-    protected static final String BORDER     = "#313244";
-    protected static final String TEXT_MAIN  = "#cdd6f4";
-    protected static final String TEXT_SUB   = "#a6adc8";
-    protected static final String TEXT_MUTED = "#6c7086";
-    protected static final String BLUE       = "#89b4fa";
-    protected static final String GREEN      = "#a6e3a1";
-    protected static final String PEACH      = "#fab387";
-    protected static final String RED        = "#f38ba8";
-    protected static final String MAUVE      = "#cba6f7";   // a workflow's packets: neither stamped nor unstamped
+    protected static final String BG_BASE    = "-qt-bg-base";
+    protected static final String BG_SURFACE = "-qt-bg-surface";
+    protected static final String BG_CARD    = "-qt-bg-card";
+    protected static final String BORDER     = "-qt-border";
+    protected static final String TEXT_MAIN  = "-qt-text-main";
+    protected static final String TEXT_SUB   = "-qt-text-sub";
+    protected static final String TEXT_MUTED = "-qt-text-muted";
+    protected static final String BLUE       = "-qt-blue";
+    protected static final String GREEN      = "-qt-green";
+    protected static final String PEACH      = "-qt-peach";
+    protected static final String RED        = "-qt-red";
+    protected static final String MAUVE      = "-qt-mauve";   // a workflow's packets: neither stamped nor unstamped
 
     // ── Layout constants ───────────────────────────────────────────────────────
     private static final double X_GAP   = 190;
@@ -146,7 +147,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
     // Step timeline (below the graph).
     protected static final String MONO = "Monospaced";
     private static final String ROW_IDLE = "-fx-border-color: transparent; -fx-border-width: 0 0 0 3;";
-    private static final String ROW_SELECTED = "-fx-background-color: rgba(250,179,135,0.12);"
+    private static final String ROW_SELECTED = "-fx-background-color: -qt-peach-soft;"
         + "-fx-border-color: " + PEACH + "; -fx-border-width: 0 0 0 3;";
     // Virtualized: real traces carry ~900 steps; one node tree per row made every click relayout
     // them all (~1 s per click). A ListView only builds the rows on screen.
@@ -169,7 +170,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
 
         headerLabel = new Label("");
         headerLabel.setFont(Font.font("System", FontWeight.BOLD, 13));
-        headerLabel.setTextFill(Color.web(TEXT_MAIN));
+        Theme.text(headerLabel, TEXT_MAIN);
 
         openBtn = new Button(QTraceI18n.t("graph.open"));
         openBtn.setId("graph-open-button"); // looked up by the screenshot harness — see ScreenshotHarness
@@ -211,7 +212,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         });
 
         Label timelineTitle = new Label(QTraceI18n.t("graph.timeline.title"));
-        timelineTitle.setTextFill(Color.web(BLUE));
+        Theme.text(timelineTitle, BLUE);
         timelineTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
         timelineTitle.setPadding(new Insets(8, 14, 6, 14));
 
@@ -225,7 +226,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
             return cell;
         });
         Label placeholder = muted(QTraceI18n.t("graph.timeline.empty"));
-        fill(placeholder, Color.web(TEXT_MUTED));
+        fill(placeholder, Theme.web(TEXT_MUTED));
         timelineList.setPlaceholder(placeholder);
         timelineList.getSelectionModel().selectedItemProperty().addListener((o, was, e) -> {
             if (ownsSelection()) return;
@@ -238,7 +239,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
 
         timelineFooter = new Label("");
         timelineFooter.setFont(Font.font(MONO, 10));
-        timelineFooter.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(timelineFooter, TEXT_MUTED);
         timelineFooter.setMaxWidth(Double.MAX_VALUE);
         timelineFooter.setPadding(new Insets(6, 14, 6, 14));
         timelineFooter.setStyle("-fx-background-color: " + BG_SURFACE + ";"
@@ -513,11 +514,11 @@ public class QTraceCommitGraph implements VersionGraph.Window {
 
     protected void redraw(Node selected) {
         GraphicsContext g = canvas.getGraphicsContext2D();
-        g.setFill(Color.web(BG_BASE));
+        g.setFill(Theme.web(BG_BASE));
         g.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
 
         if (nodes.isEmpty()) {
-            g.setFill(Color.web(TEXT_MUTED));
+            g.setFill(Theme.web(TEXT_MUTED));
             g.setFont(Font.font("System", 13));
             g.setTextAlign(TextAlignment.LEFT);
             g.fillText(QTraceI18n.t("graph.empty"), 30, LANE_Y);
@@ -525,7 +526,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         }
 
         // Edges: parent → child (linear in v1).
-        g.setStroke(Color.web(BORDER));
+        g.setStroke(Theme.web(BORDER));
         g.setLineWidth(3);
         for (int i = 1; i < nodes.size(); i++) {
             Node a = nodes.get(i - 1), b = nodes.get(i);
@@ -540,18 +541,18 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         Color nodeColor = nodeColor(n);
 
         if (selected) {
-            g.setStroke(Color.web(BLUE));
+            g.setStroke(Theme.web(BLUE));
             g.setLineWidth(3);
             g.strokeOval(n.cx - NODE_R - 4, n.cy - NODE_R - 4, (NODE_R + 4) * 2, (NODE_R + 4) * 2);
         }
         if (n.stamped || n.packet) {
-            g.setFill(n.packet ? Color.web(MAUVE) : nodeColor);
+            g.setFill(n.packet ? Theme.web(MAUVE) : nodeColor);
             g.fillOval(n.cx - NODE_R, n.cy - NODE_R, NODE_R * 2, NODE_R * 2);
         } else {
             // Unstamped (autosaved) session: hollow, dashed — recorded, not validated.
-            g.setFill(Color.web(BG_BASE));
+            g.setFill(Theme.web(BG_BASE));
             g.fillOval(n.cx - NODE_R, n.cy - NODE_R, NODE_R * 2, NODE_R * 2);
-            g.setStroke(Color.web(TEXT_MUTED));
+            g.setStroke(Theme.web(TEXT_MUTED));
             g.setLineWidth(2);
             g.setLineDashes(4, 4);
             g.strokeOval(n.cx - NODE_R, n.cy - NODE_R, NODE_R * 2, NODE_R * 2);
@@ -559,7 +560,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         }
 
         // Commit index inside the node.
-        g.setFill(Color.web(n.stamped || n.packet ? BG_BASE : TEXT_MUTED));
+        g.setFill(Theme.web(n.stamped || n.packet ? BG_BASE : TEXT_MUTED));
         g.setFont(Font.font("System", FontWeight.BOLD, 13));
         g.setTextAlign(TextAlignment.CENTER);
         g.fillText("#" + (n.index + 1), n.cx, n.cy + 4);
@@ -569,39 +570,39 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         double br = 13;
         g.setFill(contributorColor(n.contributor));
         g.fillOval(bx - br, by - br, br * 2, br * 2);
-        g.setFill(Color.web(BG_BASE));
+        g.setFill(Theme.web(BG_BASE));
         g.setFont(Font.font("System", FontWeight.BOLD, 10));
         g.fillText(initials(n.contributor), bx, by + 3);
 
         // Contributor name above the badge.
-        g.setFill(Color.web(TEXT_SUB));
+        g.setFill(Theme.web(TEXT_SUB));
         g.setFont(Font.font("System", 10));
         g.fillText(ellipsis(n.contributor, 18), n.cx, by - br - 4);
 
         // Title (notes → scope → Session #n) below the node.
-        g.setFill(Color.web(TEXT_MAIN));
+        g.setFill(Theme.web(TEXT_MAIN));
         g.setFont(Font.font("System", FontWeight.BOLD, 11));
         g.fillText(ellipsis(title(n), 22), n.cx, n.cy + NODE_R + 18);
 
         // A packet says what it holds: it has no stamp, and no date of its own.
         if (n.packet) {
-            g.setFill(Color.web(MAUVE));
+            g.setFill(Theme.web(MAUVE));
             g.setFont(Font.font("System", FontWeight.BOLD, 10));
             g.fillText(QTraceI18n.f("graph.packet.count", n.steps), n.cx, n.cy + NODE_R + 34);
             return;
         }
         // Validator + signature mark — or the unstamped mark.
         if (!n.stamped) {
-            g.setFill(Color.web(TEXT_MUTED));
+            g.setFill(Theme.web(TEXT_MUTED));
             g.setFont(Font.font("System", FontWeight.BOLD, 10));
             g.fillText(QTraceI18n.t(n.live ? "graph.live" : "graph.unstamped"), n.cx, n.cy + NODE_R + 34);
         } else if (n.validator != null) {
-            g.setFill(n.signed ? Color.web(GREEN) : Color.web(TEXT_MUTED));
+            g.setFill(n.signed ? Theme.web(GREEN) : Theme.web(TEXT_MUTED));
             g.setFont(Font.font("System", 10));
             g.fillText((n.signed ? "✓ " : "") + ellipsis(n.validator, 20), n.cx, n.cy + NODE_R + 34);
         }
         // Date.
-        g.setFill(Color.web(TEXT_MUTED));
+        g.setFill(Theme.web(TEXT_MUTED));
         g.setFont(Font.font("System", 9));
         g.fillText(dateShort(n.exportedAt), n.cx, n.cy + NODE_R + 48);
     }
@@ -650,24 +651,24 @@ public class QTraceCommitGraph implements VersionGraph.Window {
     }
 
     private HBox stepRow(VersionTimeline.Entry e, Node n) {
-        Circle dot = new Circle(4, Color.web(TEXT_MUTED));
+        Circle dot = new Circle(4, Theme.web(TEXT_MUTED));
 
         Label cmd = new Label(e.command().isBlank() ? "—" : e.command());
-        fill(cmd, Color.web(TEXT_MAIN));
+        fill(cmd, Theme.web(TEXT_MAIN));
         cmd.setFont(Font.font("System", 12));
 
         HBox sub = new HBox(8);
         sub.setAlignment(Pos.CENTER_LEFT);
         if (!e.summary().isEmpty()) {
             Label s = new Label(e.summary());
-            fill(s, Color.web(TEXT_MUTED));
+            fill(s, Theme.web(TEXT_MUTED));
             s.setFont(Font.font(MONO, 10));
             sub.getChildren().add(s);
         }
         String flag = stepFlag(e);
         if (flag != null) {
             Label f = new Label(flag);
-            fill(f, Color.web(PEACH));
+            fill(f, Theme.web(PEACH));
             f.setFont(Font.font("System", FontWeight.BOLD, 9));
             sub.getChildren().add(f);
         }
@@ -706,15 +707,15 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         if (stamped) {
             dot.setFill(nodeColor(n));
         } else {
-            dot.setFill(Color.web(BG_BASE));
-            dot.setStroke(Color.web(TEXT_MUTED));
+            Theme.fill(dot, BG_BASE);
+            Theme.stroke(dot, TEXT_MUTED);
             dot.setStrokeWidth(2);
             dot.getStrokeDashArray().setAll(3.0, 3.0);
         }
 
         Label head = new Label(QTraceI18n.t(stamped ? "graph.detail.stamped" : n.live ? "graph.live" : "graph.unstamped")
             + "  ·  #" + (n.index + 1) + " — " + title(n));
-        fill(head, stamped ? nodeColor(n) : Color.web(TEXT_MUTED));
+        fill(head, stamped ? nodeColor(n) : Theme.web(TEXT_MUTED));
         head.setFont(Font.font("System", FontWeight.BOLD, 12));
 
         List<String> parts = new ArrayList<>();
@@ -723,7 +724,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         if (stamped && n.confidence != null) parts.add(n.confidence);
         parts.add(dateShort(e.timestampIso()));
         Label sub = new Label(String.join("  ·  ", parts));
-        fill(sub, Color.web(stamped && n.signed ? GREEN : TEXT_SUB));
+        fill(sub, Theme.web(stamped && n.signed ? GREEN : TEXT_SUB));
         sub.setFont(Font.font(MONO, 10));
 
         HBox row = timelineRow(dot, e.time(), new VBox(1, head, sub));
@@ -743,7 +744,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         rail.setPrefWidth(24);
 
         Label t = new Label(time);
-        fill(t, Color.web(TEXT_MUTED));
+        fill(t, Theme.web(TEXT_MUTED));
         t.setFont(Font.font(MONO, 11));
         t.setMinWidth(66);
 
@@ -829,7 +830,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
             detailBox.getChildren().add(sectionTitle(QTraceI18n.t("graph.step.script")));
             Label script = new Label(ellipsis(e.script(), 1200));
             script.setWrapText(true);
-            script.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(script, TEXT_SUB);
             script.setFont(Font.font(MONO, 10));
             detailBox.getChildren().add(script);
         }
@@ -838,13 +839,13 @@ public class QTraceCommitGraph implements VersionGraph.Window {
 
     /** A packet's row: its title and what it holds. */
     private HBox packetRow(VersionTimeline.Entry e, Node n) {
-        Circle dot = new Circle(7, Color.web(MAUVE));
+        Circle dot = new Circle(7, Theme.web(MAUVE));
         Label head = new Label("#" + (n.index + 1) + " — " + title(n));
-        fill(head, Color.web(MAUVE));
+        fill(head, Theme.web(MAUVE));
         head.setFont(Font.font("System", FontWeight.BOLD, 12));
         Label sub = new Label(QTraceI18n.f("graph.packet.count", n.steps)
             + (n.sideRecords > 0 ? "  ·  " + QTraceI18n.f("graph.packet.side", n.sideRecords) : ""));
-        fill(sub, Color.web(TEXT_SUB));
+        fill(sub, Theme.web(TEXT_SUB));
         sub.setFont(Font.font(MONO, 10));
         VBox text = new VBox(1, head, sub);
 
@@ -871,7 +872,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
             detailBox.getChildren().add(sectionTitle(QTraceI18n.t("graph.detail.notes")));
             Label notes = new Label(n.packetNotes);
             notes.setWrapText(true);
-            notes.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(notes, TEXT_SUB);
             notes.setFont(Font.font("System", 11));
             detailBox.getChildren().add(notes);
         }
@@ -1022,7 +1023,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
             detailBox.getChildren().add(sectionTitle(QTraceI18n.t("graph.detail.notes")));
             Label notes = new Label(n.notes);
             notes.setWrapText(true);
-            notes.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(notes, TEXT_SUB);
             notes.setFont(Font.font("System", 11));
             detailBox.getChildren().add(notes);
         }
@@ -1036,7 +1037,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
         badge.setStyle("-fx-background-radius: 13; -fx-background-color: " + toHex(c) + ";"
             + "-fx-text-fill: " + BG_BASE + "; -fx-font-weight: bold; -fx-font-size: 10;");
         Label name = new Label(n.contributor);
-        name.setTextFill(Color.web(TEXT_MAIN));
+        Theme.text(name, TEXT_MAIN);
         name.setFont(Font.font("System", FontWeight.BOLD, 12));
         HBox row = new HBox(8, badge, name);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -1060,19 +1061,19 @@ public class QTraceCommitGraph implements VersionGraph.Window {
     }
 
     private Color nodeColor(Node n) {
-        if ("COMPROMISED".equalsIgnoreCase(n.fidelity)) return Color.web(RED);
-        if ("DEGRADED".equalsIgnoreCase(n.fidelity))    return Color.web(PEACH);
-        if (n.confidence == null)                       return Color.web(TEXT_MUTED);
+        if ("COMPROMISED".equalsIgnoreCase(n.fidelity)) return Theme.web(RED);
+        if ("DEGRADED".equalsIgnoreCase(n.fidelity))    return Theme.web(PEACH);
+        if (n.confidence == null)                       return Theme.web(TEXT_MUTED);
         return switch (n.confidence.toLowerCase()) {
-            case "high"   -> Color.web(GREEN);
-            case "medium" -> Color.web(PEACH);
-            case "low"    -> Color.web(RED);
-            default        -> Color.web(BLUE);
+            case "high"   -> Theme.web(GREEN);
+            case "medium" -> Theme.web(PEACH);
+            case "low"    -> Theme.web(RED);
+            default        -> Theme.web(BLUE);
         };
     }
 
     private static Color contributorColor(String name) {
-        if (name == null || name.isBlank()) return Color.web("#6c7086");
+        if (name == null || name.isBlank()) return Theme.web("-qt-text-muted");
         double hue = Math.abs(name.hashCode()) % 360;
         return Color.hsb(hue, 0.55, 0.85);
     }
@@ -1113,7 +1114,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
 
     protected Label sectionTitle(String t) {
         Label l = new Label(t);
-        l.setTextFill(Color.web(BLUE));
+        Theme.text(l, BLUE);
         l.setFont(Font.font("System", FontWeight.BOLD, 12));
         l.setPadding(new Insets(8, 0, 2, 0));
         return l;
@@ -1121,7 +1122,7 @@ public class QTraceCommitGraph implements VersionGraph.Window {
 
     protected Label kv(String k, String v) {
         Label l = new Label(k + " : " + v);
-        l.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(l, TEXT_SUB);
         l.setFont(Font.font("System", 11));
         l.setWrapText(true);
         return l;
@@ -1129,14 +1130,14 @@ public class QTraceCommitGraph implements VersionGraph.Window {
 
     protected Label bullet(String s) {
         Label l = new Label("• " + s);
-        l.setTextFill(Color.web(TEXT_MAIN));
+        Theme.text(l, TEXT_MAIN);
         l.setFont(Font.font("System", 11));
         return l;
     }
 
     protected Label muted(String s) {
         Label l = new Label(s);
-        l.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(l, TEXT_MUTED);
         l.setFont(Font.font("System", 11));
         l.setWrapText(true);
         return l;

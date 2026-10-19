@@ -112,7 +112,7 @@ final class NetworkSettingsPane {
 
     private VBox build() {
         Label intro = new Label(t("settings.network.intro"));
-        intro.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(intro, TEXT_SUB);
         intro.setFont(Font.font("System", 11));
         intro.setWrapText(true);
 
@@ -159,7 +159,7 @@ final class NetworkSettingsPane {
 
         // Certificates.
         chkSystemStore.setId("network-trust-system");
-        chkSystemStore.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(chkSystemStore, TEXT_SUB);
         chkSystemStore.setWrapText(true);
         chkSystemStore.setTooltip(hintTooltip(t("settings.network.trustsystem.hint")));
         VBox.setMargin(storeStatus, new Insets(-4, 0, 0, 24));
@@ -333,7 +333,7 @@ final class NetworkSettingsPane {
 
     private void status(String text, String color) {
         caStatus.setText(text);
-        caStatus.setTextFill(Color.web(color));
+        Theme.text(caStatus, color);
     }
 
     // ── What the form says ─────────────────────────────────────────────────────
@@ -396,14 +396,14 @@ final class NetworkSettingsPane {
         results.getChildren().clear();
         for (ConnectionTest.Outcome o : report.outcomes()) {
             Label mark = new Label(o.ok() ? "✓" : "✗");
-            mark.setTextFill(Color.web(o.ok() ? GREEN : RED));
+            Theme.text(mark, o.ok() ? GREEN : RED);
             mark.setFont(Font.font("System", FontWeight.BOLD, 12));
             mark.setMinWidth(14);
             Label what = new Label(t(o.target().purposeKey()) + "  ·  " + o.target().host());
-            what.setTextFill(Color.web(TEXT_MAIN));
+            Theme.text(what, TEXT_MAIN);
             what.setFont(Font.font("System", FontWeight.BOLD, 11));
             Label msg = new Label(o.message());
-            msg.setTextFill(Color.web(o.ok() ? TEXT_SUB : TEXT_MAIN));
+            Theme.text(msg, o.ok() ? TEXT_SUB : TEXT_MAIN);
             msg.setFont(Font.font("System", 11));
             msg.setWrapText(true);
             VBox text = new VBox(2, what, msg);
@@ -416,7 +416,7 @@ final class NetworkSettingsPane {
             Label hint = new Label(report.hint());
             hint.setWrapText(true);
             hint.setFont(Font.font("System", 11));
-            hint.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(hint, TEXT_SUB);
             hint.setMaxWidth(Double.MAX_VALUE);
             hint.setPadding(new Insets(8, 10, 8, 10));
             hint.setStyle("-fx-background-color: " + BG_SURFACE + "; -fx-background-radius: 6;"
@@ -457,21 +457,21 @@ final class NetworkSettingsPane {
     private static RadioButton radio(String key, String id) {
         RadioButton rb = new RadioButton(t(key));
         rb.setId(id);
-        rb.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(rb, TEXT_SUB);
         rb.setWrapText(true);
         return rb;
     }
 
     private static Label fieldLabel(String key) {
         Label l = new Label(t(key));
-        l.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(l, TEXT_SUB);
         l.setFont(Font.font("System", FontWeight.NORMAL, 12));
         return l;
     }
 
     private static Label muted(String text) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(l, TEXT_MUTED);
         l.setFont(Font.font("System", 11));
         l.setWrapText(true);
         return l;
@@ -479,7 +479,7 @@ final class NetworkSettingsPane {
 
     private static Label hint(String text) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(l, TEXT_MUTED);
         l.setFont(Font.font("System", 10));
         l.setWrapText(true);
         return l;

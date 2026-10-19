@@ -38,19 +38,19 @@ import qupath.lib.gui.QuPathGUI;
 
 public class QTraceAboutDialog {
 
-    private static final String BG_BASE    = "#1e1e2e";
-    private static final String BG_SURFACE = "#181825";
-    private static final String BG_CARD    = "#24273a";
-    private static final String BORDER     = "#313244";
-    private static final String TEXT_MAIN  = "#cdd6f4";
-    private static final String TEXT_SUB   = "#a6adc8";
-    private static final String TEXT_MUTED = "#6c7086";
-    private static final String BLUE       = "#89b4fa";   // Core
-    private static final String YELLOW     = "#f9e2af";   // Compliance
-    private static final String GREEN      = "#a6e3a1";   // Certified
-    private static final String TEAL       = "#94e2d5";
-    private static final String ORANGE     = "#fab387";
-    private static final String RED        = "#f38ba8";   // invalid/tampered license
+    private static final String BG_BASE    = "-qt-bg-base";
+    private static final String BG_SURFACE = "-qt-bg-surface";
+    private static final String BG_CARD    = "-qt-bg-card";
+    private static final String BORDER     = "-qt-border";
+    private static final String TEXT_MAIN  = "-qt-text-main";
+    private static final String TEXT_SUB   = "-qt-text-sub";
+    private static final String TEXT_MUTED = "-qt-text-muted";
+    private static final String BLUE       = "-qt-blue";   // Core
+    private static final String YELLOW     = "-qt-yellow";   // Compliance
+    private static final String GREEN      = "-qt-green";   // Certified
+    private static final String TEAL       = "-qt-teal";
+    private static final String ORANGE     = "-qt-peach";
+    private static final String RED        = "-qt-red";   // invalid/tampered license
 
     private static final String WEBSITE    = "https://qtrace.ca";
     private static final String PORTAL_URL = "https://qtrace.ca/portal";
@@ -151,7 +151,7 @@ public class QTraceAboutDialog {
         HBox bar = new HBox();
         bar.setAlignment(Pos.CENTER_RIGHT);
         bar.setPadding(new Insets(8, 12, 0, 12));
-        Button x = ghostButton("✕", TEXT_MUTED, "#f38ba8", 13);
+        Button x = ghostButton("✕", TEXT_MUTED, "-qt-red", 13);
         x.setOnAction(e -> dialog.close());
         bar.getChildren().add(x);
         return bar;
@@ -173,7 +173,7 @@ public class QTraceAboutDialog {
 
         Text name = new Text("qTrace");
         name.setFont(Font.font("System", FontWeight.BOLD, 30));
-        name.setFill(Color.web(TEXT_MAIN));
+        Theme.fill(name, TEXT_MAIN);
 
         String badgeColor  = inactive ? inactiveColor() : switch (mode) {
             case CORE       -> BLUE;
@@ -201,18 +201,18 @@ public class QTraceAboutDialog {
         nameRow.getChildren().addAll(name, badge);
 
         Label version = new Label("v" + QTraceController.getDisplayVersion());
-        version.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(version, TEXT_MUTED);
         version.setFont(Font.font("System", 11));
 
         Label tagline = new Label("Workflow Provenance & Certification for QuPath");
-        tagline.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(tagline, TEXT_SUB);
         tagline.setFont(Font.font("System", FontPosture.ITALIC, 12));
 
         box.getChildren().addAll(nameRow, version, tagline);
 
         if (inactive) {
             Label warn = new Label("⚠ Your qTrace identity certificate is no longer active — running in Core mode.");
-            warn.setTextFill(Color.web(inactiveColor()));
+            Theme.text(warn, inactiveColor());
             warn.setFont(Font.font("System", FontWeight.BOLD, 11));
             warn.setWrapText(true);
             warn.setMaxWidth(360);
@@ -238,22 +238,22 @@ public class QTraceAboutDialog {
         );
 
         Label titleLbl = new Label("✓  Certified validator");
-        titleLbl.setTextFill(Color.web(GREEN));
+        Theme.text(titleLbl, GREEN);
         titleLbl.setFont(Font.font("System", FontWeight.BOLD, 11));
 
         Label nameLbl = new Label(li.name());
-        nameLbl.setTextFill(Color.web(TEXT_MAIN));
+        Theme.text(nameLbl, TEXT_MAIN);
         nameLbl.setFont(Font.font("System", FontWeight.BOLD, 15));
 
         Label instLbl = new Label(li.institution().isBlank() ? "" : li.institution());
-        instLbl.setTextFill(Color.web(TEXT_SUB));
+        Theme.text(instLbl, TEXT_SUB);
         instLbl.setFont(Font.font("System", 12));
 
         HBox metaRow = new HBox(16);
         metaRow.setAlignment(Pos.CENTER_LEFT);
 
         Label expLbl = new Label("Valid until  " + li.expiresAtFormatted());
-        expLbl.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(expLbl, TEXT_MUTED);
         expLbl.setFont(Font.font("System", 11));
 
         metaRow.getChildren().add(expLbl);
@@ -325,7 +325,7 @@ public class QTraceAboutDialog {
 
             Label sectionTitle = new Label("Compliance Coverage");
             sectionTitle.setFont(Font.font("System", FontWeight.BOLD, 10));
-            sectionTitle.setTextFill(Color.web(TEXT_MUTED));
+            Theme.text(sectionTitle, TEXT_MUTED);
             sectionTitle.setPadding(new Insets(4, 0, 4, 0));
             g.add(sectionTitle, 0, row); GridPane.setColumnSpan(sectionTitle, 2); row++;
 
@@ -347,16 +347,16 @@ public class QTraceAboutDialog {
 
     private static HBox complianceIndicator(String standard, String description) {
         Label dot = new Label("●");
-        dot.setTextFill(Color.web(TEAL));
+        Theme.text(dot, TEAL);
         dot.setFont(Font.font("System", 10));
 
         Label stdLabel = new Label(standard);
         stdLabel.setFont(Font.font("System", FontWeight.BOLD, 11));
-        stdLabel.setTextFill(Color.web(TEAL));
+        Theme.text(stdLabel, TEAL);
 
         Label descLabel = new Label("— " + description);
         descLabel.setFont(Font.font("System", 11));
-        descLabel.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(descLabel, TEXT_MUTED);
 
         HBox box = new HBox(6, dot, stdLabel, descLabel);
         box.setAlignment(Pos.CENTER_LEFT);
@@ -470,17 +470,17 @@ public class QTraceAboutDialog {
         box.setPadding(new Insets(12, 24, 12, 24));
         Label title = new Label("Installed modules");
         title.setFont(Font.font("System", FontWeight.BOLD, 10));
-        title.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(title, TEXT_MUTED);
         box.getChildren().add(title);
         local.forEach((module, version) -> {
             boolean on = ModuleEntitlements.isEntitled(module);
             Label name = new Label(module);
             name.setFont(Font.font("System", FontWeight.BOLD, 12));
-            name.setTextFill(Color.web(on ? TEXT_MAIN : TEXT_MUTED));
+            Theme.text(name, on ? TEXT_MAIN : TEXT_MUTED);
             name.setMinWidth(110);
             Label detail = new Label(on ? "v" + version : "v" + version + " — no longer included in your licence");
             detail.setFont(Font.font("System", 11));
-            detail.setTextFill(Color.web(on ? TEXT_SUB : TEXT_MUTED));
+            Theme.text(detail, on ? TEXT_SUB : TEXT_MUTED);
             HBox row = new HBox(8, name, detail);
             row.setId("module-" + module);
             row.setOpacity(on ? 1.0 : 0.6);
@@ -491,7 +491,7 @@ public class QTraceAboutDialog {
 
     private static Label colHeader(String text, String color) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(color));
+        Theme.text(l, color);
         l.setFont(Font.font("System", FontWeight.BOLD, 10));
         l.setMaxWidth(Double.MAX_VALUE);
         l.setAlignment(Pos.CENTER);
@@ -500,14 +500,14 @@ public class QTraceAboutDialog {
 
     private static Label featureLabel(String text, boolean dimmed) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(dimmed ? TEXT_MUTED : TEXT_SUB));
+        Theme.text(l, dimmed ? TEXT_MUTED : TEXT_SUB);
         l.setFont(Font.font("System", 12));
         return l;
     }
 
     private static Label check(boolean present, String activeColor) {
         Label l = new Label(present ? "✓" : "—");
-        l.setTextFill(Color.web(present ? activeColor : TEXT_MUTED));
+        Theme.text(l, present ? activeColor : TEXT_MUTED);
         l.setFont(Font.font("System", FontWeight.BOLD, 13));
         l.setMaxWidth(Double.MAX_VALUE);
         l.setAlignment(Pos.CENTER);
@@ -516,7 +516,7 @@ public class QTraceAboutDialog {
 
     private static Label muted(String text) {
         Label l = new Label(text);
-        l.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(l, TEXT_MUTED);
         l.setFont(Font.font("System", 11));
         return l;
     }

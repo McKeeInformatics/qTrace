@@ -52,8 +52,8 @@ import org.slf4j.LoggerFactory;
  */
 public class QTraceExtension implements QuPathExtension, GitHubProject {
 
-    private static final String COLOR_IDLE      = "#6c7086"; // Catppuccin TEXT_MUTED — no image
-    private static final String COLOR_RECORDING = "#f38ba8"; // Catppuccin RED — recording active
+    private static final String COLOR_IDLE      = "-qt-text-muted"; // Catppuccin TEXT_MUTED — no image
+    private static final String COLOR_RECORDING = "-qt-red"; // Catppuccin RED — recording active
 
     // Guards against a double install if an update left two qtrace-core JARs on the
     // classpath for one restart (QuPath instantiates one extension per service entry).
@@ -113,6 +113,9 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
 
         // ── Toolbar button (added on FX thread after QuPath finishes layout) ───
         Platform.runLater(() -> addToolbarButton(qupath));
+
+        // ── Theme (Settings > Appearance): paints every window, now and later ──
+        Platform.runLater(() -> Theme.install(Theme.Mode.parse(QTraceConfig.get().getTheme())));
 
         // ── Panel at startup (Settings > Appearance) ───────────────────────────
         if (QTraceConfig.get().isShowPanelAtStartup()) showPanelWhenReady(qupath);
@@ -220,7 +223,7 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
         Rectangle bg = new Rectangle(22, 22);
         bg.setArcWidth(4);
         bg.setArcHeight(4);
-        bg.setFill(Color.web(COLOR_IDLE));
+        Theme.fill(bg, COLOR_IDLE);
 
         Image logoImg = QTracePanel.loadLogo();
         ImageView logoView = new ImageView();
@@ -269,10 +272,10 @@ public class QTraceExtension implements QuPathExtension, GitHubProject {
 
         // ── Dynamic icon colour based on recording state ───────────────────────
         controller.addRecordingListener(recording ->
-            bg.setFill(Color.web(recording ? COLOR_RECORDING : COLOR_IDLE))
+            Theme.fill(bg, recording ? COLOR_RECORDING : COLOR_IDLE)
         );
         // Sync initial state
-        bg.setFill(Color.web(controller.isRecording() ? COLOR_RECORDING : COLOR_IDLE));
+        Theme.fill(bg, controller.isRecording() ? COLOR_RECORDING : COLOR_IDLE);
 
         qupath.getToolBar().getItems().add(btn);
     }

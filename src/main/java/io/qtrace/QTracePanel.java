@@ -47,27 +47,27 @@ import qupath.lib.gui.QuPathGUI;
 public class QTracePanel {
 
     // Catppuccin Mocha palette — chosen to complement QuPath's dark theme
-    static final String BG_BASE    = "#1e1e2e";
-    static final String BG_SURFACE = "#181825";
-    static final String BORDER     = "#313244";
-    static final String TEXT_MAIN  = "#cdd6f4";
-    static final String TEXT_SUB   = "#a6adc8";
-    static final String TEXT_MUTED = "#6c7086";
-    static final String BLUE       = "#89b4fa";
-    static final String GREEN      = "#a6e3a1";
-    static final String PEACH      = "#fab387";
-    static final String RED        = "#f38ba8";
+    static final String BG_BASE    = "-qt-bg-base";
+    static final String BG_SURFACE = "-qt-bg-surface";
+    static final String BORDER     = "-qt-border";
+    static final String TEXT_MAIN  = "-qt-text-main";
+    static final String TEXT_SUB   = "-qt-text-sub";
+    static final String TEXT_MUTED = "-qt-text-muted";
+    static final String BLUE       = "-qt-blue";
+    static final String GREEN      = "-qt-green";
+    static final String PEACH      = "-qt-peach";
+    static final String RED        = "-qt-red";
 
     // Toolbar redesign — CTA + functional group accents
-    static final String BG_ELEVATED = "#26263a";
-    static final String TEXT_FAINT  = "#4a4a5e";
-    static final String CTA_TEAL       = "#2dd4bf";
-    static final String CTA_TEAL_SOFT  = "rgba(45,212,191,0.14)";
-    static final String CTA_TEAL_BORDER = "rgba(45,212,191,0.35)";
-    static final String GROUP_WORKSPACE = "#8B5CF6";
-    static final String GROUP_TOOLS     = "#10B981";
-    static final String GROUP_ADMIN     = "#9CA3AF";
-    static final String GOLD            = "#d9b34d";
+    static final String BG_ELEVATED = "-qt-bg-elevated";
+    static final String TEXT_FAINT  = "-qt-text-faint";
+    static final String CTA_TEAL       = "-qt-cta-teal";
+    static final String CTA_TEAL_SOFT  = "-qt-cta-teal-soft";
+    static final String CTA_TEAL_BORDER = "-qt-cta-teal-border";
+    static final String GROUP_WORKSPACE = "-qt-group-workspace";
+    static final String GROUP_TOOLS     = "-qt-group-tools";
+    static final String GROUP_ADMIN     = "-qt-group-admin";
+    static final String GOLD            = "-qt-gold";
 
     private final Stage stage;
     private final QuPathGUI qupath;
@@ -188,14 +188,14 @@ public class QTracePanel {
             : "Core";
         Text title = new Text("qTrace " + edition);
         title.setFont(Font.font("System", FontWeight.BOLD, 18));
-        title.setFill(Color.web(TEXT_MAIN));
+        Theme.fill(title, TEXT_MAIN);
 
         Region topSpacer = new Region();
         HBox.setHgrow(topSpacer, Priority.ALWAYS);
 
         HBox captureStatus = buildCaptureStatus();
 
-        Button settingsBtn = iconOnlyButton(glyphIcon("⚙"), QTraceI18n.t("btn.settings.tooltip"), Color.web(GROUP_ADMIN));
+        Button settingsBtn = iconOnlyButton(glyphIcon("⚙"), QTraceI18n.t("btn.settings.tooltip"), Theme.web(GROUP_ADMIN));
         settingsBtn.setId("settings-button"); // looked up by the screenshot harness — see ScreenshotHarness
         settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
 
@@ -204,7 +204,7 @@ public class QTracePanel {
         // ── Line 2: subtitle + license badge, indented under the title ──
         Text sub = new Text("Workflow Provenance — v" + QTraceController.getDisplayVersion());
         sub.setFont(Font.font("System", 11));
-        sub.setFill(Color.web(TEXT_MUTED));
+        Theme.fill(sub, TEXT_MUTED);
 
         VBox metaBlock = new VBox(1, sub, buildLicenseBadge());
         metaBlock.setPadding(new Insets(0, 0, 0, 36));
@@ -216,7 +216,7 @@ public class QTracePanel {
     // ── Capture status (passive — Recording / Paused) ───────────────────────────
 
     private HBox buildCaptureStatus() {
-        captureDot = new Circle(3.2, Color.web(TEXT_MUTED));
+        captureDot = new Circle(3.2, Theme.web(TEXT_MUTED));
         captureLabel = styledLabel("Paused", TEXT_MUTED, FontWeight.BOLD, 10);
         // Live autosave status — "Saved · 3 s ago", like a document editor.
         autosaveLabel = styledLabel("", TEXT_MUTED, FontWeight.NORMAL, 10);
@@ -247,7 +247,7 @@ public class QTracePanel {
         switch (e.status()) {
             case SAVING -> {
                 autosaveLabel.setText(QTraceI18n.t("autosave.saving"));
-                autosaveLabel.setTextFill(Color.web(TEXT_MUTED));
+                Theme.text(autosaveLabel, TEXT_MUTED);
                 autosaveLabel.setTooltip(null);
             }
             case SAVED -> {
@@ -256,12 +256,12 @@ public class QTracePanel {
                            : secs < 60 ? QTraceI18n.f("autosave.saved.seconds", secs)
                                        : QTraceI18n.f("autosave.saved.minutes", secs / 60);
                 autosaveLabel.setText(QTraceI18n.f("autosave.saved", ago));
-                autosaveLabel.setTextFill(Color.web(TEXT_MUTED));
+                Theme.text(autosaveLabel, TEXT_MUTED);
                 autosaveLabel.setTooltip(null);
             }
             case FAILED -> {
                 autosaveLabel.setText("⚠ " + QTraceI18n.t("autosave.failed.short"));
-                autosaveLabel.setTextFill(Color.web(RED));
+                Theme.text(autosaveLabel, RED);
                 autosaveLabel.setTooltip(new Tooltip(QTraceI18n.f("autosave.failed", e.message())));
             }
         }
@@ -318,7 +318,7 @@ public class QTracePanel {
             iconColor = TEXT_MUTED;
         }
 
-        Group icon = scaledIcon(iconMedal(Color.web(iconColor)), 11);
+        Group icon = scaledIcon(iconMedal(Theme.web(iconColor)), 11);
         Label label = styledLabel(text, urgent ? iconColor : TEXT_MUTED, FontWeight.NORMAL, 13);
 
         if (licenseInfo != null && licenseInfo.email() != null && !licenseInfo.email().isBlank()) {
@@ -409,11 +409,11 @@ public class QTracePanel {
         // ⚡ Stamp — CTA. Validates & stamps the current trace (capture itself is passive).
         btnRecord = new Button(QTraceI18n.t("btn.stamp.caption"));
         btnRecord.setId("stamp-button"); // looked up by the screenshot harness — see ScreenshotHarness
-        btnRecord.setGraphic(scaledIcon(iconStamp(Color.web(CTA_TEAL)), 17));
+        btnRecord.setGraphic(scaledIcon(iconStamp(Theme.web(CTA_TEAL)), 17));
         btnRecord.setContentDisplay(ContentDisplay.LEFT);
         btnRecord.setGraphicTextGap(7);
         btnRecord.setFont(Font.font("System", FontWeight.BOLD, 13));
-        btnRecord.setTextFill(Color.web(CTA_TEAL));
+        Theme.text(btnRecord, CTA_TEAL);
         Tooltip recordTip = new Tooltip(QTraceI18n.t("btn.stamp.tooltip"));
         recordTip.setWrapText(true);
         recordTip.setMaxWidth(260);
@@ -441,14 +441,14 @@ public class QTracePanel {
         pushInvite = upload == UploadInvite.State.SIGN_IN;
         if (pushInvite) {
             btnPush = iconButton(iconFactory(this::iconUpload), QTraceI18n.t("btn.upload.caption"),
-                QTraceI18n.t("btn.upload.signin.tooltip"), Color.web(GROUP_WORKSPACE));
+                QTraceI18n.t("btn.upload.signin.tooltip"), Theme.web(GROUP_WORKSPACE));
             btnPush.setId("upload-button");
             btnPush.setOpacity(0.45); // greyed, yet clickable: a disabled button could not say why
             btnPush.setOnAction(e -> UploadInvite.open());
         }
         if (upload == UploadInvite.State.UPLOAD) {
             btnPush = iconButton(welcomeMarked("upload", iconFactory(this::iconUpload)), QTraceI18n.t("btn.upload.caption"),
-                QTraceI18n.t("btn.upload.tooltip"), Color.web(GROUP_WORKSPACE));
+                QTraceI18n.t("btn.upload.tooltip"), Theme.web(GROUP_WORKSPACE));
             btnPush.setId("upload-button"); // looked up by the screenshot harness — see ScreenshotHarness
             btnPush.setDisable(!pushEnabled);
             btnPush.setOpacity(pushEnabled ? 1.0 : 0.45);
@@ -456,7 +456,7 @@ public class QTracePanel {
         }
         if (licensed) {
             btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),
-                QTraceI18n.t("btn.report.tooltip"), Color.web(GROUP_WORKSPACE));
+                QTraceI18n.t("btn.report.tooltip"), Theme.web(GROUP_WORKSPACE));
             btnReport.setId("report-button"); // looked up by the screenshot harness — see ScreenshotHarness
             btnReport.setOnAction(e -> controller.generateActivityReport());
         }
@@ -465,12 +465,12 @@ public class QTracePanel {
         // module has brought them (Dashboards, BatchImports).
         Button dashboardBtn = Dashboards.entitled() == null ? null
             : iconButton(welcomeMarked("dashboard", iconFactory(this::iconDashboard)), QTraceI18n.t("btn.dashboard.caption"),
-                QTraceI18n.t("btn.dashboard.tooltip"), Color.web(GROUP_TOOLS));
+                QTraceI18n.t("btn.dashboard.tooltip"), Theme.web(GROUP_TOOLS));
         Button importBtn = BatchImports.entitled() == null ? null
             : iconButton(welcomeMarked("import", iconFactory(this::iconImport)), QTraceI18n.t("btn.import.caption"),
-                QTraceI18n.t("btn.import.tooltip"), Color.web(GROUP_TOOLS));
+                QTraceI18n.t("btn.import.tooltip"), Theme.web(GROUP_TOOLS));
         Button resetBtn = btnReset = iconButton(iconFactory(this::iconReset), QTraceI18n.t("btn.reset.caption"),
-            QTraceI18n.t("btn.reset.tooltip"), Color.web(RED));
+            QTraceI18n.t("btn.reset.tooltip"), Theme.web(RED));
         // looked up by the screenshot harness — see ScreenshotHarness
         if (dashboardBtn != null) {
             dashboardBtn.setId("dashboard-button");
@@ -544,7 +544,7 @@ public class QTracePanel {
             boolean replayWait = replay && Players.entitled() == null && PendingModules.awaiting("player");
             if (replay && (Players.entitled() != null || replayWait)) {
                 Button btnReplay = iconButton(welcomeMarked("player", iconFactory(this::iconReplay)), QTraceI18n.t("btn.replay.caption"),
-                    QTraceI18n.t("btn.replay.tooltip"), Color.web(GROUP_WORKSPACE));
+                    QTraceI18n.t("btn.replay.tooltip"), Theme.web(GROUP_WORKSPACE));
                 btnReplay.setId("replay-button"); // looked up by the screenshot harness — see ScreenshotHarness
                 btnReplay.setOnAction(e -> welcomeFirst("player", controller::openReplayDialog));
                 if (replayWait) pendingLook(btnReplay, "Replay");
@@ -553,7 +553,7 @@ public class QTracePanel {
             boolean versionsWait = versions && VersionGraphs.entitled() == null && PendingModules.awaiting("versiongraph");
             if (versions && (VersionGraphs.entitled() != null || versionsWait)) {
                 Button btnGraph = iconButton(welcomeMarked("versiongraph", iconFactory(this::iconVersions)), QTraceI18n.t("btn.versions.caption"),
-                    QTraceI18n.t("btn.versions.tooltip"), Color.web(GROUP_WORKSPACE));
+                    QTraceI18n.t("btn.versions.tooltip"), Theme.web(GROUP_WORKSPACE));
                 btnGraph.setId("versions-button"); // looked up by the screenshot harness — see ScreenshotHarness
                 btnGraph.setOnAction(e -> welcomeFirst("versiongraph", controller::showCommitGraph));
                 if (versionsWait) pendingLook(btnGraph, "Version(s)");
@@ -605,7 +605,7 @@ public class QTracePanel {
             slot.getChildren().clear();
             for (PanelExtensions.Entry entry : entries.get()) {
                 Button b = iconButton(welcomeMarked(entry.module(), iconFactory(moduleIcon(entry))), entry.label(), entry.label(),
-                    Color.web(groupColor.apply(entry)));
+                    Theme.web(groupColor.apply(entry)));
                 TourHighlight.tag(b, entry.module());
                 b.setOnAction(e -> welcomeFirst(entry.module(), () -> runModuleEntry(entry)));
                 slot.getChildren().add(b);
@@ -662,7 +662,7 @@ public class QTracePanel {
         // Row 1: recording indicator
         HBox statusRow = new HBox(8);
         statusRow.setAlignment(Pos.CENTER_LEFT);
-        statusDot   = new Circle(5, Color.web(TEXT_MUTED));
+        statusDot   = new Circle(5, Theme.web(TEXT_MUTED));
         statusLabel = styledLabel("Idle — awaiting recording", TEXT_SUB, FontWeight.BOLD, 12);
         statusRow.getChildren().addAll(statusDot, statusLabel);
 
@@ -683,7 +683,7 @@ public class QTracePanel {
           + "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;");
         btnOpenQtrace.setTooltip(new Tooltip(QTraceI18n.t("btn.openqtrace.tooltip")));
         btnOpenQtrace.setOnMouseEntered(e -> btnOpenQtrace.setStyle(
-            "-fx-background-color:#20304a;-fx-text-fill:" + BLUE + ";"
+            "-fx-background-color:-qt-blue-soft;-fx-text-fill:" + BLUE + ";"
           + "-fx-cursor:hand;-fx-font-size:10;-fx-padding:1 6 1 6;"
           + "-fx-border-color:" + BLUE + ";-fx-border-radius:4;-fx-background-radius:4;"));
         btnOpenQtrace.setOnMouseExited(e -> btnOpenQtrace.setStyle(
@@ -702,7 +702,7 @@ public class QTracePanel {
         preExistingLabel = styledLabel("", TEXT_MUTED, FontWeight.NORMAL, 9);
         Label stepTitle  = styledLabel("Steps captured", TEXT_MUTED, FontWeight.NORMAL, 10);
         stepCountLabel.setFont(Font.font("System", FontWeight.BOLD, 22));
-        stepCountLabel.setTextFill(Color.web(BLUE));
+        Theme.text(stepCountLabel, BLUE);
         VBox stepsBox = new VBox(1, stepTitle, stepCountLabel, preExistingLabel);
         stepsBox.setAlignment(Pos.CENTER_LEFT);
         stepsBox.setId("counter-steps"); // looked up by the screenshot harness — see ScreenshotHarness
@@ -748,9 +748,9 @@ public class QTracePanel {
                 boolean corrupted = integrityCorrupted(state);
                 String color = corrupted ? RED : PEACH;
                 integrityLabel.setText(integrityMessage(state));
-                integrityLabel.setTextFill(Color.web(color));
+                Theme.text(integrityLabel, color);
                 integrityRow.setStyle("-fx-border-color:" + color + ";-fx-border-radius:4;-fx-background-radius:4;"
-                    + "-fx-background-color:" + (corrupted ? "rgba(243,139,168,0.10)" : "rgba(250,179,135,0.10)") + ";");
+                    + "-fx-background-color:" + (corrupted ? "-qt-red-faint" : "-qt-peach-faint") + ";");
                 btnIntegrityWhy.setOnAction(e -> onWhy.run());
             }
             fireState();
@@ -803,7 +803,7 @@ public class QTracePanel {
     private VBox buildCounter(String title, String color, Label numberLabel) {
         Label titleLbl = styledLabel(title, TEXT_MUTED, FontWeight.NORMAL, 10);
         numberLabel.setFont(Font.font("System", FontWeight.BOLD, 22));
-        numberLabel.setTextFill(Color.web(color));
+        Theme.text(numberLabel, color);
         VBox box = new VBox(2, titleLbl, numberLabel);
         box.setAlignment(Pos.CENTER_LEFT);
         return box;
@@ -974,7 +974,7 @@ public class QTracePanel {
 
     private Label styledLabel(String text, String color, FontWeight weight, int size) {
         Label lbl = new Label(text);
-        lbl.setTextFill(Color.web(color));
+        Theme.text(lbl, color);
         lbl.setFont(Font.font("System", weight, size));
         return lbl;
     }
@@ -1006,7 +1006,7 @@ public class QTracePanel {
         return color -> {
             Node drawn = icon.apply(color);
             if (!ToolWelcomes.isMarked(module)) return drawn;
-            Rectangle mark = new Rectangle(7, 7, Color.web(GOLD));
+            Rectangle mark = new Rectangle(7, 7, Theme.web(GOLD));
             mark.setArcWidth(2);
             mark.setArcHeight(2);
             mark.visibleProperty().bind(TourHighlight.activeProperty().not());
@@ -1037,7 +1037,7 @@ public class QTracePanel {
     /** Icon-only button (no caption) — used for the Settings gear, top-right of the header. */
     Button iconOnlyButton(Function<Color, Node> iconFactory, String tooltipText, Color hoverColor) {
         Button btn = new Button();
-        btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+        btn.setGraphic(iconFactory.apply(Theme.web(TEXT_MUTED)));
         btn.setTooltip(new Tooltip(tooltipText));
         String idleStyle  = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 3;";
         String hoverStyle = "-fx-background-color: " + BG_ELEVATED + "; -fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 3;";
@@ -1049,7 +1049,7 @@ public class QTracePanel {
         });
         btn.setOnMouseExited(e -> {
             if (btn.isDisabled()) return;
-            btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+            btn.setGraphic(iconFactory.apply(Theme.web(TEXT_MUTED)));
             btn.setStyle(idleStyle);
         });
         return btn;
@@ -1057,12 +1057,12 @@ public class QTracePanel {
 
     private Button iconButton(Function<Color, Node> iconFactory, String captionText, String tooltipText, Color hoverColor) {
         Button btn = new Button(captionText);
-        btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
+        btn.setGraphic(iconFactory.apply(Theme.web(TEXT_MUTED)));
         btn.setContentDisplay(stage.getWidth() < captionsWidth() ? ContentDisplay.GRAPHIC_ONLY : ContentDisplay.TOP);
         captionedButtons.add(btn);
         btn.setGraphicTextGap(3);
         btn.setFont(Font.font("System", 10.5));
-        btn.setTextFill(Color.web(TEXT_MUTED));
+        Theme.text(btn, TEXT_MUTED);
         btn.setTooltip(new Tooltip(tooltipText));
         String idleStyle  = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
         String hoverStyle = "-fx-background-color: " + BG_ELEVATED + "; -fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
@@ -1070,13 +1070,13 @@ public class QTracePanel {
         btn.setOnMouseEntered(e -> {
             if (btn.isDisabled()) return;
             btn.setGraphic(iconFactory.apply(hoverColor));
-            btn.setTextFill(Color.web(TEXT_SUB));
+            Theme.text(btn, TEXT_SUB);
             btn.setStyle(hoverStyle);
         });
         btn.setOnMouseExited(e -> {
             if (btn.isDisabled()) return;
-            btn.setGraphic(iconFactory.apply(Color.web(TEXT_MUTED)));
-            btn.setTextFill(Color.web(TEXT_MUTED));
+            btn.setGraphic(iconFactory.apply(Theme.web(TEXT_MUTED)));
+            Theme.text(btn, TEXT_MUTED);
             btn.setStyle(idleStyle);
         });
         return btn;
@@ -1431,20 +1431,20 @@ public class QTracePanel {
         Platform.runLater(() -> {
             recordingActive = active;
             if (active) {
-                statusDot.setFill(Color.web(GREEN));
+                Theme.fill(statusDot, GREEN);
                 statusLabel.setText("Recording");
-                statusLabel.setTextFill(Color.web(GREEN));
-                captureDot.setFill(Color.web(RED));
+                Theme.text(statusLabel, GREEN);
+                Theme.fill(captureDot, RED);
                 captureLabel.setText("Recording");
-                captureLabel.setTextFill(Color.web(RED));
+                Theme.text(captureLabel, RED);
                 startCaptureBlink();
             } else {
-                statusDot.setFill(Color.web(TEXT_MUTED));
+                Theme.fill(statusDot, TEXT_MUTED);
                 statusLabel.setText("Idle — awaiting recording");
-                statusLabel.setTextFill(Color.web(TEXT_SUB));
-                captureDot.setFill(Color.web(TEXT_MUTED));
+                Theme.text(statusLabel, TEXT_SUB);
+                Theme.fill(captureDot, TEXT_MUTED);
                 captureLabel.setText("Paused");
-                captureLabel.setTextFill(Color.web(TEXT_MUTED));
+                Theme.text(captureLabel, TEXT_MUTED);
                 stopCaptureBlink();
             }
             fireState();
@@ -1464,13 +1464,13 @@ public class QTracePanel {
     public void setValidated(boolean validated, String validatorName) {
         Platform.runLater(() -> {
             if (validated) {
-                statusDot.setFill(Color.web(PEACH));
+                Theme.fill(statusDot, PEACH);
                 statusLabel.setText("Validated by " + validatorName);
-                statusLabel.setTextFill(Color.web(PEACH));
+                Theme.text(statusLabel, PEACH);
             } else {
-                statusDot.setFill(Color.web(TEXT_MUTED));
+                Theme.fill(statusDot, TEXT_MUTED);
                 statusLabel.setText("Idle — awaiting recording");
-                statusLabel.setTextFill(Color.web(TEXT_SUB));
+                Theme.text(statusLabel, TEXT_SUB);
             }
         });
     }

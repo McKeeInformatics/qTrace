@@ -39,15 +39,15 @@ import java.util.Optional;
 public class ValidationStamper {
 
     // Catppuccin Mocha — matches QTraceSettingsDialog / QTracePanel
-    private static final String BG_BASE    = "#1e1e2e";
-    private static final String BG_SURFACE = "#181825";
-    private static final String BORDER     = "#313244";
-    private static final String TEXT_MAIN  = "#cdd6f4";
-    private static final String TEXT_SUB   = "#a6adc8";
-    private static final String TEXT_MUTED = "#6c7086";
-    private static final String BLUE       = "#89b4fa";
-    private static final String GREEN      = "#a6e3a1";
-    private static final String TEAL       = "#2dd4bf"; // the Stamp CTA colour of the panel
+    private static final String BG_BASE    = "-qt-bg-base";
+    private static final String BG_SURFACE = "-qt-bg-surface";
+    private static final String BORDER     = "-qt-border";
+    private static final String TEXT_MAIN  = "-qt-text-main";
+    private static final String TEXT_SUB   = "-qt-text-sub";
+    private static final String TEXT_MUTED = "-qt-text-muted";
+    private static final String BLUE       = "-qt-blue";
+    private static final String GREEN      = "-qt-green";
+    private static final String TEAL       = "-qt-cta-teal"; // the Stamp CTA colour of the panel
     private static final String FIELD =
         "-fx-background-color: " + BG_SURFACE + "; -fx-control-inner-background: " + BG_SURFACE + ";"
       + "-fx-text-fill: " + TEXT_MAIN + "; -fx-prompt-text-fill: " + TEXT_MUTED + ";"
@@ -213,7 +213,7 @@ public class ValidationStamper {
         if (attestationBox != null) {
             attestationBox.setWrapText(true);
             attestationBox.setMaxWidth(360);
-            attestationBox.setTextFill(javafx.scene.paint.Color.web(TEXT_MAIN));
+            Theme.text(attestationBox, TEXT_MAIN);
         }
 
         ComboBox<String> statusBox = new ComboBox<>(
@@ -234,9 +234,9 @@ public class ValidationStamper {
 
         // Classifier_Fidelity — computed from ActionLogger, shown read-only
         String fidelityColor = switch (fidelity) {
-            case HIGH        -> "#a6e3a1"; // green
-            case DEGRADED    -> "#fab387"; // orange
-            case COMPROMISED -> "#f38ba8"; // red
+            case HIGH        -> "-qt-green"; // green
+            case DEGRADED    -> "-qt-peach"; // orange
+            case COMPROMISED -> "-qt-red"; // red
         };
         Label fidelityLabel = new Label(fidelity.name());
         fidelityLabel.setStyle(MONO + "-fx-font-weight: bold; -fx-text-fill: " + fidelityColor + ";");
@@ -287,7 +287,7 @@ public class ValidationStamper {
         if (replay != null && replay.skipped() > 0) {
             Label replayLabel = new Label(QTraceI18n.f("stamp.replay.some",
                 replay.replayed(), replay.total(), replay.skipped()));
-            replayLabel.setStyle(MONO + "-fx-font-weight: bold; -fx-text-fill: #fab387;");
+            replayLabel.setStyle(MONO + "-fx-font-weight: bold; -fx-text-fill: -qt-peach;");
             facts.add(factLabel(QTraceI18n.t("stamp.replay.label")), 0, f); facts.add(replayLabel, 1, f);
         }
         javafx.scene.layout.VBox factsBox = new javafx.scene.layout.VBox(facts);

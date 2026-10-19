@@ -132,14 +132,14 @@ final class ProjectPrompt {
         Label name = new Label(r.name());
         name.setStyle("-fx-text-fill: " + DialogLook.TEXT_MAIN + "; -fx-font-size: 12;");
         Label folder = new Label(r.folder());
-        folder.setStyle("-fx-text-fill: #6c7086; -fx-font-size: 10;");
+        folder.setStyle("-fx-text-fill: -qt-text-muted; -fx-font-size: 10;");
         folder.setTextOverrun(javafx.scene.control.OverrunStyle.LEADING_ELLIPSIS);
         folder.setMaxWidth(400);
         VBox row = new VBox(1, name, folder);
         row.setPadding(new Insets(6, 10, 6, 10));
         String idle = "-fx-background-color: " + DialogLook.BG_SURFACE + "; -fx-background-radius: 6;"
-            + "-fx-border-color: #313244; -fx-border-radius: 6; -fx-cursor: hand;";
-        String hover = "-fx-background-color: #26263a; -fx-background-radius: 6;"
+            + "-fx-border-color: -qt-border; -fx-border-radius: 6; -fx-cursor: hand;";
+        String hover = "-fx-background-color: -qt-bg-elevated; -fx-background-radius: 6;"
             + "-fx-border-color: " + DialogLook.BLUE + "; -fx-border-radius: 6; -fx-cursor: hand;";
         row.setStyle(idle);
         row.setOnMouseEntered(e -> row.setStyle(hover));

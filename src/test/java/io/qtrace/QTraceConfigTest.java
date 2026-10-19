@@ -21,6 +21,17 @@ class QTraceConfigTest {
     private static final Path FALLBACK = Path.of("/fallback/dir");
 
     @Test
+    void theme_isDarkUntilChosen_andSurvivesTheConfigFile() {
+        com.google.gson.Gson gson = new com.google.gson.Gson();
+        QTraceConfig cfg = gson.fromJson("{}", QTraceConfig.class);
+        assertEquals("dark", cfg.getTheme());
+        cfg.setTheme("auto");
+        assertEquals("auto", gson.fromJson(gson.toJson(cfg), QTraceConfig.class).getTheme());
+        cfg.setTheme("nonsense");
+        assertEquals("dark", cfg.getTheme());
+    }
+
+    @Test
     void showPanelAtStartup_isOnUntilUnchecked_andSurvivesTheConfigFile() {
         com.google.gson.Gson gson = new com.google.gson.Gson();
         QTraceConfig cfg = gson.fromJson("{}", QTraceConfig.class);
