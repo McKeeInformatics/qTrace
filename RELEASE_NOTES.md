@@ -1,3 +1,12 @@
+## What's new in v1.2.11
+
+### New - Network settings for hospitals and institutions
+**Settings › Network** lets qTrace work behind your institution's proxy and HTTPS inspection. By default qTrace follows the computer's proxy settings and trusts the certificates installed on the computer; you can also enter a proxy by hand (with a user name and password) or add the root certificate your IT department gives you. Certificate checks can never be turned off.
+**Test connection to qtrace.ca** says in plain words what blocks: the proxy, its password, or a certificate from an inspection box, named so your IT department recognises it. **Copy the details for IT** puts what they need in the clipboard.
+
+### Changed - Every connection follows these settings
+Updates, sign-in, Upload, the Player, the Library and the activity report all go through the same network settings.
+
 ## What's new in v1.2.10
 
 ### Security — Your licence and account files are readable by you alone
