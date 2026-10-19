@@ -19,6 +19,7 @@
 
 package io.qtrace;
 
+import io.qtrace.net.QTraceHttp;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import javafx.application.Platform;
@@ -151,7 +152,7 @@ public final class QTraceUpdater {
     }
 
     public static byte[] httpGetBytes(String url, String bearer) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
+        HttpClient client = QTraceHttp.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             // NORMAL, not ALWAYS: never follow an https → http downgrade with a bearer attached.
             .followRedirects(HttpClient.Redirect.NORMAL).build();

@@ -48,16 +48,16 @@ import java.nio.file.Path;
 public class QTraceSettingsDialog {
 
     // Catppuccin Mocha — matches QTracePanel
-    private static final String BG_BASE    = "#1e1e2e";
-    private static final String BG_SURFACE = "#181825";
-    private static final String BORDER     = "#313244";
-    private static final String TEXT_MAIN  = "#cdd6f4";
-    private static final String TEXT_SUB   = "#a6adc8";
-    private static final String TEXT_MUTED = "#6c7086";
-    private static final String BLUE       = "#89b4fa";
-    private static final String GREEN      = "#a6e3a1";
-    private static final String ORANGE     = "#fab387";
-    private static final String RED        = "#f38ba8";
+    static final String BG_BASE    = "#1e1e2e";
+    static final String BG_SURFACE = "#181825";
+    static final String BORDER     = "#313244";
+    static final String TEXT_MAIN  = "#cdd6f4";
+    static final String TEXT_SUB   = "#a6adc8";
+    static final String TEXT_MUTED = "#6c7086";
+    static final String BLUE       = "#89b4fa";
+    static final String GREEN      = "#a6e3a1";
+    static final String ORANGE     = "#fab387";
+    static final String RED        = "#f38ba8";
     private static final String PORTAL_URL = "https://qtrace.ca/portal";
 
     public static void show(Stage owner) { show(owner, (Project<?>) null); }
@@ -507,6 +507,10 @@ public class QTraceSettingsDialog {
             consequences);
         autosaveBox.setPadding(new Insets(4, 20, 8, 20));
 
+        // ── Network (proxy, certificates, connection test) ─────────────────────
+        NetworkSettingsPane network = new NetworkSettingsPane(dlg);
+        Runnable[] showNetwork = new Runnable[1]; // set once the sidebar exists
+
         // ── Buttons ────────────────────────────────────────────────────────────
         Button btnReset  = flatButton("Reset all to default", TEXT_MUTED);
         Button btnCancel = flatButton("Cancel",               TEXT_SUB);
@@ -527,11 +531,18 @@ public class QTraceSettingsDialog {
             customValues[1] = io.qtrace.draft.SnapshotPolicy.DEFAULT_INTERVAL_S;
             customValues[2] = 0;
             refreshSnapshot.run();
+            network.reset();
         });
 
         btnCancel.setOnAction(e -> dlg.close());
 
         btnOk.setOnAction(e -> {
+            String networkProblem = network.problem();
+            if (!networkProblem.isEmpty()) {
+                showNetwork[0].run();
+                showError(dlg, networkProblem);
+                return;
+            }
             // When Project Folder mode is on, the fields above just display the resolved
             // <project>/qTrace/<subdir> path — don't clobber the configured fallback with it.
             if (!chkProjectFolder.isSelected()) {
@@ -558,6 +569,13 @@ public class QTraceSettingsDialog {
                 cfg.setSnapshotSettings(true, spThreshold.getValue(), spInterval.getValue(), chkKeyOnly.isSelected());
             else
                 cfg.setSnapshotSettings(false, customValues[0], customValues[1], customValues[2] == 1);
+            try {
+                network.save(cfg);
+            } catch (IOException ex) {
+                showNetwork[0].run();
+                showError(dlg, ex.getMessage());
+                return;
+            }
             cfg.save();
             if (chkProjectFolder.isSelected() && projectBaseDir != null) {
                 try { QTraceConfig.createProjectDirs(projectBaseDir); } catch (IOException ignored) {}
@@ -620,6 +638,7 @@ public class QTraceSettingsDialog {
             {"Identity",       pageIdentity},
             {"Certificate",    pageLicense},
             {"Paths",          pagePaths},
+            {QTraceI18n.t("settings.network.title"), network.node()},
             {"Preferences",    pagePreferences},
             {"Autosave",       pageAutosave},
             {"Appearance",     pageAppearance},
@@ -627,7 +646,7 @@ public class QTraceSettingsDialog {
         };
         // Looked up by the screenshot harness to click into a section without a real mouse —
         // see ScreenshotHarness / tools/screenshots.
-        String[] sectionIds = {"identity", "licence", "paths", "preferences", "autosave", "appearance", "about"};
+        String[] sectionIds = {"identity", "licence", "paths", "network", "preferences", "autosave", "appearance", "about"};
 
         for (int i = 0; i < sections.length; i++) {
             Object[] s = sections[i];
@@ -655,6 +674,7 @@ public class QTraceSettingsDialog {
         };
         for (NavEntry entry : entries) entry.navLabel().setOnMouseClicked(e -> selectEntry.accept(entry));
         selectEntry.accept(entries.get(0));
+        showNetwork[0] = () -> selectEntry.accept(entries.get(3));
 
         // ── Root ───────────────────────────────────────────────────────────────
         BorderPane root = new BorderPane();
@@ -704,7 +724,7 @@ public class QTraceSettingsDialog {
 
     // ── UI helpers ────────────────────────────────────────────────────────────
 
-    private static TextField pathField(String value) {
+    static TextField pathField(String value) {
         TextField tf = new TextField(value);
         tf.setPromptText("(default)");
         tf.setPrefHeight(30);
@@ -720,7 +740,7 @@ public class QTraceSettingsDialog {
         return tf;
     }
 
-    private static Button flatButton(String text, String color) {
+    static Button flatButton(String text, String color) {
         Button btn = new Button(text);
         btn.setTextFill(Color.web(color));
         btn.setFont(Font.font("System", 12));
@@ -872,7 +892,7 @@ public class QTraceSettingsDialog {
         return sb.toString();
     }
 
-    private static Label subTitle(String text) {
+    static Label subTitle(String text) {
         Label lbl = new Label(text.toUpperCase());
         lbl.setTextFill(Color.web(TEXT_MUTED));
         lbl.setFont(Font.font("System", FontWeight.BOLD, 10));
@@ -881,7 +901,7 @@ public class QTraceSettingsDialog {
         return lbl;
     }
 
-    private static Tooltip hintTooltip(String text) {
+    static Tooltip hintTooltip(String text) {
         Tooltip tip = new Tooltip(text);
         tip.setWrapText(true);
         tip.setMaxWidth(360);
@@ -889,7 +909,7 @@ public class QTraceSettingsDialog {
         return tip;
     }
 
-    private static void showError(Stage owner, String msg) {
+    static void showError(Stage owner, String msg) {
         javafx.scene.control.Alert a = new javafx.scene.control.Alert(
             javafx.scene.control.Alert.AlertType.ERROR);
         a.setTitle("qTrace Settings");

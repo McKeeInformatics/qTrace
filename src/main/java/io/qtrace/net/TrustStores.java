@@ -140,7 +140,7 @@ public final class TrustStores {
         for (Path bundle : LINUX_BUNDLES) {
             if (!Files.isRegularFile(bundle)) continue;
             try {
-                return new SystemStore(bundle.toString(), readCertificates(bundle), null);
+                return new SystemStore("Linux", readCertificates(bundle), null);
             } catch (IOException e) {
                 return new SystemStore(bundle.toString(), List.of(), e.getMessage());
             }

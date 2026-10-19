@@ -19,6 +19,7 @@
 
 package io.qtrace;
 
+import io.qtrace.net.QTraceHttp;
 import com.google.gson.JsonObject;
 
 import java.net.URI;
@@ -53,7 +54,7 @@ final class WorkstationClient {
     /** Blocking — call off the FX thread. Returns the HTTP status, 0 on a network failure. Never throws. */
     static int send(String licenseJwt, JsonObject env) {
         try {
-            HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+            HttpClient client = QTraceHttp.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
             HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(URL))
                 .timeout(Duration.ofSeconds(30))

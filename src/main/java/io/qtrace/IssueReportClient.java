@@ -19,6 +19,7 @@
 
 package io.qtrace;
 
+import io.qtrace.net.QTraceHttp;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -98,7 +99,7 @@ final class IssueReportClient {
     /** Blocking — call off the FX thread. Network failure → status 0. */
     static Result send(String bearer, JsonObject body) {
         try {
-            HttpClient client = HttpClient.newBuilder()
+            HttpClient client = QTraceHttp.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10)).build();
             HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(REPORT_URL))
