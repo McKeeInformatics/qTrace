@@ -44,6 +44,9 @@ sourceSets.test.runtimeClasspath += javafxJars
 
 test {
     useJUnitPlatform()
+    // OneHttpClientTest reads the sibling modules' sources: re-run it when they change.
+    inputs.files((file('..').listFiles() ?: []).findAll { it.name.startsWith('qtrace-') && it.name != 'qtrace-core' }
+        .collect { fileTree(it) { include 'src/main/java/**/*.java' } }).withPropertyName('moduleSources')
 }
 
 jar {
