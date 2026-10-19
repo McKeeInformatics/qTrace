@@ -1,0 +1,59 @@
+/*
+ * The metro line: the progress at the foot of the welcome player (QuPath) and of qtrace.ca's
+ * enrollment pages (web/components/enroll/MetroLine.tsx draws the same markup). Single source:
+ * player.html links this file; web/scripts/sync-player.mjs serves it at /player/metro.css.
+ * Colours come from tokens.css. Rules are scoped to [data-host] so they never reach the site's
+ * other pages; what only the web has (station names under the line) is under [data-host="web"].
+ * --rail is unset in QuPath (the rails keep --navy-b); the web's light theme raises it to 3:1.
+ */
+[data-host] .bar { display: grid; grid-template-columns: 100%; box-sizing: border-box; width: 100%; gap: 2px; align-items: center; padding: 8px 24px 12px; border-top: 1px solid var(--navy-b); }
+/* the progress: a metro line - start, stations, arrival; same size everywhere, only the light changes */
+/* golden ratio: the line is 1/φ (61.8 %) of the width, the sides share the other 38.2 % */
+[data-host] .track { position: relative; min-width: 0; margin: 0 19.09%; }
+[data-host] .track.has-branch { margin-bottom: 26px; }
+[data-host] .track .line { display: flex; align-items: center; }
+[data-host] .track button { background: none; border: 0; padding: 10px 0; cursor: pointer; display: grid; place-items: center; flex: none; }
+[data-host] .track button i { display: block; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box;
+  background: var(--navy); border: 1.5px solid var(--rail, var(--navy-b)); transition: background .2s, border-color .2s, box-shadow .2s; }
+[data-host] .track .rail { flex: 1 1 0; height: 2px; min-width: 6px; background: var(--rail, var(--navy-b)); transition: background .2s; }
+[data-host] .track .rail.lit { background: var(--green); }
+[data-host] .track button.past i { background: var(--green); border-color: var(--green); }
+[data-host] .track button.cur i { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 7px 1px var(--accent); }
+[data-host] .track .branch { position: absolute; top: 14px; height: 22px; }
+[data-host] .track .elbow { position: absolute; left: 0; top: 0; }
+[data-host] .track .elbow path { fill: none; stroke: var(--rail, var(--navy-b)); stroke-width: 2; }
+[data-host] .track .elbow.lit path { stroke: var(--violet); }
+[data-host] .track .brail { position: absolute; top: 19px; height: 2px; background: var(--rail, var(--navy-b)); }
+[data-host] .track .brail.lit { background: var(--violet); }
+[data-host] .track .bstop { position: absolute; top: 20px; transform: translate(-50%, -50%); }
+[data-host] .track .bnote { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 12px; white-space: nowrap;
+  font-size: 12px; color: var(--violet); opacity: 0; transition: opacity .4s; pointer-events: none; }
+[data-host] .track.deployed .bnote { opacity: 1; }
+[data-host] .track button.bs { cursor: default; padding: 10px 0; }
+[data-host] .track button.bs i { border-color: rgba(167, 139, 250, .45); }
+[data-host] .track button.bs.past i { background: var(--violet); border-color: var(--violet); }
+[data-host] .track button.bs.cur i { background: var(--violet); border-color: var(--violet); box-shadow: 0 0 7px 1px var(--violet); }
+@media (max-width: 760px) {
+  [data-host] .bar { grid-template-columns: 1fr; }
+}
+
+/* ── Web only ─────────────────────────────────────────────────────────────── */
+/* The stations are not buttons to press on the site: the steps are pages. */
+[data-host="web"] .track button { cursor: default; }
+/* Each station's name under its dot; a passed station carries a tick. */
+[data-host="web"] .track .stops { position: relative; height: 20px; margin: -4px 0 0; padding: 0; list-style: none; }
+[data-host="web"] .track .stop {
+  position: absolute; top: 0; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 4px;
+  white-space: nowrap; font-size: 12px; line-height: 20px; color: var(--tx-muted);
+}
+[data-host="web"] .track .stop svg { width: 12px; height: 12px; flex: none; color: var(--green); }
+[data-host="web"] .track .stop.past { color: var(--tx-sub); }
+[data-host="web"] .track .stop.cur { color: var(--tx); font-weight: 600; }
+@media (max-width: 640px) {
+  [data-host="web"] .bar { padding-left: 16px; padding-right: 16px; }
+  /* Narrow: only the station of this page is named on screen (.here, lit or just ticked);
+     screen readers still hear the others. */
+  [data-host="web"] .track .stop:not(.here) {
+    width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; padding: 0; margin: -1px;
+  }
+}

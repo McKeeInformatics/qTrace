@@ -6,11 +6,14 @@
   window.qtrace.run(action, arg) — a whitelist, nothing else. Opened in a plain browser, it plays
   trunk.json and shows what QuPath would do.
 -->
-<html lang="en">
+<html lang="en" data-host="qupath">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>qTrace</title>
+  <!-- tokens.css and metro.css are shared with qtrace.ca's enrollment pages (data-host="web"). -->
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="metro.css">
   <link rel="stylesheet" href="player.css">
 </head>
 <body>

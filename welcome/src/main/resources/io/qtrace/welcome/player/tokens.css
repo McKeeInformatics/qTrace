@@ -1,0 +1,85 @@
+/*
+ * qTrace tokens: the colours of the welcome player (QuPath) and of qtrace.ca's enrollment pages.
+ * Single source: player.html links this file, and web/scripts/sync-player.mjs copies it to
+ * https://www.qtrace.ca/player/tokens.css, which the site's /enroll and /portal/connect load.
+ *
+ * Scoped to [data-host] (player.html: data-host="qupath", the site's shell: data-host="web"),
+ * never :root, so the site's own pages keep their palette if this sheet stays loaded.
+ * QuPath is dark only. The light theme exists only on the web (system preference, or the
+ * shell's explicit data-theme), and a theme for the extension stays a decision of its own.
+ */
+[data-host] {
+  color-scheme: dark;
+  --navy: #0d1b2a;
+  --navy-dark: #09131e;
+  --navy-card: #13263a;
+  --navy-b: #1f3a55;
+  --accent: #5be0d8;
+  --accent-dim: rgba(91, 224, 216, 0.14);
+  --blue: #5ab4e8;
+  --green: #a6e3a1;
+  --violet: #a78bfa;
+  --amber: #f2c46d;
+  --tx: #e8f4f8;
+  --tx-sub: #b4c8d6;
+  --tx-muted: #8aa3b5;
+  --tx-dim: #5d7a90;
+  --mono: "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+
+/* Web only, both themes: what a form needs and the player does not have.
+   --field-b: an input's border (3:1 against the page and a card) · --danger: an error's text
+   · --on-accent: text on an accent fill. */
+[data-host="web"] {
+  --field-b: #5a7790;
+  --danger: #ff8f86;
+  --on-accent: #0d1b2a;
+}
+
+/* Web, light: measured against --navy (#f5f8fa) and --navy-card (#ffffff).
+   Text 16.3 / 9.7 / 6.1 / 4.5:1 (tx, tx-sub, tx-muted, tx-dim on white), accent 5.5:1,
+   green 5.4:1, danger 6.6:1, field border 3.3:1, metro rail 3.1:1. */
+[data-host="web"][data-theme="light"] {
+  color-scheme: light;
+  --navy: #f5f8fa;
+  --navy-dark: #eaf0f4;
+  --navy-card: #ffffff;
+  --navy-b: #d5e0e8;
+  --accent: #0a7570;
+  --accent-dim: rgba(10, 117, 112, 0.10);
+  --blue: #1d6aa3;
+  --green: #1f7a3a;
+  --violet: #6a4bd0;
+  --amber: #a15c00;
+  --tx: #0d1b2a;
+  --tx-sub: #2c475b;
+  --tx-muted: #4a6578;
+  --tx-dim: #5f7a8d;
+  --field-b: #7a90a2;
+  --danger: #b42318;
+  --on-accent: #ffffff;
+  --rail: #7a90a2;
+}
+@media (prefers-color-scheme: light) {
+  [data-host="web"]:not([data-theme="dark"]) {
+    color-scheme: light;
+    --navy: #f5f8fa;
+    --navy-dark: #eaf0f4;
+    --navy-card: #ffffff;
+    --navy-b: #d5e0e8;
+    --accent: #0a7570;
+    --accent-dim: rgba(10, 117, 112, 0.10);
+    --blue: #1d6aa3;
+    --green: #1f7a3a;
+    --violet: #6a4bd0;
+    --amber: #a15c00;
+    --tx: #0d1b2a;
+    --tx-sub: #2c475b;
+    --tx-muted: #4a6578;
+    --tx-dim: #5f7a8d;
+    --field-b: #7a90a2;
+    --danger: #b42318;
+    --on-accent: #ffffff;
+    --rail: #7a90a2;
+  }
+}
