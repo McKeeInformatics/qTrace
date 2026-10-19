@@ -46,7 +46,7 @@ class NetworkI18nTest {
                 assertFalse(out.contains("{"), file + " " + k + ": unformatted argument");
                 // A single quote in a MessageFormat pattern swallows text: they must be doubled.
                 assertEquals(raw.replace("''", "").chars().filter(c -> c == '\'').count(), 0, file + " " + k);
-                assertFalse(raw.contains("—"), file + " " + k + ": no em dash");
+                assertFalse(raw.contains("\u2014"), file + " " + k + ": no em dash");
             }
         }
     }
