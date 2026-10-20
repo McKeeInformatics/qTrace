@@ -38,7 +38,7 @@ public final class Theme {
         "blue", "green", "peach", "red", "gold", "mauve", "sky", "lavender", "yellow",
         "cta-teal", "cta-teal-soft", "cta-teal-border",
         "group-workspace", "group-tools", "group-admin",
-        "row-alt", "blue-soft", "red-soft", "chip", "nav-selected", "green-soft", "gold-bg", "gold-border", "btn", "btn-hover", "teal", "red-strong", "glass94", "glass85", "peach-soft", "peach-faint", "red-faint", "gold-soft", "gold-line", "green-faint");
+        "row-alt", "blue-soft", "red-soft", "chip", "nav-selected", "green-soft", "gold-bg", "gold-border", "btn", "btn-hover", "teal", "red-strong", "glass94", "glass85", "peach-soft", "peach-faint", "red-faint", "gold-soft", "gold-line", "green-faint", "field");
 
     public static final Map<String, String> DARK = palette(
         "#1e1e2e", "#181825", "#26263a", "#24273a", "#2a2b3d", "#313244",
@@ -46,7 +46,7 @@ public final class Theme {
         "#89b4fa", "#a6e3a1", "#fab387", "#f38ba8", "#d9b34d", "#cba6f7", "#74c7ec", "#b4befe", "#f9e2af",
         "#2dd4bf", "rgba(45,212,191,0.14)", "rgba(45,212,191,0.35)",
         "#8B5CF6", "#10B981", "#9CA3AF",
-        "#20202e", "#20304a", "#3a2020", "#2a2a3a", "#242438", "#28352c", "#0e0c08", "#4a3c1e", "#45475a", "#585b70", "#94e2d5", "#c0392b", "rgba(30,30,46,0.94)", "rgba(30,30,46,0.85)", "rgba(250,179,135,0.12)", "rgba(250,179,135,0.10)", "rgba(243,139,168,0.10)", "rgba(217,179,77,0.12)", "rgba(217,179,77,0.45)", "rgba(166,227,161,0.14)");
+        "#20202e", "#20304a", "#3a2020", "#2a2a3a", "#242438", "#28352c", "#0e0c08", "#4a3c1e", "#45475a", "#585b70", "#94e2d5", "#c0392b", "rgba(30,30,46,0.94)", "rgba(30,30,46,0.85)", "rgba(250,179,135,0.12)", "rgba(250,179,135,0.10)", "rgba(243,139,168,0.10)", "rgba(217,179,77,0.12)", "rgba(217,179,77,0.45)", "rgba(166,227,161,0.14)", "#181825");
 
     /** Catppuccin Latte, with the accents darkened where Latte's own would fall under 3:1 on its base. */
     public static final Map<String, String> LIGHT = palette(
@@ -55,7 +55,7 @@ public final class Theme {
         "#1e66f5", "#2f8a1e", "#d4560a", "#d20f39", "#9a7410", "#8839ef", "#0a86b8", "#7287fd", "#b87400",
         "#0d9488", "rgba(13,148,136,0.12)", "rgba(13,148,136,0.35)",
         "#7c3aed", "#059669", "#6b7280",
-        "#e8ebf1", "#d6e2fc", "#f9dce2", "#dfe3ec", "#dde1ea", "#dcefd6", "#f6edd2", "#d8c27a", "#ccd0da", "#bcc0cc", "#179299", "#b8102f", "rgba(239,241,245,0.94)", "rgba(239,241,245,0.85)", "rgba(212,86,10,0.12)", "rgba(212,86,10,0.10)", "rgba(210,15,57,0.10)", "rgba(154,116,16,0.12)", "rgba(154,116,16,0.45)", "rgba(47,138,30,0.14)");
+        "#e8ebf1", "#d6e2fc", "#f9dce2", "#dfe3ec", "#dde1ea", "#dcefd6", "#f6edd2", "#d8c27a", "#ccd0da", "#bcc0cc", "#179299", "#b8102f", "rgba(239,241,245,0.94)", "rgba(239,241,245,0.85)", "rgba(212,86,10,0.12)", "rgba(212,86,10,0.10)", "rgba(210,15,57,0.10)", "rgba(154,116,16,0.12)", "rgba(154,116,16,0.45)", "rgba(47,138,30,0.14)", "#ffffff");
 
     private static final ObjectProperty<Map<String, String>> CURRENT = new SimpleObjectProperty<>(DARK);
     private static Mode mode = Mode.DARK;
@@ -85,7 +85,7 @@ public final class Theme {
         StringBuilder sb = new StringBuilder("/* " + MARK + " */\n.root {\n");
         for (String t : TOKENS) sb.append("  -qt-").append(t).append(": ").append(p.get(t)).append(";\n");
         sb.append("  -fx-base: ").append(p.get("bg-base")).append(";\n");
-        sb.append("  -fx-control-inner-background: ").append(p.get("bg-surface")).append(";\n");
+        sb.append("  -fx-control-inner-background: ").append(p.get("field")).append(";\n");
         sb.append("  -fx-accent: ").append(p.get("blue")).append(";\n");
         sb.append("  -fx-text-base-color: ").append(p.get("text-main")).append(";\n}\n");
         return sb.toString();

@@ -55,7 +55,7 @@ public final class DialogLook {
         pane.setPadding(Insets.EMPTY);
         // -fx-base makes every control dark with light text.
         pane.setStyle("-fx-background-color: " + BG_BASE + "; -fx-base: " + BG_BASE + ";"
-            + "-fx-control-inner-background: " + BG_SURFACE + "; -fx-accent: " + BLUE + ";"
+            + "-fx-control-inner-background: " + Theme.v("field") + "; -fx-accent: " + BLUE + ";"
             + "-fx-focus-color: " + BLUE + "; -fx-faint-focus-color: transparent;");
 
         if (pane.lookupButton(cancel) instanceof Button c)

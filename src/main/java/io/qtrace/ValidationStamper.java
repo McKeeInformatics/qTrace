@@ -49,7 +49,7 @@ public class ValidationStamper {
     private static final String GREEN      = "-qt-green";
     private static final String TEAL       = "-qt-cta-teal"; // the Stamp CTA colour of the panel
     private static final String FIELD =
-        "-fx-background-color: " + BG_SURFACE + "; -fx-control-inner-background: " + BG_SURFACE + ";"
+        "-fx-background-color: " + Theme.v("field") + "; -fx-control-inner-background: " + Theme.v("field") + ";"
       + "-fx-text-fill: " + TEXT_MAIN + "; -fx-prompt-text-fill: " + TEXT_MUTED + ";"
       + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;";
     private static final String COMBO =
@@ -329,7 +329,7 @@ public class ValidationStamper {
         pane.setPadding(Insets.EMPTY);
         // -fx-base makes every control (drop-down lists, check box, scroll bars) dark with light text.
         pane.setStyle("-fx-background-color: " + BG_BASE + "; -fx-base: " + BG_BASE + ";"
-            + "-fx-control-inner-background: " + BG_SURFACE + "; -fx-accent: " + BLUE + ";"
+            + "-fx-control-inner-background: " + Theme.v("field") + "; -fx-accent: " + BLUE + ";"
             + "-fx-focus-color: " + BLUE + "; -fx-faint-focus-color: transparent;");
         pane.getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 

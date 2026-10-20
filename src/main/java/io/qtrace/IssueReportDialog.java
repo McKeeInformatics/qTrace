@@ -65,7 +65,7 @@ public final class IssueReportDialog {
     private static final String BLUE       = "-qt-blue";
     private static final String RED        = "-qt-red";
     private static final String FIELD =
-        "-fx-background-color: " + BG_SURFACE + "; -fx-control-inner-background: " + BG_SURFACE + ";"
+        "-fx-background-color: " + Theme.v("field") + "; -fx-control-inner-background: " + Theme.v("field") + ";"
       + "-fx-text-fill: " + TEXT_MAIN + "; -fx-prompt-text-fill: " + TEXT_MUTED + ";"
       + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4; -fx-background-radius: 4; -fx-font-size: 12;";
 
@@ -295,7 +295,7 @@ public final class IssueReportDialog {
         VBox root = new VBox(header, content, actions);
         // -fx-base makes every control (drop-down list, scroll bars) dark with light text.
         root.setStyle("-fx-background-color: " + BG_BASE + "; -fx-base: " + BG_BASE + ";"
-            + "-fx-control-inner-background: " + BG_SURFACE + "; -fx-accent: " + BLUE + ";"
+            + "-fx-control-inner-background: " + Theme.v("field") + "; -fx-accent: " + BLUE + ";"
             + "-fx-focus-color: " + BLUE + "; -fx-faint-focus-color: transparent;");
         Scene scene = new Scene(root, 640, 520);
         // Esc = Cancel, as in Settings.
