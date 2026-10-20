@@ -1,3 +1,11 @@
+## What's new in v1.2.12
+
+### New - Dark, Light or Auto theme
+**Settings › Appearance › Theme** chooses how qTrace looks: Dark (as before), Light, or Auto, which follows QuPath's own theme. The choice applies on **Save** to the panel, the mini-panel and every qTrace window, including those already open.
+
+### New - Validate & Stamp can check a code before stamping
+With the qTrace Security extension, once qtrace.ca has two-factor authentication turned on, the Validate & Stamp dialog asks for the code of your authenticator app and checks it with qtrace.ca when you click **Stamp** (**Checking…**). The dialog closes only on a right code; qtrace.ca's signed confirmation goes with the stamp. Until then, nothing changes.
+
 ## What's new in v1.2.11
 
 ### New - Network settings for hospitals and institutions
