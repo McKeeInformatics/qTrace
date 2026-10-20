@@ -21,7 +21,10 @@ package io.qtrace;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -59,6 +62,34 @@ public final class StampSections {
             }
         }
         return out;
+    }
+
+    /** How long Stamp waits for the blocks' checks before it refuses. */
+    static final long CHECK_TIMEOUT_SECONDS = 60;
+
+    /**
+     * Every block's check, one after the other, in order: the proofs they joined (none null), or
+     * a refusal at the first block that refuses. A block whose check throws refuses too: what a
+     * block asks for is a condition of the stamp, so a broken check never lets it through.
+     */
+    static CompletableFuture<List<StampEvidence>> check(List<StampSection> sections, StampContext context) {
+        CompletableFuture<List<StampEvidence>> all = CompletableFuture.completedFuture(new ArrayList<>());
+        for (StampSection s : sections) {
+            all = all.thenCompose(proofs -> {
+                CompletionStage<StampEvidence> one;
+                try {
+                    one = s.check(context);
+                } catch (RuntimeException e) {
+                    return CompletableFuture.failedFuture(e);
+                }
+                if (one == null) return CompletableFuture.completedFuture(proofs);
+                return one.thenApply(p -> {
+                    if (p != null) proofs.add(p);
+                    return proofs;
+                });
+            });
+        }
+        return all.orTimeout(CHECK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     static boolean allReady(List<StampSection> sections) {

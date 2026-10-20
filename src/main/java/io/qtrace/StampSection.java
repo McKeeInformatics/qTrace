@@ -22,6 +22,9 @@ package io.qtrace;
 import javafx.beans.value.ObservableBooleanValue;
 import javafx.scene.Node;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+
 /**
  * A block a qTrace module adds to the Validate &amp; Stamp dialog, just above the Stamp button
  * (e.g. the authenticator code of the security module). Registered through
@@ -34,4 +37,15 @@ public interface StampSection {
 
     /** The Stamp button stays disabled while this is false. */
     ObservableBooleanValue ready();
+
+    /**
+     * Called on the FX thread when the validator clicks Stamp, before anything is written: the
+     * block checks what it asked (qtrace.ca verifies a code, say) without blocking that thread.
+     * It completes with the proof to join to the stamp, or null for none. Completed exceptionally,
+     * the stamp is refused: the dialog stays open and the block says why itself. The default
+     * checks nothing.
+     */
+    default CompletionStage<StampEvidence> check(StampContext context) {
+        return CompletableFuture.completedFuture(null);
+    }
 }

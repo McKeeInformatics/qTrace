@@ -79,4 +79,58 @@ class StampSectionsTest {
         assertTrue(StampSections.allReady(List.of(section(true), section(true))));
         assertFalse(StampSections.allReady(List.of(section(true), section(false))));
     }
+
+    private static StampSection checking(java.util.function.Function<StampContext, java.util.concurrent.CompletionStage<StampEvidence>> check) {
+        return new StampSection() {
+            @Override public Node node() { return null; }
+            @Override public ObservableBooleanValue ready() { return new SimpleBooleanProperty(true); }
+            @Override public java.util.concurrent.CompletionStage<StampEvidence> check(StampContext c) { return check.apply(c); }
+        };
+    }
+
+    private static final StampContext CONTEXT = new StampContext("n0nce-n0nce-n0nce-n0nce", "slide.svs", "ab");
+
+    @Test
+    void checksJoinTheirProofsInOrderAndSkipNone() throws Exception {
+        StampEvidence p1 = new StampEvidence("security", "second-factor", "jwt1");
+        StampEvidence p3 = new StampEvidence("other", "kind", "v3");
+        List<StampSection> sections = List.of(
+            checking(c -> java.util.concurrent.CompletableFuture.completedFuture(p1)),
+            section(true),                                                // default: checks nothing
+            checking(c -> java.util.concurrent.CompletableFuture.completedFuture(p3)));
+        assertEquals(List.of(p1, p3), StampSections.check(sections, CONTEXT).get());
+        assertEquals(List.of(), StampSections.check(List.of(), CONTEXT).get());
+    }
+
+    @Test
+    void everyCheckSeesTheSameContext() throws Exception {
+        List<StampContext> seen = new java.util.ArrayList<>();
+        StampSection s = checking(c -> { seen.add(c); return java.util.concurrent.CompletableFuture.completedFuture(null); });
+        StampSections.check(List.of(s, s), CONTEXT).get();
+        assertEquals(List.of(CONTEXT, CONTEXT), seen);
+    }
+
+    @Test
+    void aRefusalStopsTheStampAndTheChecksAfterIt() {
+        boolean[] reached = {false};
+        List<StampSection> sections = List.of(
+            checking(c -> java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("wrong code"))),
+            checking(c -> { reached[0] = true; return java.util.concurrent.CompletableFuture.completedFuture(null); }));
+        var all = StampSections.check(sections, CONTEXT);
+        assertThrows(java.util.concurrent.ExecutionException.class, all::get);
+        assertFalse(reached[0]);
+    }
+
+    @Test
+    void aCheckThatThrowsRefusesTheStamp() {
+        StampSection broken = checking(c -> { throw new IllegalStateException("bug"); });
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> StampSections.check(List.of(broken), CONTEXT).get());
+    }
+
+    @Test
+    void aNonceIsFreshAndUrlSafe() {
+        String a = StampContext.newNonce(), b = StampContext.newNonce();
+        assertNotEquals(a, b);
+        assertTrue(a.matches("[A-Za-z0-9_-]{32}"), a);
+    }
 }

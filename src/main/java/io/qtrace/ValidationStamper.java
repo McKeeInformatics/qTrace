@@ -61,6 +61,19 @@ public class ValidationStamper {
 
     private static Dialog<ValidationStamp> current; // the open stamp dialog, if any — FX thread only
 
+    // The proofs the blocks joined to the stamp the dialog last returned (StampSection.check) — FX thread only.
+    private static java.util.List<StampEvidence> lastEvidence = java.util.List.of();
+
+    /**
+     * The proofs joined to the stamp {@link #show} just returned, handed over once: the caller
+     * keeps them with that stamp. Empty when no block joined any.
+     */
+    static java.util.List<StampEvidence> takeEvidence() {
+        java.util.List<StampEvidence> e = lastEvidence;
+        lastEvidence = java.util.List.of();
+        return e;
+    }
+
     /** Closes the stamp dialog if one is open (= Cancel); true when it did. The Stamp button is a toggle. */
     static boolean closeIfOpen() {
         if (current == null || !current.isShowing()) return false;
@@ -108,6 +121,7 @@ public class ValidationStamper {
                                                   String defaultCaseId,
                                                   ReplaySkip.Summary replay,
                                                   String restampsBasicId) {
+        lastEvidence = java.util.List.of();
         Dialog<ValidationStamp> dialog = new Dialog<>();
         dialog.initOwner(owner);
         // Not modal: the panel button that opened it must stay clickable to close it again.
@@ -345,10 +359,13 @@ public class ValidationStamper {
         // Compliance: Stamp blocked until validator named AND attestation checked (21 CFR §11.50)
         // Core: Stamp blocked only until validator name entered (no cryptographic signing)
         Node okBtn = stampBtn;
+        // While the blocks check what they asked (StampSection.check), Stamp waits.
+        javafx.beans.property.BooleanProperty checking = new javafx.beans.property.SimpleBooleanProperty(false);
         Runnable updateOk = () -> okBtn.setDisable(
             validatorField.getText().trim().isEmpty()
             || (attestationBox != null && !attestationBox.isSelected())
             || !StampSections.allReady(sections)
+            || checking.get()
         );
         for (StampSection s : sections) s.ready().addListener((obs, o, n) -> updateOk.run());
         if (activeLicense == null) {
@@ -359,6 +376,34 @@ public class ValidationStamper {
         }
         updateOk.run();
 
+        // Stamp, with module blocks: their checks first; the dialog closes only once all passed,
+        // with their proofs. A refusal keeps it open (the block says why), Stamp again retries.
+        final java.util.List<StampEvidence> proofs = new java.util.ArrayList<>();
+        final boolean[] checked = {false};
+        if (!sections.isEmpty()) {
+            final String imgHashForCheck = imgHash;
+            stampBtn.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
+                if (checked[0]) return;
+                e.consume();
+                if (checking.get()) return;
+                checking.set(true);
+                updateOk.run();
+                stampBtn.setText("Checking…");
+                StampContext context = new StampContext(StampContext.newNonce(), currentImageName(), imgHashForCheck);
+                StampSections.check(sections, context).whenComplete((joined, err) ->
+                    javafx.application.Platform.runLater(() -> {
+                        checking.set(false);
+                        stampBtn.setText("Stamp");
+                        updateOk.run();
+                        if (err != null || !dialog.isShowing()) return;
+                        proofs.clear();
+                        proofs.addAll(joined);
+                        checked[0] = true;
+                        stampBtn.fire();
+                    }));
+            });
+        }
+
         if (!sections.isEmpty()) centerActions(pane, content, sections, stampBtn, cancelBtn);
 
         // ── Result converter ─────────────────────────────────────────────────
@@ -367,6 +412,7 @@ public class ValidationStamper {
 
         dialog.setResultConverter(btn -> {
             if (btn != ButtonType.OK) return null;
+            lastEvidence = java.util.List.copyOf(proofs);
             String sel = statusBox.getValue();
             int idx = 1;
             for (int i = 0; i < STATUS_LABELS.length; i++)
@@ -416,6 +462,17 @@ public class ValidationStamper {
         }
     }
 
+    /** The image open in QuPath, as it names it; null when there is none or QuPath is not up. */
+    private static String currentImageName() {
+        try {
+            var gui = qupath.lib.gui.QuPathGUI.getInstance();
+            var data = gui != null ? gui.getImageData() : null;
+            return data != null ? data.getServer().getMetadata().getName() : null;
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
+    }
+
     /**
      * With a module block: the block, then Stamp centred under it and Cancel as a link below.
      * The dialog's own buttons stay the ones that act (result converter, close) — hidden, and
@@ -438,6 +495,7 @@ public class ValidationStamper {
         Button stamp = new Button("Stamp");
         stamp.setStyle(stampBtn.getStyle() + "-fx-padding: 8 44 8 44;");
         stamp.disableProperty().bind(stampBtn.disableProperty());
+        stamp.textProperty().bind(stampBtn.textProperty()); // "Checking…" while the blocks check
         stamp.setOnAction(e -> stampBtn.fire());
         stampBtn.setDefaultButton(false);
         stamp.setDefaultButton(true);

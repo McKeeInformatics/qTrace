@@ -185,6 +185,10 @@ public class QTraceController {
 
     // Validation state
     private ValidationStamp lastStamp    = null;
+    // The proofs modules joined to a stamp in the dialog (StampSection.check), and that stamp:
+    // only that very stamp carries them to Compliance, never one restored or rebuilt later.
+    private ValidationStamp            evidencedStamp = null;
+    private java.util.List<StampEvidence> stampEvidence = java.util.List.of();
     private Path            lastCertPath  = null;  // written by exportReport(), used by pushToWorkspace()
     private Path            lastQtracePath = null;
     private String          lastRecordId   = null;  // qtb_… of a stamp that produced no certificate (BasicRecord); null when certified
@@ -1452,6 +1456,8 @@ public class QTraceController {
                         return;
                     }
                     lastStamp = stamp;
+                    evidencedStamp = stamp;
+                    stampEvidence = ValidationStamper.takeEvidence();
                     lastStampStepCount = logger.getCapturedSteps().size();
                     ActivityLog.add("Validation stamp recorded:");
                     ActivityLog.add("  validator  : " + stamp.validator());
@@ -1681,7 +1687,8 @@ public class QTraceController {
                     JsonArray sessions = qtroot.getAsJsonArray("sessions");
                     JsonObject lastSession = sessions.get(sessions.size() - 1).getAsJsonObject();
                     JsonObject imageRoot = qtroot.getAsJsonObject("image");
-                    Path certPath = ep.buildCertificate(lastStamp, lastSession, imageRoot, outDir);
+                    Path certPath = ep.buildCertificate(lastStamp, lastSession, imageRoot, outDir,
+                        lastStamp == evidencedStamp ? stampEvidence : java.util.List.of());
                     if (certPath != null) {
                         lastCertPath = certPath;
                         QTraceExporter.appendExternalFile(outFile, "cert", certPath);

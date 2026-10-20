@@ -80,6 +80,17 @@ public interface QTracePlugin {
                                    JsonObject imageRoot, Path exportDir) { return null; }
 
     /**
+     * The same, with the proofs modules joined to the stamp in the dialog ({@link StampEvidence},
+     * e.g. the security module's second-factor attestation), kept in the chain of custody. A
+     * Compliance that predates them does not override this one: the stamp is certified without.
+     */
+    default Path buildCertificate(ValidationStamp stamp, JsonObject sessionPayload,
+                                   JsonObject imageRoot, Path exportDir,
+                                   java.util.List<StampEvidence> evidence) {
+        return buildCertificate(stamp, sessionPayload, imageRoot, exportDir);
+    }
+
+    /**
      * Builds the compact digest that would be sent to the report endpoint, as a
      * pretty-printed JSON string. Split from {@link #sendReportDigest} so the Core
      * can show the user exactly what leaves their machine (audit/transparency)
