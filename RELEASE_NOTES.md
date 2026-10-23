@@ -1,3 +1,11 @@
+## What's new in v1.2.13
+
+### Fixed - Windows: Open Project Folder opens Explorer
+**Settings › Open Project Folder**, the Player's log button, **Open .qtrace** and every link to qtrace.ca opened a command prompt instead of Explorer when the path held a space. They now open Explorer, or the file's default app.
+
+### Fixed - Linux: the Player's log button opens the log
+When the default app for a file is a terminal program (Neovim for a .log, for instance), the log button seemed to do nothing. qTrace now opens it in a terminal window.
+
 ## What's new in v1.2.12
 
 ### New - Dark, Light or Auto theme
