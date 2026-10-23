@@ -1034,26 +1034,7 @@ public class QTraceController {
             showGraphInfo("qTrace — Open .qtrace", QTraceI18n.t("report.info.noqtrace"));
             return;
         }
-        openWithOs(file);
-    }
-
-    /**
-     * Launches the OS file-open command directly on the file. Deliberately avoids
-     * java.awt.Desktop.open(File): on Linux, initializing AWT's Desktop inside a
-     * JavaFX/GTK process can crash the JVM. xdg-open/open/cmd start don't touch AWT.
-     */
-    private static void openWithOs(File file) {
-        try {
-            String os = System.getProperty("os.name", "").toLowerCase();
-            ProcessBuilder pb;
-            if (os.contains("win"))
-                pb = new ProcessBuilder("cmd", "/c", "start", "", file.getAbsolutePath());
-            else if (os.contains("mac"))
-                pb = new ProcessBuilder("open", file.getAbsolutePath());
-            else
-                pb = new ProcessBuilder("xdg-open", file.getAbsolutePath());
-            pb.start();
-        } catch (Exception ignored) {}
+        BrowserOpener.open(file.getAbsolutePath());
     }
 
     /** Non-blocking info alert shown when the commit graph has nothing to display. */

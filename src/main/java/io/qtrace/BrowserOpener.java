@@ -23,17 +23,22 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Opens a URL (or a folder) with the operating system's default handler.
+ * Opens a URL, a file or a folder with the operating system's default handler.
  *
  * Never use java.awt.Desktop here: initializing AWT inside the JavaFX/GTK process can crash the
- * JVM on Linux. xdg-open / open / cmd start don't touch AWT. Public: the provisioning and welcome
- * modules use it too.
+ * JVM on Linux. xdg-open / open / explorer.exe don't touch AWT. Public: the provisioning, welcome,
+ * player and dashboard modules use it too.
+ *
+ * Windows goes through explorer.exe, never {@code cmd /c start}: Java quotes an argument that
+ * holds a space, and {@code start} takes its first quoted argument as the title of a new console
+ * window, so a path like {@code C:\Users\Jane Doe\project} opened a command prompt instead of
+ * Explorer. cmd also reads {@code &} in a URL as a command separator.
  */
 public final class BrowserOpener {
 
     private BrowserOpener() {}
 
-    /** Opens {@code url} on a background thread; failures are ignored (nothing to recover). */
+    /** Opens {@code url} (or a file / folder path) on a background thread; failures are ignored (nothing to recover). */
     public static void open(String url) {
         new Thread(() -> {
             try {
@@ -46,6 +51,6 @@ public final class BrowserOpener {
         String os = osName.toLowerCase(Locale.ROOT);
         if (os.contains("linux")) return List.of("xdg-open", url);
         if (os.contains("mac"))   return List.of("open", url);
-        return List.of("cmd", "/c", "start", url);
+        return List.of("explorer.exe", url);
     }
 }

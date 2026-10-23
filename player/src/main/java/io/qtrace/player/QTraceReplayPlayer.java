@@ -20,6 +20,7 @@
 package io.qtrace.player;
 
 import io.qtrace.Theme;
+import io.qtrace.BrowserOpener;
 import io.qtrace.ActionLogger;
 import io.qtrace.QTraceConfig;
 import io.qtrace.QTraceController;
@@ -1544,9 +1545,8 @@ class QTraceReplayPlayer {
 
     /**
      * Opens the current run's log file directly in the OS default text viewer/editor, or the
-     * replay-logs folder itself when there's no run yet to point at. Never uses
-     * java.awt.Desktop: initializing AWT inside this JavaFX/GTK process can crash the JVM on
-     * Linux (same reason QTracePreflightDialog's "Install →" shells out to xdg-open instead).
+     * replay-logs folder itself when there's no run yet to point at, through Core's
+     * BrowserOpener (no AWT, and no command prompt instead of the file on Windows).
      */
     private void openLogsFolder() {
         java.nio.file.Path target = logWriter != null
@@ -1556,19 +1556,7 @@ class QTraceReplayPlayer {
             java.nio.file.Files.createDirectories(logWriter != null ? target.getParent() : target);
         } catch (Exception ignored) {}
 
-        new Thread(() -> {
-            try {
-                String os = System.getProperty("os.name", "").toLowerCase();
-                ProcessBuilder pb;
-                if (os.contains("linux"))
-                    pb = new ProcessBuilder("xdg-open", target.toString());
-                else if (os.contains("mac"))
-                    pb = new ProcessBuilder("open", target.toString());
-                else
-                    pb = new ProcessBuilder("cmd", "/c", "start", target.toString());
-                pb.start();
-            } catch (Exception ignored) {}
-        }, "qtrace-open-logs").start();
+        BrowserOpener.open(target.toString());
     }
 
     /**

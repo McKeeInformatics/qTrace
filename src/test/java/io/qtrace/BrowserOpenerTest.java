@@ -21,7 +21,14 @@ class BrowserOpenerTest {
     }
 
     @Test
-    void windowsUsesStart() {
-        assertEquals(List.of("cmd", "/c", "start", URL), BrowserOpener.command("Windows 11", URL));
+    void windowsUsesExplorer() {
+        assertEquals(List.of("explorer.exe", URL), BrowserOpener.command("Windows 11", URL));
+    }
+
+    @Test
+    void windowsFolderWithSpacesIsOneArgumentToExplorer() {
+        // cmd /c start took the quoted path as a console title: a command prompt opened instead
+        String folder = "C:\\Users\\Jane Doe\\My Project\\qTrace";
+        assertEquals(List.of("explorer.exe", folder), BrowserOpener.command("Windows 10", folder));
     }
 }

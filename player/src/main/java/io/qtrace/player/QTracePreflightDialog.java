@@ -20,6 +20,7 @@
 package io.qtrace.player;
 
 import io.qtrace.Theme;
+import io.qtrace.BrowserOpener;
 import io.qtrace.player.ext.Compat;
 import io.qtrace.player.ext.ExtensionHandlerRegistry;
 import io.qtrace.player.ext.InstanSegHandler;
@@ -337,22 +338,8 @@ class QTracePreflightDialog {
         String url = ke != null ? ke.getInstallUrl() : FALLBACK_URL;
         btn.setText("Opening…");
         btn.setDisable(true);
-        // Never use java.awt.Desktop here: initializing AWT inside the JavaFX/GTK
-        // process can crash the JVM on Linux. xdg-open/open/cmd start don't touch AWT.
-        new Thread(() -> {
-            try {
-                String os = System.getProperty("os.name", "").toLowerCase();
-                ProcessBuilder pb;
-                if (os.contains("linux"))
-                    pb = new ProcessBuilder("xdg-open", url);
-                else if (os.contains("mac"))
-                    pb = new ProcessBuilder("open", url);
-                else
-                    pb = new ProcessBuilder("cmd", "/c", "start", url);
-                pb.start();
-            } catch (Exception ignored) {}
-            Platform.runLater(() -> { btn.setText("Install →"); btn.setDisable(false); });
-        }, "qtrace-install-browse").start();
+        BrowserOpener.open(url);
+        Platform.runLater(() -> { btn.setText("Install →"); btn.setDisable(false); });
     }
 
     private static QTraceExtensionHandler findKnownExt(String name) {
