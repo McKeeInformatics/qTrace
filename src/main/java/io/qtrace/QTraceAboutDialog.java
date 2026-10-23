@@ -188,8 +188,8 @@ public class QTraceAboutDialog {
 
         Label badge = new Label(badgeText);
         badge.setStyle(
-            "-fx-background-color: " + badgeColor + "22;"
-          + "-fx-border-color: " + badgeColor + "66;"
+            "-fx-background-color: " + Theme.alpha(badgeColor, 13) + ";"
+          + "-fx-border-color: " + Theme.alpha(badgeColor, 40) + ";"
           + "-fx-border-radius: 5; -fx-background-radius: 5;"
           + "-fx-text-fill: " + badgeColor + ";"
           + "-fx-font-size: 12; -fx-font-weight: bold;"
@@ -233,7 +233,7 @@ public class QTraceAboutDialog {
         inner.setPadding(new Insets(12, 16, 12, 16));
         inner.setStyle(
             "-fx-background-color: " + BG_CARD + ";"
-          + "-fx-border-color: " + GREEN + "44;"
+          + "-fx-border-color: " + Theme.alpha(GREEN, 27) + ";"
           + "-fx-border-radius: 8; -fx-background-radius: 8;"
         );
 
@@ -394,8 +394,8 @@ public class QTraceAboutDialog {
             String c = inactiveColor();
             Button renew = new Button(error ? "Regenerate key →" : "Renew certificate →");
             renew.setStyle(
-                "-fx-background-color: " + c + "22;"
-              + "-fx-border-color: " + c + "66;"
+                "-fx-background-color: " + Theme.alpha(c, 13) + ";"
+              + "-fx-border-color: " + Theme.alpha(c, 40) + ";"
               + "-fx-border-radius: 5; -fx-background-radius: 5;"
               + "-fx-text-fill: " + c + ";"
               + "-fx-font-size: 11; -fx-font-weight: bold;"
@@ -408,8 +408,8 @@ public class QTraceAboutDialog {
             boolean account = offer(licence != null && !licence.isBlank(), Account.signedIn()) == Offer.ACCOUNT;
             Button upgrade = new Button(account ? "Get your account ↑" : "Get Compliance ↑");
             upgrade.setStyle(
-                "-fx-background-color: " + YELLOW + "22;"
-              + "-fx-border-color: " + YELLOW + "66;"
+                "-fx-background-color: " + Theme.alpha(YELLOW, 13) + ";"
+              + "-fx-border-color: " + Theme.alpha(YELLOW, 40) + ";"
               + "-fx-border-radius: 5; -fx-background-radius: 5;"
               + "-fx-text-fill: " + YELLOW + ";"
               + "-fx-font-size: 11; -fx-font-weight: bold;"
@@ -426,8 +426,8 @@ public class QTraceAboutDialog {
         } else if (mode == Mode.COMPLIANCE) {
             Button cert = new Button("Load certificate →");
             cert.setStyle(
-                "-fx-background-color: " + GREEN + "22;"
-              + "-fx-border-color: " + GREEN + "66;"
+                "-fx-background-color: " + Theme.alpha(GREEN, 13) + ";"
+              + "-fx-border-color: " + Theme.alpha(GREEN, 40) + ";"
               + "-fx-border-radius: 5; -fx-background-radius: 5;"
               + "-fx-text-fill: " + GREEN + ";"
               + "-fx-font-size: 11; -fx-font-weight: bold;"

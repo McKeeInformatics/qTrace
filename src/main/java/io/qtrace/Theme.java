@@ -84,6 +84,17 @@ public final class Theme {
     static String css(Map<String, String> p) {
         StringBuilder sb = new StringBuilder("/* " + MARK + " */\n.root {\n");
         for (String t : TOKENS) sb.append("  -qt-").append(t).append(": ").append(p.get(t)).append(";\n");
+        for (String t : TOKENS) {
+            String c = p.get(t);
+            if (!c.startsWith("#")) continue;   // already translucent
+            int r = Integer.parseInt(c.substring(1, 3), 16), g = Integer.parseInt(c.substring(3, 5), 16),
+                b = Integer.parseInt(c.substring(5, 7), 16);
+            for (int a : ALPHAS) {
+                sb.append("  -qt-").append(t).append("-a").append(a).append(": rgba(")
+                  .append(r).append(',').append(g).append(',').append(b).append(",0.")
+                  .append(String.format("%02d", a)).append(");\n");
+            }
+        }
         sb.append("  -fx-base: ").append(p.get("bg-base")).append(";\n");
         sb.append("  -fx-control-inner-background: ").append(p.get("field")).append(";\n");
         sb.append("  -fx-accent: ").append(p.get("blue")).append(";\n");
@@ -150,6 +161,20 @@ public final class Theme {
     /** The looked-up colour name of a token, for inline styles: {@code "-qt-bg-base"}. */
     public static String v(String token) { return "-qt-" + token; }
 
+    /** The shades {@link #alpha} offers, in percent: a tint, a soft line, a border. */
+    static final int[] ALPHAS = {13, 27, 40};
+
+    /**
+     * A looked-up colour's translucent shade, for inline styles: {@code alpha(v("blue"), 40)} is
+     * {@code "-qt-blue-a40"}, the blue at 40 % that the stylesheet defines in each palette.
+     * A looked-up name cannot take a hex alpha suffix ({@code "-qt-blue" + "22"} is no colour).
+     */
+    public static String alpha(String lookedUp, int percent) {
+        if (java.util.Arrays.stream(ALPHAS).noneMatch(a -> a == percent))
+            throw new IllegalArgumentException("no " + percent + " % shade; offered: " + java.util.Arrays.toString(ALPHAS));
+        return lookedUp + "-a" + percent;
+    }
+
     /** The token's current value as a literal, for the code that cannot use a looked-up colour. */
     public static String hex(String token) { return CURRENT.get().get(token); }
 
@@ -184,7 +209,8 @@ public final class Theme {
         w.sceneProperty().addListener((o, a, b) -> apply(b));
     }
 
-    private static void apply(Scene scene) {
+    /** Paints one scene; windows are painted on their own, this is for a scene snapshotted without one. FX thread. */
+    public static void apply(Scene scene) {
         if (scene == null) return;
         scene.getStylesheets().removeIf(Theme::isOurs);
         scene.getStylesheets().add(0, sheet());

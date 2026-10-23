@@ -55,6 +55,22 @@ class ThemeTest {
     }
 
     @Test
+    void alpha_isALookedUpColourEveryPaletteDefines() {
+        assertEquals("-qt-blue-a40", Theme.alpha(Theme.v("blue"), 40));
+        String dark = Theme.css(Theme.DARK), light = Theme.css(Theme.LIGHT);
+        assertTrue(dark.contains("-qt-blue-a13: rgba(137,180,250,0.13);"), dark);
+        assertTrue(light.contains("-qt-green-a27: rgba(47,138,30,0.27);"), light);
+        // A token that is already translucent has no alpha variant.
+        assertTrue(!dark.contains("-qt-cta-teal-soft-a"), dark);
+    }
+
+    @Test
+    void alpha_refusesAShadeTheSheetDoesNotDefine() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+            () -> Theme.alpha(Theme.v("blue"), 50));
+    }
+
+    @Test
     void ourSheetIsRecognisedAfterEncoding_soASwapReplacesItInsteadOfStacking() {
         String enc = "data:text/css," + java.net.URLEncoder.encode(Theme.css(Theme.DARK), java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         assertTrue(Theme.isOurs(enc));
