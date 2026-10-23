@@ -19,6 +19,7 @@
 
 package io.qtrace;
 
+import java.io.File;
 import java.util.List;
 import java.util.Locale;
 
@@ -26,8 +27,12 @@ import java.util.Locale;
  * Opens a URL, a file or a folder with the operating system's default handler.
  *
  * Never use java.awt.Desktop here: initializing AWT inside the JavaFX/GTK process can crash the
- * JVM on Linux. xdg-open / open / explorer.exe don't touch AWT. Public: the provisioning, welcome,
- * player and dashboard modules use it too.
+ * JVM on Linux. gio / xdg-open / open / explorer.exe don't touch AWT. Public: the provisioning,
+ * welcome, player and dashboard modules use it too.
+ *
+ * Linux prefers {@code gio open} to {@code xdg-open}: outside GNOME/KDE, xdg-utils 1.2 ignores
+ * {@code Terminal=true}, so a terminal app set as the default (Neovim for a .log) ran with no
+ * window at all and the button seemed to do nothing. gio honours it (xdg-terminal-exec).
  *
  * Windows goes through explorer.exe, never {@code cmd /c start}: Java quotes an argument that
  * holds a space, and {@code start} takes its first quoted argument as the title of a new console
@@ -42,15 +47,32 @@ public final class BrowserOpener {
     public static void open(String url) {
         new Thread(() -> {
             try {
-                new ProcessBuilder(command(System.getProperty("os.name", ""), url)).start();
+                // Detached from QuPath's pipes: nothing reads them, and a handler that writes to them would block
+                new ProcessBuilder(command(System.getProperty("os.name", ""), url, onPath("gio")))
+                    .redirectInput(ProcessBuilder.Redirect.from(new File(isWindows() ? "NUL" : "/dev/null")))
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
             } catch (Exception ignored) {}
         }, "qtrace-browser").start();
     }
 
-    static List<String> command(String osName, String url) {
+    static List<String> command(String osName, String url, boolean hasGio) {
         String os = osName.toLowerCase(Locale.ROOT);
-        if (os.contains("linux")) return List.of("xdg-open", url);
+        if (os.contains("linux")) return hasGio ? List.of("gio", "open", url) : List.of("xdg-open", url);
         if (os.contains("mac"))   return List.of("open", url);
         return List.of("explorer.exe", url);
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+    }
+
+    private static boolean onPath(String exe) {
+        String path = System.getenv("PATH");
+        if (path == null) return false;
+        for (String dir : path.split(File.pathSeparator))
+            if (!dir.isEmpty() && new File(dir, exe).canExecute()) return true;
+        return false;
     }
 }
