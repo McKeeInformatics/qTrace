@@ -294,14 +294,18 @@ public class QTraceAboutDialog {
             "English / French UI",
         };
         for (String feat : core) {
-            g.add(featureLabel(feat, false), 0, row);
-            g.add(check(true, isCompliance ? TEAL : BLUE), 1, row);
+            g.add(featureLabel(feat), 0, row);
+            g.add(check(isCompliance ? TEAL : BLUE), 1, row);
             row++;
         }
 
+        // A standard workstation sees only what it has: the Compliance features are
+        // not listed until the edition is there.
+        if (!isCompliance) return g;
+
         Region r1 = gridRule(); g.add(r1, 0, row); GridPane.setColumnSpan(r1, 2); row++;
 
-        // Compliance features — available only with active subscription
+        // Compliance features
         String[] complianceFeatures = {
             "Dashboard — multi-image viewer",
             "Batch export for full cohorts",
@@ -314,32 +318,30 @@ public class QTraceAboutDialog {
             "Priority support by qtrace.ca",
         };
         for (String feat : complianceFeatures) {
-            g.add(featureLabel(feat, !isCompliance), 0, row);
-            g.add(check(isCompliance, TEAL), 1, row);
+            g.add(featureLabel(feat), 0, row);
+            g.add(check(TEAL), 1, row);
             row++;
         }
 
-        // Compliance standards — only shown in Compliance edition
-        if (isCompliance) {
-            Region r2 = gridRule(); g.add(r2, 0, row); GridPane.setColumnSpan(r2, 2); row++;
+        // Compliance standards
+        Region r2 = gridRule(); g.add(r2, 0, row); GridPane.setColumnSpan(r2, 2); row++;
 
-            Label sectionTitle = new Label("Compliance Coverage");
-            sectionTitle.setFont(Font.font("System", FontWeight.BOLD, 10));
-            Theme.text(sectionTitle, TEXT_MUTED);
-            sectionTitle.setPadding(new Insets(4, 0, 4, 0));
-            g.add(sectionTitle, 0, row); GridPane.setColumnSpan(sectionTitle, 2); row++;
+        Label sectionTitle = new Label("Compliance Coverage");
+        sectionTitle.setFont(Font.font("System", FontWeight.BOLD, 10));
+        Theme.text(sectionTitle, TEXT_MUTED);
+        sectionTitle.setPadding(new Insets(4, 0, 4, 0));
+        g.add(sectionTitle, 0, row); GridPane.setColumnSpan(sectionTitle, 2); row++;
 
-            String[][] standards = {
-                {"ISO 15189 §5.8",     "Traceability of examination processes"},
-                {"FDA 21 CFR Part 11", "Electronic records & electronic signatures"},
-                {"CAP",                "Laboratory accreditation documentation"},
-                {"GLP / OECD",         "Method reproducibility & data integrity"},
-                {"CLIA",               "Quality assessment documentation"},
-            };
-            for (String[] std : standards) {
-                HBox indicator = complianceIndicator(std[0], std[1]);
-                g.add(indicator, 0, row); GridPane.setColumnSpan(indicator, 2); row++;
-            }
+        String[][] standards = {
+            {"ISO 15189 §5.8",     "Traceability of examination processes"},
+            {"FDA 21 CFR Part 11", "Electronic records & electronic signatures"},
+            {"CAP",                "Laboratory accreditation documentation"},
+            {"GLP / OECD",         "Method reproducibility & data integrity"},
+            {"CLIA",               "Quality assessment documentation"},
+        };
+        for (String[] std : standards) {
+            HBox indicator = complianceIndicator(std[0], std[1]);
+            g.add(indicator, 0, row); GridPane.setColumnSpan(indicator, 2); row++;
         }
 
         return g;
@@ -498,16 +500,16 @@ public class QTraceAboutDialog {
         return l;
     }
 
-    private static Label featureLabel(String text, boolean dimmed) {
+    private static Label featureLabel(String text) {
         Label l = new Label(text);
-        Theme.text(l, dimmed ? TEXT_MUTED : TEXT_SUB);
+        Theme.text(l, TEXT_SUB);
         l.setFont(Font.font("System", 12));
         return l;
     }
 
-    private static Label check(boolean present, String activeColor) {
-        Label l = new Label(present ? "✓" : "—");
-        Theme.text(l, present ? activeColor : TEXT_MUTED);
+    private static Label check(String color) {
+        Label l = new Label("✓");
+        Theme.text(l, color);
         l.setFont(Font.font("System", FontWeight.BOLD, 13));
         l.setMaxWidth(Double.MAX_VALUE);
         l.setAlignment(Pos.CENTER);
