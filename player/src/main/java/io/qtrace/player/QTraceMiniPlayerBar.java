@@ -248,17 +248,11 @@ final class QTraceMiniPlayerBar {
     private static double clamp(double v) { return Math.max(0, Math.min(1, v)); }
 
     private VBox buildUi() {
-        MenuItem local = new MenuItem("Local .qtrace file…");
-        local.setOnAction(e -> player.browseFromMiniPlayer());
-        MenuItem remote = new MenuItem("qtrace.ca ID or share link…");
-        openBtn = new MenuButton("📂 Open", null, local, remote);
-        remote.setOnAction(e -> showIdPopup(openBtn));
-        // Then one entry per module source (e.g. "Training…").
-        for (io.qtrace.PlayerSource source : QTraceReplayPlayer.moduleSources()) {
-            MenuItem item = new MenuItem(source.label());
-            item.setOnAction(e -> player.chooseFromSource(source));
-            openBtn.getItems().add(item);
-        }
+        // The open image's trace, a file, an ID or link, the module sources, the recents:
+        // the Player window's menu too (PlayerOpenMenu), built again each time it opens.
+        openBtn = new MenuButton("📂 Open");
+        PlayerOpenMenu.attach(openBtn, () -> player.openMenuState(true),
+            player.openMenuActions(() -> showIdPopup(openBtn)));
         style(openBtn);
         darkPopup(openBtn);
         openBtn.setTooltip(new Tooltip("Open a replay"));
@@ -459,7 +453,7 @@ final class QTraceMiniPlayerBar {
      * looked-up colour, so the popup's entries inherit it — on modena's default white popup they
      * were grey on white, unreadable. The popup itself is only reachable through its entries.
      */
-    private static void darkPopup(MenuButton button) {
+    static void darkPopup(MenuButton button) {
         button.showingProperty().addListener((obs, was, showing) -> {
             if (!showing || button.getItems().isEmpty()) return;
             javafx.scene.control.ContextMenu popup = button.getItems().get(0).getParentPopup();

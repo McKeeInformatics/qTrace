@@ -537,9 +537,8 @@ public class QTraceController {
                 return;
             }
             String imageName = imageData.getServer().getMetadata().getName();
-            String base = imageName.replaceAll("[^a-zA-Z0-9._-]", "_");
             Path exportDir  = QTraceConfig.get().outputExportDir();
-            Path qtracePath = exportDir.resolve(base + ".qtrace");
+            Path qtracePath = QTraceExporter.fileFor(exportDir, imageName);
             if (!Files.exists(qtracePath) || !Files.isDirectory(exportDir)) {
                 panel.setPushEnabled(false);
                 return;
@@ -1020,11 +1019,20 @@ public class QTraceController {
         try {
             var imageData = logger.getCurrentImageData();
             if (imageData == null) return null;
-            String base = imageData.getServer().getMetadata().getName()
-                .replaceAll("[^a-zA-Z0-9._-]", "_");
-            Path outFile = QTraceConfig.get().outputExportDir().resolve(base + ".qtrace");
+            Path outFile = QTraceExporter.fileFor(QTraceConfig.get().outputExportDir(),
+                imageData.getServer().getMetadata().getName());
             return Files.exists(outFile) ? outFile.toFile() : null;
         } catch (Exception ignored) { return null; }
+    }
+
+    /**
+     * The .qtrace of the image open in the viewer, as it is on disk (what was done since the
+     * last commit is not in it yet), or null: no image open, or nothing recorded for it yet.
+     * The player's "Trace of « image »".
+     */
+    public static File openImageRecord() {
+        QTraceController c = active;
+        return c != null && c.logger != null ? c.currentQtraceFile() : null;
     }
 
     /** Opens the current image's .qtrace file with whatever the OS resolves for it, if one exists. */
@@ -1568,8 +1576,8 @@ public class QTraceController {
             if (QTracePluginManager.getEntitled() == null) return null;
             var imageData = logger.getCurrentImageData();
             if (imageData == null) return null;
-            String base = imageData.getServer().getMetadata().getName().replaceAll("[^a-zA-Z0-9._-]", "_");
-            Path outFile = QTraceConfig.get().outputExportDir().resolve(base + ".qtrace");
+            Path outFile = QTraceExporter.fileFor(QTraceConfig.get().outputExportDir(),
+                imageData.getServer().getMetadata().getName());
             if (!Files.exists(outFile)) return null;
             return BasicRecord.restampedFrom(JsonParser.parseString(Files.readString(outFile)).getAsJsonObject(), true);
         } catch (Exception ignored) { return null; }
@@ -1579,9 +1587,8 @@ public class QTraceController {
         try {
             var imageData = logger.getCurrentImageData();
             if (imageData == null) return null;
-            String imageName = imageData.getServer().getMetadata().getName();
-            String base = imageName.replaceAll("[^a-zA-Z0-9._-]", "_");
-            java.nio.file.Path outFile = QTraceConfig.get().outputExportDir().resolve(base + ".qtrace");
+            java.nio.file.Path outFile = QTraceExporter.fileFor(QTraceConfig.get().outputExportDir(),
+                imageData.getServer().getMetadata().getName());
             if (!java.nio.file.Files.exists(outFile)) return null;
             JsonObject root = JsonParser.parseString(java.nio.file.Files.readString(outFile)).getAsJsonObject();
             return root.has("status") ? root.get("status").getAsString() : null;

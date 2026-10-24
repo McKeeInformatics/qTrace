@@ -102,6 +102,11 @@ public class QTraceExporter {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    /** The .qtrace of the image named {@code imageName} in {@code dir}: what {@link #export} writes, what readers open. */
+    public static Path fileFor(Path dir, String imageName) {
+        return dir.resolve(imageName.replaceAll("[^a-zA-Z0-9._-]", "_") + ".qtrace");
+    }
+
     /**
      * Appends a session to the existing .qtrace, or creates it if absent.
      * @return absolute path of the .qtrace file
@@ -112,8 +117,7 @@ public class QTraceExporter {
 
         String imageName = imageData.getServer().getMetadata().getName();
         Files.createDirectories(outputDir);
-        String base    = imageName.replaceAll("[^a-zA-Z0-9._-]", "_");
-        Path   outFile = outputDir.resolve(base + ".qtrace");
+        Path   outFile = fileFor(outputDir, imageName);
 
         // The commit this .qtrace was last recorded in: each session points back at the history
         // it extends (a commit can't carry its own hash).

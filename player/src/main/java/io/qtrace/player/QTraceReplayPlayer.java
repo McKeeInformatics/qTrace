@@ -246,18 +246,21 @@ class QTraceReplayPlayer {
         stage.setHeight(820); // same default height as QTraceDashboard
 
         // ── Input row ────────────────────────────────────────────────────────
-        // Text fallback, not emoji-only: on some Linux/JavaFX setups the "📂" glyph doesn't
-        // exist in the resolved system font and silently renders nothing — an emoji-only
-        // button then looks like an empty, invisible button instead of failing loudly.
-        Button browseBtn = new Button("📂 Browse");
+        // 📂 Open: the open image's trace, a local file, the module sources, the recents —
+        // the same menu as the mini-player's (PlayerOpenMenu), the field below takes an ID or link.
+        // Text after the emoji: on some Linux/JavaFX setups the "📂" glyph doesn't exist in the
+        // resolved system font and silently renders nothing — the label still reads "Open".
+        MenuButton browseBtn = new MenuButton("📂 Open");
         browseBtn.setId("browse-button"); // looked up by the screenshot harness — see PlayerScreenshotHarness
         browseBtn.setFont(Font.font("System", 12));
         Theme.text(browseBtn, TEXT_SUB);
         browseBtn.setStyle(
             "-fx-background-color: " + SURFACE + "; -fx-border-color: " + BORDER + ";"
-          + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 5 9 5 9;");
-        Tooltip.install(browseBtn, new Tooltip("Open a local .qtrace file"));
-        browseBtn.setOnAction(e -> browseLocalFile());
+          + "-fx-text-base-color: " + TEXT_SUB + "; -fx-mark-color: " + TEXT_SUB + ";"
+          + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 2 4 2 4;");
+        Tooltip.install(browseBtn, new Tooltip("Open a trace or a workflow"));
+        PlayerOpenMenu.attach(browseBtn, () -> openMenuState(false), openMenuActions(null));
+        QTraceMiniPlayerBar.darkPopup(browseBtn);
 
         inputField = new TextField();
         inputField.setPromptText("Local .qtrace path, qtc_… ID, or share link");
@@ -286,15 +289,6 @@ class QTraceReplayPlayer {
         toMiniBtn.setManaged(keepAliveOnClose);
 
         HBox inputRow = new HBox(8, browseBtn);
-        // One button per module source (e.g. "Training…"), right after Browse.
-        for (io.qtrace.PlayerSource source : moduleSources()) {
-            Button sourceBtn = new Button(source.label());
-            sourceBtn.setFont(browseBtn.getFont());
-            Theme.text(sourceBtn, TEXT_SUB);
-            sourceBtn.setStyle(browseBtn.getStyle());
-            sourceBtn.setOnAction(e -> chooseFromSource(source));
-            inputRow.getChildren().add(sourceBtn);
-        }
         inputRow.getChildren().addAll(inputField, openBtn, toMiniBtn);
         inputRow.setAlignment(Pos.CENTER_LEFT);
 
@@ -526,9 +520,6 @@ class QTraceReplayPlayer {
         return sb.toString();
     }
 
-    /** Opens the file chooser — the mini-player's "Local file…" entry. */
-    void browseFromMiniPlayer() { browseLocalFile(); }
-
     /**
      * Sources offered by the modules this licence includes (e.g. the training catalogue), for the
      * Open entries of the Player and of the mini-player. Empty on a Core without PlayerSources.
@@ -538,6 +529,61 @@ class QTraceReplayPlayer {
             return io.qtrace.PlayerSources.entitled();
         } catch (LinkageError e) {
             return List.of();
+        }
+    }
+
+    // The sources 📂 Open last listed: an entry's index points into this list.
+    private List<io.qtrace.PlayerSource> menuSources = List.of();
+
+    /** 📂 Open as it is now: the open image and its trace, the module sources, the recents. */
+    PlayerOpenMenu.State openMenuState(boolean withIdEntry) {
+        String image = null;
+        try {
+            ImageData<BufferedImage> data = qupath.getImageData();
+            if (data != null) image = data.getServer().getMetadata().getName();
+        } catch (RuntimeException ignored) {}
+        menuSources = moduleSources();
+        return new PlayerOpenMenu.State(image, image != null ? openImageRecord() : null,
+            menuSources.stream().map(io.qtrace.PlayerSource::label).toList(),
+            PlayerRecents.read(PlayerRecents.FILE), PlayerRecents::available, withIdEntry,
+            System.currentTimeMillis());
+    }
+
+    /** What 📂 Open's entries do; {@code idOrLink} is the mini-player's popup (the window has its field). */
+    PlayerOpenMenu.Actions openMenuActions(Runnable idOrLink) {
+        return new PlayerOpenMenu.Actions() {
+            @Override public void open(String source) { openFromMiniPlayer(source); }
+            @Override public void browse() { browseLocalFile(); }
+            @Override public void idOrLink() { if (idOrLink != null) idOrLink.run(); }
+            @Override public void chooseSource(int index) {
+                if (index >= 0 && index < menuSources.size()) chooseFromSource(menuSources.get(index));
+            }
+            @Override public void clearRecents() {
+                try { PlayerRecents.write(PlayerRecents.FILE, List.of()); }
+                catch (Exception e) { System.err.println("[qTrace] player recents not cleared: " + e.getMessage()); }
+            }
+        };
+    }
+
+    /** The open image's .qtrace (Core), or null. Null on a Core published before it existed. */
+    private static java.io.File openImageRecord() {
+        try {
+            return QTraceController.openImageRecord();
+        } catch (LinkageError e) {
+            return null;
+        }
+    }
+
+    /** Puts what just loaded first in 📂 Open › Recent. Off the FX thread; never fails a load. */
+    private static void rememberRecent(String source, String json) {
+        try {
+            boolean workflow = WorkflowSource.isWorkflow(json);
+            PlayerRecents.Entry entry = new PlayerRecents.Entry(source, PlayerRecents.kindOf(source, workflow),
+                PlayerRecents.titleOf(source, json), System.currentTimeMillis());
+            PlayerRecents.write(PlayerRecents.FILE,
+                PlayerRecents.remember(PlayerRecents.read(PlayerRecents.FILE), entry));
+        } catch (Exception e) {
+            System.err.println("[qTrace] player recents not written: " + e.getMessage());
         }
     }
 
@@ -705,6 +751,8 @@ class QTraceReplayPlayer {
                 List<ReplayStep> measurementMapSteps = workflow ? List.of()
                     : QTraceReplayEngine.extractMeasurementMapSteps(qtraceJson, scope);
                 String preamble = QTraceReplayEngine.buildPreambleScript(qtraceJson, classifierDir, scope);
+
+                rememberRecent(source, qtraceJson);
 
                 java.nio.file.Path finalClassifierDir = newClassifierDir;
                 QTraceReplayEngine.DownloadResult finalClassifierResult = classifierResult;
