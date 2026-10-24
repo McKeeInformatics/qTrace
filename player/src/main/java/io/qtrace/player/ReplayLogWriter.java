@@ -228,6 +228,19 @@ public class ReplayLogWriter implements AutoCloseable {
         return result;
     }
 
+    /**
+     * Without a certificate nothing can sign the run, so its payload is written at once, at the
+     * end of the run, for the record (the Player's Stamp button stays greyed out). The writer
+     * stays open: a batch still appends its move to the next target.
+     */
+    public void appendUnsignedStamp(ReplayStamp unsigned) throws IOException {
+        writeLine("");
+        writeLine("=== ReplayStamp ===");
+        writeLine("signed         : no (no certificate: a record of the run, not a proof)");
+        writeLine("payload        : " + unsigned.canonicalPayload());
+        flush();
+    }
+
     private void writeLine(String line) throws IOException {
         writer.write(line);
         writer.write("\n");

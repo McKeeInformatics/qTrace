@@ -184,6 +184,7 @@ class QTraceReplayPlayer {
     private String replaySource;        // what the user opened: local path, qtc_… ID or share link
     private ReplayLogWriter logWriter;
     private ReplayStamp pendingStamp;
+    private Tooltip stampTip;
     private String sourceQtraceHash;
     private String qtraceBaseName;
     // Directory the source .qtrace was loaded from — null for a remote/downloaded source.
@@ -334,6 +335,11 @@ class QTraceReplayPlayer {
         stampBtn.setDisable(true);
         applyGrayStamp();
         stampBtn.setOnAction(e -> onStamp());
+        // A disabled button gets no mouse events: the tooltip sits on a wrapper, so it also says why it is grey
+        StackPane stampHolder = new StackPane(stampBtn);
+        stampTip = new Tooltip();
+        Tooltip.install(stampHolder, stampTip);
+        refreshStampTip();
 
         Button exportCodeBtn = new Button("</> Export Code");
         exportCodeBtn.setFont(Font.font("System", 10));
@@ -343,7 +349,7 @@ class QTraceReplayPlayer {
           + "-fx-border-radius: 4; -fx-background-radius: 4; -fx-cursor: hand; -fx-padding: 3 8 3 8;");
         exportCodeBtn.setOnAction(e -> exportCode());
 
-        HBox transportRow = new HBox(8, transportGroup, exportCodeBtn, stampBtn);
+        HBox transportRow = new HBox(8, transportGroup, exportCodeBtn, stampHolder);
         transportRow.setAlignment(Pos.CENTER);
         transportRow.setPadding(new Insets(8, 0, 0, 0));
         setTransportEnabled(false);
@@ -2458,7 +2464,10 @@ class QTraceReplayPlayer {
             pendingStamp = logWriter.finishUnsigned(replayer, sourceQtraceHash, qupathVersion);
             logArea.appendText("\n=== Run finished — " + pendingStamp.resultStatus()
                 + " (" + pendingStamp.stepsFailed() + " error(s)) — log: " + logWriter.logPath() + " ===\n");
-            stampBtn.setDisable(false);
+            // Nothing could sign it: the payload goes into the log now, and Stamp stays grey
+            if (canSign()) stampBtn.setDisable(false);
+            else logWriter.appendUnsignedStamp(pendingStamp);
+            refreshStampTip();
             // The trace of the image this run just played gets the log's name and fingerprint.
             if (recorderImage != null && logger.getCurrentImageData() == recorderImage)
                 logWriter.linkInto(logger.getReplayedFrom());
@@ -2487,6 +2496,27 @@ class QTraceReplayPlayer {
         }
         String script = QTraceReplayEngine.assembleScript(preambleRunPreambleText, selected);
         QTraceController.openInScriptEditor(qupath, script);
+    }
+
+    /**
+     * Whether a replay can be signed here: the same keys StampSigner tries — an active
+     * certificate's key (passphrase asked at the click if still locked), else the key file.
+     */
+    private static boolean canSign() {
+        if (QTracePluginManager.hasCompliance() && !QTracePluginManager.isEntitled()) return false;
+        QTracePlugin ep = QTracePluginManager.getEntitled();
+        if (ep != null && (ep.getDecryptedSigningKey() != null || ep.hasEncryptedSigningKey())) return true;
+        String configured = QTraceConfig.get().getSigningKeyPath();
+        java.nio.file.Path keyFile = !configured.isBlank() ? java.nio.file.Path.of(configured)
+            : java.nio.file.Path.of(System.getProperty("user.home"), ".qTrace", "qtrace-signing.key");
+        return java.nio.file.Files.exists(keyFile);
+    }
+
+    private void refreshStampTip() {
+        if (stampTip == null) return;
+        stampTip.setText(canSign()
+            ? "Sign this replay with your certificate: the log gets a proof of who ran it"
+            : "Signing a replay needs a qTrace certificate. The run's payload is written to the log anyway");
     }
 
     private void onStamp() {

@@ -60,6 +60,21 @@ class ReplayLogWriterTest {
     }
 
     @Test
+    void withoutACertificateThePayloadEndsTheRun_andTheLogStaysOpenForTheBatch(@TempDir Path dir) throws Exception {
+        try (ReplayLogWriter w = open(dir)) {
+            ReplayStamp stamp = w.finishUnsigned("someone", "srchash", "0.7.0");
+            w.appendUnsignedStamp(stamp);
+            w.appendBatchTransition("next image");
+            String text = Files.readString(w.logPath());
+            assertThat(text).contains("=== ReplayStamp ===\nsigned         : no (no certificate: a record of the run, not a proof)\n"
+                + "payload        : " + stamp.canonicalPayload() + "\n");
+            assertThat(text).doesNotContain("signature      :");
+            assertThat(text).endsWith("=== batch: moving to next target — next image ===\n");
+            assertThat(w.summaryHash()).isEqualTo(stamp.logHash());
+        }
+    }
+
+    @Test
     void linkIntoNamesTheFileAndItsSummaryHash_whichSurvivesWhatIsAppendedAfterwards(@TempDir Path dir) throws Exception {
         try (ReplayLogWriter w = open(dir)) {
             JsonObject before = new JsonObject();
