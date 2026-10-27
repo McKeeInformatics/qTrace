@@ -350,17 +350,19 @@ public class QTraceController {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         if (qupath.getStage() != null) alert.initOwner(qupath.getStage());
         alert.setTitle(QTraceI18n.t("recover.title"));
-        alert.setHeaderText(QTraceI18n.f("recover.header", name));
         String content = draft.snapshot() != null
             ? QTraceI18n.f("recover.content", steps, when)
             : QTraceI18n.f("recover.content.noSnapshot", steps, when);
         if (qpdataChanged) content += "\n\n" + QTraceI18n.t("recover.content.qpdataChanged");
-        alert.setContentText(content);
         ButtonType btnRestore = new ButtonType(QTraceI18n.t("recover.restore"), ButtonBar.ButtonData.OK_DONE);
         ButtonType btnKeep    = new ButtonType(QTraceI18n.t("recover.keep"),    ButtonBar.ButtonData.CANCEL_CLOSE);
         if (qpdataChanged) alert.getButtonTypes().setAll(btnKeep);
-        else               alert.getButtonTypes().setAll(btnRestore, btnKeep);
-        alert.getDialogPane().setMinWidth(520);
+        else               alert.getButtonTypes().setAll(btnKeep, btnRestore);
+        // The qTrace look: QuPath's own default button is light blue under white text, unreadable.
+        DialogLook.apply(alert, QTraceI18n.t("recover.title").replace("qTrace — ", ""),
+            QTraceI18n.f("recover.header", name), DialogLook.text(content),
+            qpdataChanged ? btnKeep : btnRestore, DialogLook.BLUE, btnKeep);
+        alert.getDialogPane().setPrefWidth(460);
 
         Optional<ButtonType> result = alert.showAndWait();
         boolean restore = !qpdataChanged && result.isPresent() && result.get() == btnRestore;

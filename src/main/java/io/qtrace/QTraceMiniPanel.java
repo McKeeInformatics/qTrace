@@ -315,7 +315,7 @@ public final class QTraceMiniPanel {
 
         Color admin = Theme.web(QTracePanel.GROUP_ADMIN);
         nodes.add(separator());
-        Button settingsBtn = titled(glyph("⚙"), "Settings", admin);
+        Button settingsBtn = titled(c -> panel.scaledIcon(panel.iconSettings(c), GLYPH), "Settings", admin);
         TourHighlight.tag(settingsBtn, "settings");
         settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
         // Same glyph and look as the mini-player's ⤢.
@@ -404,15 +404,6 @@ public final class QTraceMiniPanel {
 
     private java.util.function.Function<Color, Node> icon(java.util.function.Function<Color, javafx.scene.Group> vector) {
         return c -> panel.scaledIcon(vector.apply(c), ICON);
-    }
-
-    private static java.util.function.Function<Color, Node> glyph(String glyph) {
-        return c -> {
-            Label l = new Label(glyph);
-            l.setFont(Font.font("System", javafx.scene.text.FontWeight.BOLD, GLYPH));
-            l.setTextFill(c);
-            return l;
-        };
     }
 
     /** A small framed text button — the mini-player's button look (QTraceMiniPlayerBar.style). */

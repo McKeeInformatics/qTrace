@@ -195,7 +195,7 @@ public class QTracePanel {
 
         HBox captureStatus = buildCaptureStatus();
 
-        Button settingsBtn = iconOnlyButton(glyphIcon("⚙"), QTraceI18n.t("btn.settings.tooltip"), Theme.web(GROUP_ADMIN));
+        Button settingsBtn = iconOnlyButton(iconFactory(this::iconSettings), QTraceI18n.t("btn.settings.tooltip"), Theme.web(GROUP_ADMIN));
         settingsBtn.setId("settings-button"); // looked up by the screenshot harness — see ScreenshotHarness
         settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
 
@@ -1024,16 +1024,6 @@ public class QTracePanel {
         tool.run();
     }
 
-    /** Adapter for a unicode glyph (Settings ⚙) that doesn't need a redrawn vector icon. */
-    Function<Color, Node> glyphIcon(String glyph) {
-        return color -> {
-            Label l = new Label(glyph);
-            l.setFont(Font.font("System", FontWeight.BOLD, 16));
-            l.setTextFill(color);
-            return l;
-        };
-    }
-
     /** Icon-only button (no caption) — used for the Settings gear, top-right of the header. */
     Button iconOnlyButton(Function<Color, Node> iconFactory, String tooltipText, Color hoverColor) {
         Button btn = new Button();
@@ -1258,6 +1248,28 @@ public class QTracePanel {
 
         Group g = new Group(arc, arrowHead);
         return g;
+    }
+
+    /**
+     * Settings gear, drawn: the ⚙ glyph is missing from many Linux fonts (no DejaVu) and then
+     * the button showed nothing at all.
+     */
+    Group iconSettings(Color c) {
+        double[] pts = new double[8 * 4 * 2];
+        int i = 0;
+        for (int t = 0; t < 8; t++) {
+            double a = t * 45;
+            for (double[] v : new double[][] {{7.2, a - 15}, {9.8, a - 9}, {9.8, a + 9}, {7.2, a + 15}}) {
+                pts[i++] = 12 + v[0] * Math.cos(Math.toRadians(v[1]));
+                pts[i++] = 12 + v[0] * Math.sin(Math.toRadians(v[1]));
+            }
+        }
+        Polygon wheel = new Polygon(pts);
+        wheel.setFill(Color.TRANSPARENT);
+        wheel.setStroke(c);
+        wheel.setStrokeWidth(1.6);
+        wheel.setStrokeLineJoin(StrokeLineJoin.ROUND);
+        return new Group(wheel, circ(12, 12, 3.1, c, 1.6, false));
     }
 
     Group iconDashboard(Color c) {
