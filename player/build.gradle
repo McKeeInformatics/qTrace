@@ -8,7 +8,7 @@ plugins {
 }
 
 group = 'io.qtrace'
-version = '0.1.3'
+version = '0.1.4'
 
 def coreVersion = (file('../build.gradle').text =~ /(?m)^version = '([^']+)'/)[0][1]
 

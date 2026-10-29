@@ -1,3 +1,23 @@
+## What's new in v1.2.14
+
+### New - Choose the mini-panel's buttons
+A small blue gear at the top right of the full panel turns it into a choice: click a tool to add it to the mini-panel (green) or take it out, drag the blocks of the column to order them. **Done** keeps the choice for this computer, **Default** goes back to qTrace's own mini-panel.
+
+### New - Pause the capture, declared in the record
+A click on the mini-panel's red recording dot pauses qTrace's capture; a click on its two grey bars resumes it. Nothing done meanwhile goes into the trace, but the session declares each pause (`capture_pauses`: when, and what was left out), and the stamp tells the validator before stamping (**Capture was paused** · **Stamp anyway**). A double-click still closes the project.
+
+### New - Compute time of each step
+A step of a replayed trace and a script run from the editor keep how long they ran (`duration_ms` in the .qtrace).
+
+### New - Player: one Open menu
+**📂 Open** in the mini-player and the Player window opens the trace of the image on screen first, then the last 5 things you opened (traces, qtrace.ca records, shared links, workflows).
+
+### Fixed - The Settings gear is visible on Linux
+The ⚙ character is missing from many Linux fonts and left an empty button; the gear is now drawn, in the panel and the mini-panel. **Recover unsaved work** takes the qTrace look, and its **Restore** button is readable.
+
+### Fixed - An image no longer shows a duplicate's record
+In a project with "Slide" and "Slide (1)", the Dashboard and the Cohort map showed the record of one for the other. Each image now takes the record that bears exactly its name.
+
 ## What's new in v1.2.13
 
 ### Fixed - Windows: Open Project Folder opens Explorer
