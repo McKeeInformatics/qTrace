@@ -64,6 +64,7 @@ final class MiniPanelEditor {
     private final Stage stage;
     private final Parent toolbar;
     private final Runnable redrawToolbar;
+    private final Function<Color, Node> settingsIcon;
     private final HBox banner;
     private final VBox side, column;
     private final EventHandler<ActionEvent> clicks = this::onToolClicked;
@@ -73,11 +74,13 @@ final class MiniPanelEditor {
     /**
      * @param toolbar       the panel's tool buttons, at any depth
      * @param redrawToolbar draws the toolbar again, with the buttons' own states
+     * @param settingsIcon  the Settings gear as the panel draws it, for the column's fixed part
      */
-    MiniPanelEditor(Stage stage, Parent toolbar, Runnable redrawToolbar) {
+    MiniPanelEditor(Stage stage, Parent toolbar, Runnable redrawToolbar, Function<Color, Node> settingsIcon) {
         this.stage = stage;
         this.toolbar = toolbar;
         this.redrawToolbar = redrawToolbar;
+        this.settingsIcon = settingsIcon;
 
         Label hint = new Label(QTraceI18n.t("minipanel.config.hint"));
         hint.setWrapText(true);
@@ -247,7 +250,7 @@ final class MiniPanelEditor {
         line.setStyle("-fx-background-color: " + QTracePanel.BORDER + ";");
         VBox.setMargin(line, new Insets(5, 0, 5, 0));
         nodes.add(line);
-        nodes.add(fixed(glyph("⚙")));
+        nodes.add(fixed(settingsIcon.apply(Theme.web(QTracePanel.TEXT_MUTED))));
         nodes.add(fixed(QTraceMiniPanel.reportIcon(Theme.web(QTracePanel.TEXT_MUTED))));
         Label expand = new Label("⤢");
         expand.setStyle("-fx-border-color: " + QTracePanel.BORDER + "; -fx-border-radius: 4; -fx-padding: 0 6 0 6;");
@@ -305,13 +308,6 @@ final class MiniPanelEditor {
         p.setOpacity(0.4);
         Tooltip.install(p, new Tooltip(QTraceI18n.t("minipanel.config.fixed")));
         return p;
-    }
-
-    private static Label glyph(String g) {
-        Label l = new Label(g);
-        l.setFont(Font.font("System", FontWeight.BOLD, 22));
-        Theme.text(l, QTracePanel.TEXT_MUTED);
-        return l;
     }
 
     private double sideWidth() {

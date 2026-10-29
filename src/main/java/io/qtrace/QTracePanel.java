@@ -182,7 +182,7 @@ public class QTracePanel {
     private VBox buildHeader() {
         VBox header = new VBox(4);
         FlowPane toolbar = buildToolbarRow();
-        miniEditor = new MiniPanelEditor(stage, toolbar, this::redrawToolbar);
+        miniEditor = new MiniPanelEditor(stage, toolbar, this::redrawToolbar, c -> scaledIcon(iconSettings(c), 20));
 
         // ── Line 1: logo + title + passive capture status (top-right, title's line) ──
         HBox topLine = new HBox(10);
@@ -224,10 +224,8 @@ public class QTracePanel {
     private Button miniPanelGear() {
         Button gear = new Button();
         gear.setId("mini-panel-gear"); // looked up by the screenshot harness — see ScreenshotHarness
-        Label glyph = new Label("⚙");
-        glyph.setFont(Font.font("System", FontWeight.BOLD, 13));
-        Theme.text(glyph, BLUE);
-        gear.setGraphic(glyph);
+        // The drawn gear, as Settings' own (the ⚙ glyph is missing from many Linux fonts), in blue.
+        gear.setGraphic(scaledIcon(iconSettings(Theme.web(BLUE)), 15));
         gear.setTooltip(new Tooltip(QTraceI18n.t("minipanel.config.tooltip")));
         String idle = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 3 4 3 4; -fx-background-radius: 6;";
         String on = idle + "-fx-background-color: " + Theme.alpha(BLUE, 27) + ";";
