@@ -103,7 +103,13 @@ public final class ProjectRecords {
         return new Scan(rows, qtraceMap.size(), qtDir != null ? qtDir.getAbsolutePath() : null);
     }
 
+    /**
+     * The record named exactly like the image first: a duplicated image ("<name> (1)") contains
+     * the original's name, and its file sorts first. The loose match only when none is exact.
+     */
     private static <T> T findMatching(String name, Map<String, T> map) {
+        T exact = map.get(name);
+        if (exact != null) return exact;
         for (var e : map.entrySet())
             if (namesMatch(name, e.getKey())) return e.getValue();
         return null;

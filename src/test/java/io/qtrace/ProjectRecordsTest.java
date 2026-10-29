@@ -67,6 +67,22 @@ class ProjectRecordsTest {
     }
 
     @Test
+    void anImageGetsItsOwnTraceNotADuplicatesWhoseNameContainsIt() throws Exception {
+        // QuPath names a duplicated image "<name> (1)": its file sorts before the original's.
+        String name = "ROI25_1904-CM-ROI4.ome.tiff - ROI25_1904-CM-ROI4.ome";
+        trace("ROI25_-_ROI25.ome (1).qtrace", name + " (1)");
+        trace("ROI25_-_ROI25.ome (2).qtrace", name + " (2)");
+        trace("ROI25_-_ROI25.ome.qtrace", name);
+        ProjectRecords.Scan scan = ProjectRecords.scan(List.of(name + " (1)", name, name + " (2)"), dir.toFile());
+
+        assertEquals(3, scan.rows().size());
+        assertEquals("ROI25_-_ROI25.ome (1).qtrace", scan.rows().get(0).qtraceFile().getName());
+        assertEquals("ROI25_-_ROI25.ome.qtrace", scan.rows().get(1).qtraceFile().getName());
+        assertEquals(name, scan.rows().get(1).qtrace().getAsJsonObject("image").get("name").getAsString());
+        assertEquals("ROI25_-_ROI25.ome (2).qtrace", scan.rows().get(2).qtraceFile().getName());
+    }
+
+    @Test
     void anUnreadableTraceIsSkipped() throws Exception {
         Files.writeString(dir.resolve("Broken.qtrace"), "{ not json");
         ProjectRecords.Scan scan = ProjectRecords.scan(List.of("Core_01.ome.tif"), dir.toFile());
