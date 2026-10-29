@@ -76,7 +76,11 @@ class ReplayRecorder {
 
     void beforeStep(ReplayStep step) {
         sizeBefore = workflow.get().size();
-        logger.beginReplayStep(step.index());
+        try {
+            logger.beginReplayStep(step.index(), step.title()); // a view shows what is running
+        } catch (NoSuchMethodError e) {
+            logger.beginReplayStep(step.index()); // a Core from before the Logbook
+        }
     }
 
     void afterStep(ReplayStep step, ReplayExecutor.Status status) {

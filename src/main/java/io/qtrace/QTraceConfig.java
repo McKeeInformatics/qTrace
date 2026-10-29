@@ -102,6 +102,8 @@ public class QTraceConfig {
 
     // Panel: Activity log folded — null = unfolded
     private Boolean panelLogCollapsed;
+    // Mini-panel: the tools this user chose, in their order — null = qTrace's own (MiniPanelChoice)
+    private java.util.List<String> miniPanelTools;
     // Panel: opened when QuPath starts — null = yes (on by default)
     private Boolean showPanelAtStartup;
     private Boolean showModuleNewsAtStartup;
@@ -328,6 +330,8 @@ public class QTraceConfig {
 
     public boolean isPanelLogCollapsed()                 { return Boolean.TRUE.equals(panelLogCollapsed); }
     public void    setPanelLogCollapsed(boolean b)       { this.panelLogCollapsed = b; }
+    public java.util.List<String> getMiniPanelTools()            { return miniPanelTools; }
+    public void    setMiniPanelTools(java.util.List<String> t)   { this.miniPanelTools = t; }
     public boolean isShowPanelAtStartup()                { return showPanelAtStartup == null || showPanelAtStartup; }
     public void    setShowPanelAtStartup(boolean b)      { this.showPanelAtStartup = b; }
     public String  getTheme()                            { return Theme.Mode.parse(theme).id(); }

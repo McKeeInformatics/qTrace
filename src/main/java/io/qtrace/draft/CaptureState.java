@@ -76,4 +76,6 @@ public class CaptureState {
     public int    manualAnnotationCount = 0;
     public int    importCounter         = 0;
     public String imageHash             = null;
+    /** The session's capture pauses (CapturePauses); null when there was none. */
+    public com.google.gson.JsonArray capturePauses = null;
 }

@@ -157,6 +157,9 @@
     workfloweditor: '<line x1="6" y1="7.6" x2="6" y2="16.4" ' + S + ' stroke-width="1.7"/><circle cx="6" cy="5.2" r="2.4" ' + S + ' stroke-width="1.7"/>' +
       '<circle cx="6" cy="18.8" r="2.4" ' + S + ' stroke-width="1.7"/><polygon points="12.2,17.8 13.2,14.2 19.4,8 22,10.6 15.8,16.8" ' + S + ' stroke-width="1.6"/>' +
       '<line x1="17.9" y1="9.5" x2="20.5" y2="12.1" ' + S + ' stroke-width="1.4"/>',
+    logbook: '<circle cx="12" cy="12" r="3" fill="currentColor"/>' +
+      '<path d="M7.62 7.62A6.2 6.2 0 0 0 7.62 16.38M16.38 16.38A6.2 6.2 0 0 0 16.38 7.62" ' + S + ' stroke-width="1.7"/>' +
+      '<path d="M4.34 5.57A10 10 0 0 0 4.34 18.43M19.66 18.43A10 10 0 0 0 19.66 5.57" ' + S + ' stroke-width="1.5"/>',
     security: '<path d="M12 3L19 6V11C19 15.4 16 19 12 21C8 19 5 15.4 5 11V6Z" ' + S + ' stroke-width="1.7"/>' +
       '<circle cx="12" cy="10.4" r="1.9" ' + S + ' stroke-width="1.5"/><line x1="12" y1="12.3" x2="12" y2="15.4" ' + S + ' stroke-width="1.5"/>',
     compliance: '<path d="M12 3L19 6V11C19 15.4 16 19 12 21C8 19 5 15.4 5 11V6Z" ' + S + ' stroke-width="1.7"/>' +

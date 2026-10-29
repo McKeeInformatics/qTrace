@@ -358,6 +358,8 @@ public class QTraceExporter {
         session.add("steps", stepsArr);
         // This session came from replaying another .qtrace — keep the link to its source.
         if (logger.getReplayedFrom() != null) session.add("replayed_from", logger.getReplayedFrom().deepCopy());
+        // A declared gap: when capture was paused and what the trace does not hold because of it.
+        if (logger.getPauseCount() > 0) session.add("capture_pauses", logger.getCapturePauses());
 
         // Contributions: categorized summary of this commit's actions, attributed to its
         // single author. Pre-tracking steps (prior contributor's inherited state) excluded.

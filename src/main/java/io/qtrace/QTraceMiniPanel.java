@@ -105,6 +105,7 @@ public final class QTraceMiniPanel {
         BatchImports.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         ModuleEntitlements.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         UploadInvite.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
+        MiniPanelChoice.onChange(QTraceMiniPanel.class, () -> javafx.application.Platform.runLater(this::rebuild));
         panel.addStateListener(this::refresh);
         // Opening or closing a project switches ▶ Start ↔ pause, with or without an image.
         var project = qupath.projectProperty();
@@ -193,10 +194,17 @@ public final class QTraceMiniPanel {
         single.setOnFinished(e -> javafx.application.Platform.runLater(controller::startWork));
         // With a project open (recording or paused), a double-click closes the project — the
         // counterpart of ▶ Start. QuPath asks about unsaved work, as with its own menu.
+        // Recording or capture paused: one click pauses or resumes the capture (as the Logbook's
+        // Live), waiting a moment in case a second click (close the project) follows.
+        javafx.animation.PauseTransition pauseClick = new javafx.animation.PauseTransition(Duration.millis(260));
+        pauseClick.setOnFinished(e -> {
+            if (controller.hasActiveImage()) controller.setCapturePaused(!controller.isCapturePaused());
+        });
         dotBox.setOnMouseClicked(e -> {
             if (resuming) return;
             if (!startIcon.isVisible()) {
-                if (e.getClickCount() == 2) controller.closeProject();
+                if (e.getClickCount() == 2) { pauseClick.stop(); controller.closeProject(); }
+                else if (e.getClickCount() == 1) pauseClick.playFromStart();
                 return;
             }
             if (e.getClickCount() >= 2) { single.stop(); resume(); }
@@ -277,40 +285,25 @@ public final class QTraceMiniPanel {
         TourHighlight.tag(resetBtn, "reset");
         resetBtn.setOnAction(e -> panel.confirmReset());
 
-        // The organization chose its panel (PanelProfile): its tools, in its order, and nothing else.
-        List<String> profile = PanelProfile.tools();
-        if (profile != null) {
-            for (String tool : profile) {
-                Node node = switch (tool) {
-                    case PanelProfile.STAMP     -> stampBtn;
-                    case PanelProfile.UPLOAD    -> uploadSlot;
-                    case PanelProfile.REPORT    -> reportBtn;
-                    case PanelProfile.DASHBOARD -> dashboardBtn;
-                    case PanelProfile.IMPORT    -> importBtn;
-                    case PanelProfile.RESET     -> resetBtn;
-                    case PanelProfile.PLAYER    -> replayBtn;
-                    case PanelProfile.VERSIONS  -> versionsBtn;
-                    default                     -> null;
-                };
-                if (node != null) nodes.add(node);
-                else addModuleButtons(nodes, PanelExtensions.ofModule(tool));
-            }
-        } else {
-            nodes.add(stampBtn);
-            if (licensed || player || uploadSlot != null || (versions && !licensed)) nodes.add(separator());
-            if (uploadSlot != null) nodes.add(uploadSlot);
-            if (player) nodes.add(replayBtn);
-            if (licensed || (player && versions)) nodes.add(separator());
-            if (versions) nodes.add(versionsBtn);
-            if (licensed) {
-                addModuleButtons(nodes, PanelExtensions.entitled(PanelExtensions.VERSIONS));
-                nodes.add(reportBtn);
-            }
-            nodes.add(separator());
-            if (dashboardBtn != null) nodes.add(dashboardBtn);
-            addModuleButtons(nodes, PanelExtensions.entitled(PanelExtensions.DASHBOARD));
-            if (importBtn != null) nodes.add(importBtn);
-            nodes.add(resetBtn);
+        // The tools the user chose (MiniPanelChoice); without a choice, qTrace's own mini-panel
+        // or the one the organization chose (PanelProfile).
+        java.util.Map<String, Node> byTool = new java.util.HashMap<>();
+        byTool.put(PanelProfile.STAMP, stampBtn);
+        byTool.put(PanelProfile.RESET, resetBtn);
+        if (uploadSlot != null)   byTool.put(PanelProfile.UPLOAD, uploadSlot);
+        if (reportBtn != null)    byTool.put(PanelProfile.REPORT, reportBtn);
+        if (replayBtn != null)    byTool.put(PanelProfile.PLAYER, replayBtn);
+        if (versionsBtn != null)  byTool.put(PanelProfile.VERSIONS, versionsBtn);
+        if (dashboardBtn != null) byTool.put(PanelProfile.DASHBOARD, dashboardBtn);
+        if (importBtn != null)    byTool.put(PanelProfile.IMPORT, importBtn);
+        List<String> chosen = MiniPanelChoice.tools();
+        java.util.Set<String> drawn = new java.util.HashSet<>();
+        for (String tool : chosen != null ? chosen : defaultLayout()) {
+            if (SEPARATOR.equals(tool)) { nodes.add(separator()); continue; }
+            if (!drawn.add(tool)) continue; // a module with several buttons: all of them at its first place
+            Node node = byTool.get(tool);
+            if (node != null) nodes.add(node);
+            else addModuleButtons(nodes, PanelExtensions.ofModule(tool));
         }
 
         Color admin = Theme.web(QTracePanel.GROUP_ADMIN);
@@ -336,6 +329,49 @@ public final class QTraceMiniPanel {
         column.getChildren().setAll(nodes);
         refresh();
         TourHighlight.reapply();
+    }
+
+    private static final String SEPARATOR = "|";
+
+    /**
+     * qTrace's own mini-panel, as tool names and {@link #SEPARATOR}s between its groups — or, when
+     * the organization chose its panel ({@link PanelProfile}), its tools in its order. The
+     * modules' buttons stand under the button they go with; those that follow Stamp in the panel
+     * ({@link PanelExtensions#CAPTURE}) are not in it.
+     */
+    static List<String> defaultLayout() {
+        List<String> profile = PanelProfile.tools();
+        if (profile != null) return List.copyOf(profile);
+        boolean licensed = QTracePluginManager.isEntitled();
+        // A module that arrived but does not run yet has its button too, greyed.
+        boolean player = Players.entitled() != null || PendingModules.awaiting("player");
+        boolean versions = VersionGraphs.entitled() != null || PendingModules.awaiting("versiongraph");
+        UploadInvite.State upload = UploadInvite.state();
+        boolean uploads = upload == UploadInvite.State.UPLOAD || upload == UploadInvite.State.SIGN_IN;
+        List<String> out = new ArrayList<>();
+        out.add(PanelProfile.STAMP);
+        if (licensed || player || uploads || (versions && !licensed)) out.add(SEPARATOR);
+        if (uploads) out.add(PanelProfile.UPLOAD);
+        if (player) out.add(PanelProfile.PLAYER);
+        if (licensed || (player && versions)) out.add(SEPARATOR);
+        if (versions) out.add(PanelProfile.VERSIONS);
+        if (licensed) {
+            for (PanelExtensions.Entry e : PanelExtensions.entitled(PanelExtensions.VERSIONS)) out.add(e.module());
+            out.add(PanelProfile.REPORT);
+        }
+        out.add(SEPARATOR);
+        if (Dashboards.entitled() != null) out.add(PanelProfile.DASHBOARD);
+        for (PanelExtensions.Entry e : PanelExtensions.entitled(PanelExtensions.DASHBOARD)) out.add(e.module());
+        if (BatchImports.entitled() != null) out.add(PanelProfile.IMPORT);
+        out.add(PanelProfile.RESET);
+        return out;
+    }
+
+    /** The tools of qTrace's own mini-panel, in its order: what the mini-panel mode starts from. */
+    static List<String> defaultTools() {
+        List<String> out = new ArrayList<>();
+        for (String t : defaultLayout()) if (!SEPARATOR.equals(t) && !out.contains(t)) out.add(t);
+        return out;
     }
 
     /** Modules' buttons ({@link PanelExtensions}): under the button they go with, or where the organization's panel puts them. */
@@ -367,7 +403,8 @@ public final class QTraceMiniPanel {
         pauseIcon.setVisible(!recording && !start && !resuming);
         statusBox.setCursor(start && !resuming ? Cursor.HAND : null);
         Tooltip.install(statusBox, tip(resuming ? "Opening the last project and image…" : start ? "Start — click: recent projects · double-click: last project and image"
-            : (recording ? "Recording" : "Paused") + " — double-click: close the project"));
+            : (recording ? "Recording — click: pause the capture" : controller.isCapturePaused() ? "Capture paused — click: resume"
+                : "Paused") + " · double-click: close the project"));
         if (recording && captureBlink == null) startBlink();
         else if (!recording) stopBlink();
 
@@ -466,7 +503,7 @@ public final class QTraceMiniPanel {
     }
 
     /** A speech bubble with an exclamation mark — "tell us": bug or feature request. */
-    private static Node reportIcon(Color c) {
+    static Node reportIcon(Color c) {
         javafx.scene.shape.Path bubble = new javafx.scene.shape.Path(
             new javafx.scene.shape.MoveTo(3, 2),
             new javafx.scene.shape.LineTo(13, 2),

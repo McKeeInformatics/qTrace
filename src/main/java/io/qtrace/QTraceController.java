@@ -509,7 +509,7 @@ public class QTraceController {
         int preExisting  = logger.getPreExistingStepCount();
         int manual       = logger.getManualAnnotationCount();
         Platform.runLater(() -> {
-            panel.setRecordingActive(attached);
+            panel.setRecordingActive(attached && !logger.isCapturePaused());
             panel.updateStepCount(steps, preExisting, manual);
             panel.setRecordReady(steps > 0);
             if (attached && steps > 0)
@@ -1130,6 +1130,7 @@ public class QTraceController {
                         capturedOutput.clear();
                         capturingOutput = true;
                         if (logger != null) logger.setScriptRunning(true);
+                        CaptureEvents.started(CaptureEvents.SCRIPT, "Script running");
 
                         String text = null;
                         if (rawScriptText instanceof javafx.beans.value.ObservableValue<?> stProp) {
@@ -1145,6 +1146,9 @@ public class QTraceController {
                         pause.setOnFinished(e -> {
                             capturingOutput = false;
                             if (logger != null) logger.setScriptRunning(false);
+                            java.time.Instant since = CaptureEvents.runningSince(CaptureEvents.SCRIPT);
+                            CaptureEvents.finished(CaptureEvents.SCRIPT);
+                            if (logger != null) logger.scriptEnded(since);
                             if (!capturedOutput.isEmpty() && panel != null) {
                                 capturedOutput.forEach(line -> ActivityLog.add("  out> " + line));
                             }
@@ -1411,6 +1415,11 @@ public class QTraceController {
             ActivityLog.add("Nothing to record — no steps captured yet.");
             return;
         }
+        // A paused capture left things out: the validator is told before stamping, and the record says it.
+        if (logger.getPauseCount() > 0 && !confirmStampAfterPause()) {
+            ActivityLog.add("Stamp cancelled — capture was paused in this session.");
+            return;
+        }
         // The stamp binds qpdata_sha256 to the file on disk: stamping unsaved work would
         // certify a stale .qpdata that doesn't contain what the validator is attesting.
         var imageData = logger.getCurrentImageData();
@@ -1457,6 +1466,7 @@ public class QTraceController {
                     if (!stamp.notes().isEmpty())
                         ActivityLog.add("  notes      : " + stamp.notes());
                     if (panel != null) panel.setValidated(true, stamp.validator());
+                    CaptureEvents.captured(CaptureEvents.STAMP, "Stamped by " + stamp.validator() + " · " + stamp.scope(), null);
                     exportReport();
                     refreshIntegrity();
                     // The record is on disk: views of the project update this one image.
@@ -1464,6 +1474,36 @@ public class QTraceController {
                 },
                 () -> { ActivityLog.add("Record cancelled."); }
             );
+    }
+
+    /** Pauses or resumes capture — for a module (the Logbook's Live button). FX thread. */
+    public void setCapturePaused(boolean paused) {
+        if (logger != null) logger.setCapturePaused(paused);
+    }
+
+    public boolean isCapturePaused() {
+        return logger != null && logger.isCapturePaused();
+    }
+
+    /** Stamp anyway (true) or Cancel, when capture was paused in this session — Esc cancels. */
+    private boolean confirmStampAfterPause() {
+        int missed = logger.getUncapturedCount(), pauses = logger.getPauseCount();
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.initOwner(qupath.getStage());
+        alert.setTitle("qTrace — Stamp");
+        ButtonType stamp  = new ButtonType("Stamp anyway", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(cancel, stamp);
+        String what = missed == 0 ? "nothing was done while it was paused"
+            : missed + (missed == 1 ? " action was" : " actions were") + " done while it was paused and " + (missed == 1 ? "is" : "are") + " not in this trace";
+        DialogLook.apply(alert, "Capture was paused",
+            "Paused " + pauses + (pauses == 1 ? " time" : " times") + " in this session" + (logger.isCapturePaused() ? ", and still paused" : ""),
+            DialogLook.text("Capture was paused: " + what + ". The record declares each pause, with what it left out. "
+                + "A replay will not redo what was done while paused."),
+            stamp, DialogLook.BLUE, cancel);
+        if (alert.getDialogPane().lookupButton(stamp) instanceof javafx.scene.control.Button b) b.setDefaultButton(false);
+        if (alert.getDialogPane().lookupButton(cancel) instanceof javafx.scene.control.Button c) c.setDefaultButton(true);
+        return alert.showAndWait().filter(b -> b == stamp).isPresent();
     }
 
     /** "Save now & Continue" (true) or Cancel — Esc cancels. */
@@ -2083,7 +2123,7 @@ public class QTraceController {
         lastStampStepCount = -1;
         if (panel != null) {
             panel.setValidated(false, "");
-            panel.setRecordingActive(true);
+            panel.setRecordingActive(!logger.isCapturePaused());
         }
     }
 

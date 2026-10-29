@@ -26,6 +26,12 @@ public final class PanelExtensions {
     public static final String DASHBOARD = "dashboard";
     public static final String VERSIONS  = "versions";
     /**
+     * A button right after Stamp, in the panel's capture group — for a view of the capture
+     * itself (the Logbook). Not in qTrace's own mini-panel: the user adds it there if they wish
+     * ({@link MiniPanelChoice}).
+     */
+    public static final String CAPTURE   = "capture";
+    /**
      * A button of its own, shown only in an organization's panel that names the module — for a
      * tool reached another way in qTrace's own panel (Training, from the player's Open).
      */
@@ -45,7 +51,7 @@ public final class PanelExtensions {
 
     private PanelExtensions() {}
 
-    /** @param anchor {@link #DASHBOARD}, {@link #VERSIONS} or {@link #PROFILE} */
+    /** @param anchor {@link #DASHBOARD}, {@link #VERSIONS}, {@link #CAPTURE} or {@link #PROFILE} */
     public static void register(String module, String anchor, String label, Function<Color, Group> icon, Runnable action) {
         if (module == null || anchor == null || label == null || action == null) return;
         synchronized (ENTRIES) {

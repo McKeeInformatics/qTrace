@@ -242,12 +242,30 @@ public class ActionLogger implements WorkflowListener {
     private final List<JsonObject>        lastSelectedDetections = new ArrayList<>();
     private PathObjectSelectionListener   selectionListener      = null;
 
+    // The session's capture pauses — declared before the listener that reads them.
+    private CapturePauses pauses = new CapturePauses();
+
     private final PathObjectHierarchyListener hierarchyListener = event -> {
         var type      = event.getEventType();
         boolean ready = System.currentTimeMillis() - attachTime >= 800;
         if (!ready) return;
 
         Collection<PathObject> changed = event.getChangedObjects();
+
+        // Capture paused: nothing is recorded, what is done is counted and declared (CapturePauses).
+        // Annotations always; detections only removed by hand — a command's own are its step's.
+        if (pauses.isPaused()) {
+            if (!scriptRunning && type != PathObjectHierarchyEvent.HierarchyEventType.OTHER_STRUCTURE_CHANGE) {
+                int annotations = 0, detections = 0;
+                for (PathObject o : changed) {
+                    if (o.isAnnotation()) annotations++;
+                    else if (o.isDetection() && type == PathObjectHierarchyEvent.HierarchyEventType.REMOVED) detections++;
+                }
+                pauses.missedChange("annotation", annotations);
+                pauses.missedChange("detection removed", detections);
+            }
+            return;
+        }
 
         // New manual annotation drawn — skipped during a hooked file import, which is
         // captured as a single "Import objects from file" step by recordFileImport() instead.
@@ -344,6 +362,74 @@ public class ActionLogger implements WorkflowListener {
         }
     };
 
+    // ── Capture pause: a declared gap (CapturePauses, the session's capture_pauses) ──
+
+    /** A new session's pauses: empty, or one opening now when capture is paused. */
+    private CapturePauses freshPauses() {
+        boolean wasPaused = pauses.isPaused();
+        CapturePauses fresh = new CapturePauses();
+        if (wasPaused) fresh.pause(Instant.now());
+        return fresh;
+    }
+
+    public boolean isCapturePaused() { return pauses.isPaused(); }
+
+    /**
+     * Pauses capture (nothing done meanwhile is recorded; it is counted and the record declares
+     * the pause) or resumes it. FX thread.
+     */
+    public void setCapturePaused(boolean paused) {
+        if (paused == pauses.isPaused()) return;
+        if (paused) {
+            pauses.pause(Instant.now());
+            ActivityLog.add("Capture paused — what is done now is not recorded; the record will say so.");
+            CaptureEvents.captured(CaptureEvents.PAUSE, "Capture paused", null);
+        } else {
+            int missed = pauses.missedInLast();
+            pauses.resume(Instant.now());
+            // What was made during the pause is the image's state now, not something to capture later.
+            if (currentImageData != null)
+                currentImageData.getHierarchy().getAnnotationObjects().forEach(o -> {
+                    if (!annotationStepIndex.containsKey(o.getID())) snapshotAnnotationIds.add(o.getID());
+                });
+            String text = "Capture resumed" + (missed == 0 ? "" : " · " + missed + (missed == 1 ? " action" : " actions") + " not captured");
+            ActivityLog.add(text);
+            CaptureEvents.captured(CaptureEvents.RESUME, text, null);
+        }
+        if (panel != null) panel.setRecordingActive(currentImageData != null && !pauses.isPaused());
+        notifyChanged();
+    }
+
+    /**
+     * A script run from the editor ended: its step, recorded when it started, gets its compute time.
+     * The views are told (CaptureEvents.DURATION).
+     */
+    public void scriptEnded(Instant since) {
+        Long ms = durationMs(since, Instant.now());
+        if (ms == null) return;
+        for (int i = capturedSteps.size() - 1; i >= 0; i--) {
+            JsonObject st = capturedSteps.get(i);
+            if (!st.has("command") || !st.get("command").getAsString().startsWith("Script: ")) continue;
+            if (st.has("duration_ms")) return; // already timed: not this run's
+            st.addProperty("duration_ms", ms);
+            JsonObject said = new JsonObject();
+            said.add("timestamp", st.get("timestamp"));
+            said.add("command", st.get("command"));
+            said.addProperty("duration_ms", ms);
+            CaptureEvents.captured(CaptureEvents.DURATION, st.get("command").getAsString(), said);
+            notifyChanged();
+            return;
+        }
+    }
+
+    /** The pauses the session declares; empty when there was none. */
+    public com.google.gson.JsonArray getCapturePauses() { return pauses.toJson(); }
+
+    /** How many things done during this session's pauses the trace does not hold. */
+    public int getUncapturedCount() { return pauses.missedTotal(); }
+
+    public int getPauseCount() { return pauses.count(); }
+
     public void setPanel(QTracePanel p) { this.panel = p; }
 
     public ActionLogger(QuPathGUI qupath, QTracePanel panel) {
@@ -365,6 +451,8 @@ public class ActionLogger implements WorkflowListener {
     public void attach(ImageData<BufferedImage> imageData) {
         detach();
         if (imageData == null) return;
+        // Each session declares its own pauses; one still on goes on into the new session.
+        pauses = freshPauses();
 
         currentImageData    = imageData;
         lastKnownStepCount  = imageData.getHistoryWorkflow().size();
@@ -420,10 +508,11 @@ public class ActionLogger implements WorkflowListener {
         }
 
         refreshManualAnnotationCount();
-        if (panel != null) panel.setRecordingActive(true);
+        if (panel != null) panel.setRecordingActive(!pauses.isPaused());
         if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
         if (panel != null) panel.setRecordReady(!capturedSteps.isEmpty());
         ActivityLog.add("Recording started — " + serverName(imageData));
+        CaptureEvents.captured(CaptureEvents.IMAGE, serverName(imageData), null);
 
         computeHashAsync(imageData);
     }
@@ -495,19 +584,38 @@ public class ActionLogger implements WorkflowListener {
         // A replay instruction is running: its workflow entries are reconciled first (exactly
         // one per OK instruction, none otherwise) and captured by endReplayStep().
         if (replayStepIndex != null) return;
-        captureNewSteps(workflow.getSteps(), null);
+        // A command run by hand: its start is not known to qTrace, so neither is its compute time.
+        captureNewSteps(workflow.getSteps(), null, null);
     }
 
-    private void captureNewSteps(List<WorkflowStep> steps, Integer replayedStep) {
+    /** The compute time of a step, from the start of what made it; null when its start is unknown. */
+    static Long durationMs(Instant since, Instant now) {
+        if (since == null || now == null || now.isBefore(since)) return null;
+        return now.toEpochMilli() - since.toEpochMilli();
+    }
+
+    /** @param since when what made these steps started (its compute time ends now); null: not known */
+    private void captureNewSteps(List<WorkflowStep> steps, Integer replayedStep, Instant since) {
         int newSize = steps.size();
         if (newSize <= lastKnownStepCount) return;
+        if (pauses.isPaused()) {
+            // Not in the trace: named and counted in the pause the record declares.
+            for (int i = lastKnownStepCount; i < newSize; i++) pauses.missedStep(steps.get(i).getName());
+            lastKnownStepCount = newSize;
+            notifyChanged(); // the draft keeps the pause's count
+            return;
+        }
 
         for (int i = lastKnownStepCount; i < newSize; i++) {
             WorkflowStep step = steps.get(i);
             JsonObject json   = serializeStep(step, i);
             if (replayedStep != null) json.addProperty("replayed_step", replayedStep);
+            // The compute time goes to the last step of the batch: the one that took it.
+            Long duration = i == newSize - 1 ? durationMs(since, Instant.now()) : null;
+            if (duration != null) json.addProperty("duration_ms", duration);
             capturedSteps.add(json);
             ActivityLog.add("Step " + (i + 1) + " captured: " + step.getName());
+            CaptureEvents.captured(CaptureEvents.kindOfStep(step.getName()), step.getName(), json); // whole: a view may make a workflow of it
             if (step instanceof ScriptableWorkflowStep s) {
                 detectClassifierFromScript(s.getScript());
                 detectCellIntensityFromScript(s.getScript());
@@ -745,6 +853,7 @@ public class ActionLogger implements WorkflowListener {
         retireStep(idx);
         String roiName = (obj.getROI() != null) ? obj.getROI().getRoiName() : "Object";
         ActivityLog.add("Annotation deleted: " + roiName + " (removed from meta-script)");
+        CaptureEvents.captured(CaptureEvents.ANNOTATION, "Annotation deleted: " + roiName, null);
         refreshManualAnnotationCount();
         if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
     }
@@ -850,9 +959,18 @@ public class ActionLogger implements WorkflowListener {
      * Defers workflow capture while replay instruction {@code sourceIndex} runs; its objects
      * are also not captured as manual annotations (same guard as a running script).
      */
+    private String replayKind; // what the running replay instruction is, for CaptureEvents.started
+
     public void beginReplayStep(int sourceIndex) {
+        beginReplayStep(sourceIndex, null);
+    }
+
+    /** @param command the replayed instruction's title, so a view shows what is running; null for setup */
+    public void beginReplayStep(int sourceIndex, String command) {
         scriptRunning   = true;
         replayStepIndex = sourceIndex;
+        replayKind      = CaptureEvents.kindOfStep(command);
+        CaptureEvents.started(replayKind, command != null ? command : "Preparing the replay");
     }
 
     /** Captures what the instruction left in the workflow, tagged {@code replayed_step}. */
@@ -860,11 +978,14 @@ public class ActionLogger implements WorkflowListener {
         Integer idx = replayStepIndex;
         replayStepIndex = null;
         scriptRunning   = false;
+        Instant since = replayKind != null ? CaptureEvents.runningSince(replayKind) : null;
+        if (replayKind != null) CaptureEvents.finished(replayKind);
+        replayKind = null;
         if (currentImageData == null || idx == null) return;
         List<WorkflowStep> steps = currentImageData.getHistoryWorkflow().getSteps();
         // A failed instruction's partial entries were removed — never index past the end.
         if (lastKnownStepCount > steps.size()) lastKnownStepCount = steps.size();
-        captureNewSteps(steps, idx);
+        captureNewSteps(steps, idx, since);
     }
 
     public Set<String> getDeletedFragments() {
@@ -950,6 +1071,7 @@ public class ActionLogger implements WorkflowListener {
             : "Detection" + (removed.size() > 1 ? "s" : "") + " deleted: " + removed.size();
         if (note != null && !note.isBlank()) msg += " — " + note;
         ActivityLog.add(msg);
+        CaptureEvents.captured(CaptureEvents.CORRECTION, msg, CaptureEvents.scalars(record));
     }
 
     // ── Annotation correction tracking ──────────────────────────────────────
@@ -1009,6 +1131,7 @@ public class ActionLogger implements WorkflowListener {
         String msg = "Annotation" + (removed.size() > 1 ? "s" : "") + " deleted: " + removed.size();
         if (note != null && !note.isBlank()) msg += " — " + note;
         ActivityLog.add(msg);
+        CaptureEvents.captured(CaptureEvents.CORRECTION, msg, CaptureEvents.scalars(record));
     }
 
     private void showDetectionNoteDialog(String type, int nDeleted, int nAdded,
@@ -1113,6 +1236,7 @@ public class ActionLogger implements WorkflowListener {
      */
     public void resetCapture() {
         if (currentImageData == null) return;
+        pauses = freshPauses();
 
         capturedSteps.clear();
         annotationStepIndex.clear();
@@ -1135,6 +1259,8 @@ public class ActionLogger implements WorkflowListener {
         if (panel != null) panel.updateStepCount(0, 0, 0);
         if (panel != null) panel.setRecordReady(false);
         ActivityLog.add("— Reset — history cleared. Tracking from this point forward.");
+        CaptureEvents.forgetRecent();
+        CaptureEvents.captured(CaptureEvents.RESET, "Reset — tracking from this point forward", null);
         notifyChanged();
     }
 
@@ -1171,6 +1297,7 @@ public class ActionLogger implements WorkflowListener {
         s.manualAnnotationCount = manualAnnotationCount;
         s.importCounter         = importCounter;
         s.imageHash             = imageHash;
+        s.capturePauses         = pauses.isEmpty() ? null : pauses.toJson();
         return s;
     }
 
@@ -1181,6 +1308,7 @@ public class ActionLogger implements WorkflowListener {
      */
     public void restoreState(io.qtrace.draft.CaptureState s) {
         if (currentImageData == null) return;
+        pauses = CapturePauses.fromJson(s.capturePauses);
         capturedSteps.clear();
         capturedSteps.addAll(s.capturedSteps);
         annotationStepIndex.clear();
@@ -1262,6 +1390,7 @@ public class ActionLogger implements WorkflowListener {
      */
     public void recordFileImport(java.io.File file, int objectCount, ImportContext declared) {
         if (currentImageData == null || file == null) return;
+        if (pauses.isPaused()) { pauses.missedChange("file import", 1); return; }
         try {
             byte[] rawBytes = Files.readAllBytes(file.toPath());
             String sha256   = computeSha256Bytes(rawBytes);
@@ -1372,6 +1501,8 @@ public class ActionLogger implements WorkflowListener {
                 null, null, null);
             ActivityLog.add("[Alignment] AffineServer detected — moving: " + movingName);
             ActivityLog.add("[Alignment] Matrix: " + Arrays.toString(matrix));
+            CaptureEvents.captured(CaptureEvents.ALIGNMENT, "Alignment captured — moving: " + movingName,
+                CaptureEvents.matrix(matrix));
             if (panel != null) panel.setRecordReady(true);
             return;
         }
@@ -1562,10 +1693,12 @@ public class ActionLogger implements WorkflowListener {
                 colormap = measurementMapComboBox.getValue().getName();
             double min = measurementMapSliders.size() > 0 ? measurementMapSliders.get(0).getValue() : Double.NaN;
             double max = measurementMapSliders.size() > 1 ? measurementMapSliders.get(1).getValue() : Double.NaN;
+            if (pauses.isPaused()) { pauses.missedChange("measurement map", 1); return; }
             measurementMapRecords.add(new MeasurementMapRecord(measurement, colormap, min, max, Instant.now()));
             notifyChanged();
             ActivityLog.add("[MeasurementMap] " + reason + " — measurement: " + measurement
                 + ", colormap: " + colormap + ", range: [" + min + ", " + max + "]");
+            CaptureEvents.captured(CaptureEvents.DISPLAY, "Measurement map: " + measurement + " · " + colormap, null);
         } catch (Exception e) {
             ActivityLog.add("[MeasurementMap] WARNING: could not capture state — " + e.getMessage());
         }
@@ -1627,9 +1760,12 @@ public class ActionLogger implements WorkflowListener {
             }
             List<ClassListRecord> changes = ClassListRecord.diff(classListBaseline, now, Instant.now());
             classListBaseline = now;
+            if (pauses.isPaused()) { pauses.missedChange("class list", changes.size()); return; }
             for (ClassListRecord c : changes) {
                 classListRecords.add(c);
                 ActivityLog.add("[Classes] " + (ClassListRecord.ADD.equals(c.action) ? "Added — " : "Removed — ") + c.name);
+                CaptureEvents.captured(CaptureEvents.DISPLAY,
+                    (ClassListRecord.ADD.equals(c.action) ? "Class added: " : "Class removed: ") + c.name, null);
             }
         } catch (Exception e) {
             ActivityLog.add("[Classes] WARNING: could not read the class list — " + e.getMessage());
@@ -1706,10 +1842,13 @@ public class ActionLogger implements WorkflowListener {
                 ActivityLog.add("[DisplaySettings] " + reason + " — nothing changed, not recorded");
                 return;
             }
+            if (pauses.isPaused()) { pauses.missedChange("display settings", 1); return; }
             displaySettingsRecords.add(record);
             notifyChanged();
             ActivityLog.add("[DisplaySettings] " + reason + " — " + record.channels.size()
                 + " channel(s), gamma " + record.gamma);
+            CaptureEvents.captured(CaptureEvents.DISPLAY, "Display settings: " + record.channels.size()
+                + " channel(s), gamma " + record.gamma, null);
         } catch (Exception e) {
             ActivityLog.add("[DisplaySettings] WARNING: could not capture state — " + e.getMessage());
         }
@@ -1806,6 +1945,7 @@ public class ActionLogger implements WorkflowListener {
     private void onWarpySaveClicked(String text) {
         double[] matrix = parseWarpyMatrixText(text);
         if (matrix == null) return;
+        if (pauses.isPaused()) { pauses.missedChange("alignment", 1); return; }
         if (currentAlignment != null
                 && "WarpyTextArea".equals(currentAlignment.captureSource)
                 && Arrays.equals(matrix, currentAlignment.matrix)) return;
@@ -1827,6 +1967,8 @@ public class ActionLogger implements WorkflowListener {
             "(reference image — see QuPath project)", "",
             null, null, null);
         ActivityLog.add("[Alignment/Warpy] Matrix captured — moving: " + movingName);
+        CaptureEvents.captured(CaptureEvents.ALIGNMENT, "Warpy alignment captured — moving: " + movingName,
+            CaptureEvents.matrix(matrix));
         if (panel != null) panel.setRecordReady(true);
     }
 
@@ -1918,6 +2060,7 @@ public class ActionLogger implements WorkflowListener {
 
     /** Invoked on FX thread when a transform_TARGET_SOURCE.json file is written by Warpy. */
     private void onWarpyTransformFile(Path transformFile) {
+        if (pauses.isPaused()) { pauses.missedChange("alignment", 1); return; }
         try {
             String fname = transformFile.getFileName().toString();
             java.util.regex.Matcher mat = java.util.regex.Pattern
@@ -1971,6 +2114,8 @@ public class ActionLogger implements WorkflowListener {
                 fname, sourceId, targetId);
             ActivityLog.add("[Alignment/Warpy] File: " + fname);
             ActivityLog.add("  Source: " + sourceName + "  →  Target: " + targetName);
+            CaptureEvents.captured(CaptureEvents.ALIGNMENT, "Warpy alignment: " + sourceName + " → " + targetName,
+                CaptureEvents.matrix(matrix));
             if (panel != null) panel.setRecordReady(true);
         } catch (Exception e) {
             ActivityLog.add("[Warpy file parse error] " + e.getMessage());
@@ -2131,6 +2276,8 @@ public class ActionLogger implements WorkflowListener {
             notifyChanged();
 
             ActivityLog.add("[Pixel classifier loaded] " + name);
+            CaptureEvents.captured(CaptureEvents.CLASSIFIER, "Pixel classifier loaded: " + name,
+                CaptureEvents.classifier(name, sha256));
             ActivityLog.add("  type   : " + meta.type() + " / " + meta.outputType());
             ActivityLog.add("  sha256 : " + sha256.substring(0, 16) + "...");
 
@@ -2267,6 +2414,7 @@ public class ActionLogger implements WorkflowListener {
         long now = System.currentTimeMillis();
         Long lastSeen = objClassifierWarnedAt.get(name);
         if (lastSeen != null && now - lastSeen < 3000) return;
+        if (pauses.isPaused()) { pauses.missedChange("object classifier", 1); return; }
         objClassifierWarnedAt.put(name, now);
 
         boolean nameValid = CLASSIFIER_NAME_PATTERN.matcher(name).matches();
@@ -2283,6 +2431,7 @@ public class ActionLogger implements WorkflowListener {
         notifyChanged();
         ActivityLog.add("[Object classifier saved] " + name
             + (nameValid ? "" : "  ⚠ name does not match naming policy"));
+        CaptureEvents.captured(CaptureEvents.CLASSIFIER, "Object classifier saved: " + name, rec);
 
         if (!nameValid) {
             ActivityLog.add("  Expected : YYYYMMDD-SGI-ClassType-[...]");
@@ -2305,6 +2454,7 @@ public class ActionLogger implements WorkflowListener {
     private void onClassifierSaved(Path classifierFile) {
         if (currentImageData == null) return;
         if (System.currentTimeMillis() - attachTime < 2000) return; // anti-rebond
+        if (pauses.isPaused()) { pauses.missedChange("pixel classifier", 1); return; }
 
         try {
             String name    = classifierFile.getFileName().toString().replaceAll("\\.json$", "");
@@ -2345,6 +2495,8 @@ public class ActionLogger implements WorkflowListener {
 
             // ── Log ─────────────────────────────────────────────────────────
             ActivityLog.add("[Pixel classifier saved] " + name);
+            CaptureEvents.captured(CaptureEvents.CLASSIFIER, "Pixel classifier saved: " + name,
+                CaptureEvents.classifier(name, sha256));
             ActivityLog.add("  user      : " + user);
             ActivityLog.add("  image SHA : " + (imageHash != null ? imageHash.substring(0,16) + "..." : "(pending)"));
             ActivityLog.add("  type      : " + meta.type() + " / " + meta.outputType());

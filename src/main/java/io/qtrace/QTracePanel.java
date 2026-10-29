@@ -32,6 +32,7 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
@@ -154,7 +155,7 @@ public class QTracePanel {
 
     // ── Root layout ──────────────────────────────────────────────────────────
 
-    private VBox buildRoot() {
+    private Parent buildRoot() {
         VBox root = new VBox(12);
         root.setPadding(new Insets(16, 16, 4, 16));
         root.setStyle("-fx-background-color: " + BG_BASE + ";");
@@ -169,13 +170,19 @@ public class QTracePanel {
             logSection,
             buildFooter()
         );
-        return root;
+        // The mini-panel mode's column stands beside the panel, the height of the window.
+        HBox.setHgrow(root, Priority.ALWAYS);
+        HBox whole = new HBox(root, miniEditor.side());
+        whole.setStyle("-fx-background-color: " + BG_BASE + ";");
+        return whole;
     }
 
     // ── Header ───────────────────────────────────────────────────────────────
 
     private VBox buildHeader() {
         VBox header = new VBox(4);
+        FlowPane toolbar = buildToolbarRow();
+        miniEditor = new MiniPanelEditor(stage, toolbar, this::redrawToolbar);
 
         // ── Line 1: logo + title + passive capture status (top-right, title's line) ──
         HBox topLine = new HBox(10);
@@ -199,7 +206,7 @@ public class QTracePanel {
         settingsBtn.setId("settings-button"); // looked up by the screenshot harness — see ScreenshotHarness
         settingsBtn.setOnAction(e -> QTraceSettingsDialog.show(qupath));
 
-        topLine.getChildren().addAll(logoView, title, topSpacer, captureStatus, settingsBtn);
+        topLine.getChildren().addAll(logoView, title, topSpacer, captureStatus, miniPanelGear(), settingsBtn);
 
         // ── Line 2: subtitle + license badge, indented under the title ──
         Text sub = new Text("Workflow Provenance — v" + QTraceController.getDisplayVersion());
@@ -209,8 +216,41 @@ public class QTracePanel {
         VBox metaBlock = new VBox(1, sub, buildLicenseBadge());
         metaBlock.setPadding(new Insets(0, 0, 0, 36));
 
-        header.getChildren().addAll(topLine, metaBlock, buildToolbarRow());
+        header.getChildren().addAll(topLine, metaBlock, toolbar, miniEditor.banner());
         return header;
+    }
+
+    /** The blue gear: the mini-panel mode, where the panel's tools are chosen for the mini-panel. */
+    private Button miniPanelGear() {
+        Button gear = new Button();
+        gear.setId("mini-panel-gear"); // looked up by the screenshot harness — see ScreenshotHarness
+        Label glyph = new Label("⚙");
+        glyph.setFont(Font.font("System", FontWeight.BOLD, 13));
+        Theme.text(glyph, BLUE);
+        gear.setGraphic(glyph);
+        gear.setTooltip(new Tooltip(QTraceI18n.t("minipanel.config.tooltip")));
+        String idle = "-fx-background-color: transparent; -fx-cursor: hand; -fx-padding: 3 4 3 4; -fx-background-radius: 6;";
+        String on = idle + "-fx-background-color: " + Theme.alpha(BLUE, 27) + ";";
+        String hover = idle + "-fx-background-color: " + Theme.alpha(BLUE, 13) + ";";
+        gear.setStyle(idle);
+        gear.setOnMouseEntered(e -> gear.setStyle(miniEditor.active() ? on : hover));
+        gear.setOnMouseExited(e -> gear.setStyle(miniEditor.active() ? on : idle));
+        gear.setOnAction(e -> miniEditor.toggle());
+        // Done turns the mode off too: the gear follows the mode, not its own clicks.
+        miniEditor.activeProperty().addListener((o, was, now) -> gear.setStyle(now ? on : idle));
+        return gear;
+    }
+
+    private MiniPanelEditor miniEditor;
+
+    private boolean miniEditing() { return miniEditor != null && miniEditor.active(); }
+
+    /** Names a toolbar button's tool, as the mini-panel mode and {@link MiniPanelChoice} know it. */
+    private static void tool(Button b, String name) { b.getProperties().put(MiniPanelEditor.TOOL, name); }
+
+    private void redrawToolbar() {
+        fillToolbarRow();
+        applyCompactToolbar();
     }
 
     // ── Capture status (passive — Recording / Paused) ───────────────────────────
@@ -350,7 +390,8 @@ public class QTracePanel {
         if (profile != null)
             return Math.max(MIN_WIDTH, 80 * profile.size() + (profile.contains(PanelProfile.STAMP) ? 80 : 0));
         if (QTracePluginManager.isEntitled()) return 760;
-        int extra = (Players.entitled() != null ? 1 : 0) + (VersionGraphs.entitled() != null ? 1 : 0);
+        int extra = (Players.entitled() != null ? 1 : 0) + (VersionGraphs.entitled() != null ? 1 : 0)
+            + PanelExtensions.entitled(PanelExtensions.CAPTURE).size();
         if (BatchImports.entitled() == null) extra--;
         return Math.max(MIN_WIDTH, 400 + 80 * extra);
     }
@@ -427,6 +468,8 @@ public class QTracePanel {
           + "-fx-padding: 6 12 6 10;"
         );
         btnRecord.setOnAction(e -> controller.recordTrace());
+        tool(btnRecord, PanelProfile.STAMP);
+        btnRecord.getProperties().put(MiniPanelEditor.ICON, (Function<Color, Node>) c -> scaledIcon(iconStamp(c), 17));
         applyStampEnabled();
 
         // Workspace & Analyse — Compliance only, when licensed & active.
@@ -445,6 +488,7 @@ public class QTracePanel {
             btnPush.setId("upload-button");
             btnPush.setOpacity(0.45); // greyed, yet clickable: a disabled button could not say why
             btnPush.setOnAction(e -> UploadInvite.open());
+            tool(btnPush, PanelProfile.UPLOAD);
         }
         if (upload == UploadInvite.State.UPLOAD) {
             btnPush = iconButton(welcomeMarked("upload", iconFactory(this::iconUpload)), QTraceI18n.t("btn.upload.caption"),
@@ -453,12 +497,14 @@ public class QTracePanel {
             btnPush.setDisable(!pushEnabled);
             btnPush.setOpacity(pushEnabled ? 1.0 : 0.45);
             btnPush.setOnAction(e -> welcomeFirst("upload", controller::pushToWorkspace));
+            tool(btnPush, PanelProfile.UPLOAD);
         }
         if (licensed) {
             btnReport = iconButton(iconFactory(this::iconReport), QTraceI18n.t("btn.report.caption"),
                 QTraceI18n.t("btn.report.tooltip"), Theme.web(GROUP_WORKSPACE));
             btnReport.setId("report-button"); // looked up by the screenshot harness — see ScreenshotHarness
             btnReport.setOnAction(e -> controller.generateActivityReport());
+            tool(btnReport, PanelProfile.REPORT);
         }
 
         // Consultation & Traitement — Core + Compliance. Dashboard and Import: there once a
@@ -475,14 +521,17 @@ public class QTracePanel {
         if (dashboardBtn != null) {
             dashboardBtn.setId("dashboard-button");
             dashboardBtn.setOnAction(e -> welcomeFirst("dashboard", controller::showDashboard));
+            tool(dashboardBtn, PanelProfile.DASHBOARD);
         }
         if (importBtn != null) {
             importBtn.setId("import-button");
             importBtn.setOnAction(e -> welcomeFirst("import", controller::startBatchExport));
+            tool(importBtn, PanelProfile.IMPORT);
             TourHighlight.tag(importBtn, "import");
         }
         resetBtn.setId("reset-button");
         resetBtn.setOnAction(e -> confirmReset());
+        tool(resetBtn, PanelProfile.RESET);
         resetBtn.setDisable(!controller.hasActiveImage());
         resetBtn.setOpacity(controller.hasActiveImage() ? 1.0 : 0.45);
 
@@ -503,10 +552,12 @@ public class QTracePanel {
                 };
                 if (node != null) row.getChildren().add(node); // Upload, Report: with the licence only; Dashboard, Import: with their module
             }
+            if (miniEditor != null) miniEditor.toolbarRedrawn();
             return;
         }
 
         row.getChildren().add(btnRecord);
+        row.getChildren().add(moduleSlot(PanelExtensions.CAPTURE, GROUP_TOOLS));
         if (!licensed) {
             // No account yet: the greyed Upload opens the group Replay and Version(s) stand in.
             // A basic account (no certificate) has Upload itself, in that same place.
@@ -525,6 +576,7 @@ public class QTracePanel {
         row.getChildren().add(moduleSlot(PanelExtensions.DASHBOARD, GROUP_TOOLS));
         if (importBtn != null) row.getChildren().add(importBtn);
         row.getChildren().add(resetBtn);
+        if (miniEditor != null) miniEditor.toolbarRedrawn();
     }
 
     /**
@@ -547,6 +599,7 @@ public class QTracePanel {
                     QTraceI18n.t("btn.replay.tooltip"), Theme.web(GROUP_WORKSPACE));
                 btnReplay.setId("replay-button"); // looked up by the screenshot harness — see ScreenshotHarness
                 btnReplay.setOnAction(e -> welcomeFirst("player", controller::openReplayDialog));
+                tool(btnReplay, PanelProfile.PLAYER);
                 if (replayWait) pendingLook(btnReplay, "Replay");
                 buttons.add(btnReplay);
             }
@@ -556,6 +609,7 @@ public class QTracePanel {
                     QTraceI18n.t("btn.versions.tooltip"), Theme.web(GROUP_WORKSPACE));
                 btnGraph.setId("versions-button"); // looked up by the screenshot harness — see ScreenshotHarness
                 btnGraph.setOnAction(e -> welcomeFirst("versiongraph", controller::showCommitGraph));
+                tool(btnGraph, PanelProfile.VERSIONS);
                 if (versionsWait) pendingLook(btnGraph, "Version(s)");
                 buttons.add(btnGraph);
             }
@@ -563,6 +617,7 @@ public class QTracePanel {
             slot.getChildren().addAll(buttons);
             slot.setVisible(!slot.getChildren().isEmpty());
             slot.setManaged(!slot.getChildren().isEmpty());
+            if (miniEditor != null) miniEditor.toolbarRedrawn();
         };
         moduleSlots.add(fill);
         fill.run();
@@ -608,10 +663,12 @@ public class QTracePanel {
                     Theme.web(groupColor.apply(entry)));
                 TourHighlight.tag(b, entry.module());
                 b.setOnAction(e -> welcomeFirst(entry.module(), () -> runModuleEntry(entry)));
+                tool(b, entry.module());
                 slot.getChildren().add(b);
             }
             slot.setVisible(!slot.getChildren().isEmpty());
             slot.setManaged(!slot.getChildren().isEmpty());
+            if (miniEditor != null) miniEditor.toolbarRedrawn();
         };
         moduleSlots.add(fill);
         fill.run();
@@ -785,6 +842,7 @@ public class QTracePanel {
     /** Stamp needs captured steps and an image to stamp — never offered with no image open. */
     boolean isStampEnabled()    { return recordReady && controller.hasActiveImage(); }
     private void applyStampEnabled() {
+        if (miniEditing()) return; // the mini-panel mode keeps every tool clickable; Done redraws them
         boolean on = isStampEnabled();
         btnRecord.setDisable(!on);
         btnRecord.setOpacity(on ? 1.0 : 0.45);
@@ -1047,6 +1105,7 @@ public class QTracePanel {
 
     private Button iconButton(Function<Color, Node> iconFactory, String captionText, String tooltipText, Color hoverColor) {
         Button btn = new Button(captionText);
+        btn.getProperties().put(MiniPanelEditor.ICON, iconFactory);
         btn.setGraphic(iconFactory.apply(Theme.web(TEXT_MUTED)));
         btn.setContentDisplay(stage.getWidth() < captionsWidth() ? ContentDisplay.GRAPHIC_ONLY : ContentDisplay.TOP);
         captionedButtons.add(btn);
@@ -1058,13 +1117,13 @@ public class QTracePanel {
         String hoverStyle = "-fx-background-color: " + BG_ELEVATED + "; -fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 5 8 6 8;";
         btn.setStyle(idleStyle);
         btn.setOnMouseEntered(e -> {
-            if (btn.isDisabled()) return;
+            if (btn.isDisabled() || btn.getProperties().containsKey(MiniPanelEditor.EDITING)) return;
             btn.setGraphic(iconFactory.apply(hoverColor));
             Theme.text(btn, TEXT_SUB);
             btn.setStyle(hoverStyle);
         });
         btn.setOnMouseExited(e -> {
-            if (btn.isDisabled()) return;
+            if (btn.isDisabled() || btn.getProperties().containsKey(MiniPanelEditor.EDITING)) return;
             btn.setGraphic(iconFactory.apply(Theme.web(TEXT_MUTED)));
             Theme.text(btn, TEXT_MUTED);
             btn.setStyle(idleStyle);
@@ -1338,6 +1397,7 @@ public class QTracePanel {
     /** Rebuilds the scene to reflect a changed entitlement (e.g. license downgrade). */
     public void refresh() {
         Platform.runLater(() -> {
+            if (miniEditor != null) miniEditor.exit(); // the new scene starts out of the mini-panel mode
             stage.setTitle(QTraceController.getEditionLabel());
             stage.setMinWidth(MIN_WIDTH);
             stage.setScene(new Scene(buildRoot(), stage.getWidth(), stage.getHeight())); // keep the user's size
@@ -1416,7 +1476,7 @@ public class QTracePanel {
         Platform.runLater(() -> {
             // Remembered even without the button: the module that brings Upload can load later.
             pushEnabled = enabled;
-            if (btnPush != null && !pushInvite) {
+            if (btnPush != null && !pushInvite && !miniEditing()) {
                 btnPush.setDisable(!enabled);
                 btnPush.setOpacity(enabled ? 1.0 : 0.45);
             }
@@ -1491,7 +1551,7 @@ public class QTracePanel {
     public void refreshStatus() {
         Platform.runLater(() -> {
             imageNameLabel.setText(controller.getCurrentImageName());
-            if (btnReset != null) {
+            if (btnReset != null && !miniEditing()) {
                 boolean has = controller.hasActiveImage();
                 btnReset.setDisable(!has);
                 btnReset.setOpacity(has ? 1.0 : 0.45);
