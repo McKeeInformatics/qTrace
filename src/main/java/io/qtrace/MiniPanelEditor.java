@@ -279,7 +279,7 @@ final class MiniPanelEditor {
             start[0] = e.getSceneY();
             block.setCursor(Cursor.CLOSED_HAND);
             block.setStyle(lifted);
-            block.toFront();
+            block.setViewOrder(-1); // drawn above its neighbours; toFront() would reorder the VBox's children and make the block jump to the bottom
         });
         block.setOnMouseDragged(e -> block.setTranslateY(e.getSceneY() - start[0]));
         block.setOnMouseReleased(e -> {
@@ -287,6 +287,7 @@ final class MiniPanelEditor {
             double pitch = block.getHeight() + column.getSpacing();
             int to = Math.max(0, Math.min(tools.size() - 1, from + (int) Math.round(block.getTranslateY() / pitch)));
             block.setTranslateY(0);
+            block.setViewOrder(0);
             block.setCursor(Cursor.OPEN_HAND);
             block.setStyle(idle);
             if (to != from) {
