@@ -32,12 +32,6 @@ Without the catalogue: download `qtrace-loader.jar` from [Releases](../../releas
 drag it onto the QuPath window (or copy it to your extensions folder), then click **Install**.
 The loader downloads the signed qTrace modules itself — do not copy `qtrace-core-*` files by hand.
 
-## Compliance features
-
-Cryptographic certification (Ed25519 + OpenTimestamps), contributor identity
-verification, and blockchain anchoring require **qTrace Compliance** —
-visit [qtrace.ca](https://qtrace.ca) or contact [Romain Tourte](mailto:tourteromain@gmail.com)
-
 ## License
 
 **GPL v3** — free for all use. See [LICENSE](LICENSE).
