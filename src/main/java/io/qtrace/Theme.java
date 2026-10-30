@@ -99,6 +99,11 @@ public final class Theme {
         sb.append("  -fx-control-inner-background: ").append(p.get("field")).append(";\n");
         sb.append("  -fx-accent: ").append(p.get("blue")).append(";\n");
         sb.append("  -fx-text-base-color: ").append(p.get("text-main")).append(";\n}\n");
+        // A dialog's default button (Yes, Install...): Modena paints it a pale accent with white text,
+        // unreadable on the dark theme — QuPath's own "Save changes" included. Solid accent, base-coloured text.
+        sb.append(".button:default, .button:default:hover, .button:default:focused {\n")
+          .append("  -fx-background-color: ").append(p.get("blue")).append(";\n")
+          .append("  -fx-text-fill: ").append(p.get("bg-base")).append(";\n}\n");
         return sb.toString();
     }
 
