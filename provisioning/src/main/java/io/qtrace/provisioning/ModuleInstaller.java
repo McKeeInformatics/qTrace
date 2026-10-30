@@ -28,6 +28,7 @@ import io.qtrace.QTraceUpdater;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -343,6 +344,7 @@ final class ModuleInstaller {
             ButtonType later   = new ButtonType(QTraceI18n.t("update.later"),   ButtonBar.ButtonData.CANCEL_CLOSE);
             ButtonType ignore  = new ButtonType(QTraceI18n.t(one ? "update.ignore" : "update.ignore.many"), ButtonBar.ButtonData.OTHER);
             alert.getButtonTypes().setAll(install, later, ignore);
+            solidAction(alert, install);
 
             Optional<ButtonType> result = alert.showAndWait();
             log.info(TAG + "update prompt: user chose {}", result.map(ButtonType::getText).orElse("<closed>"));
@@ -463,6 +465,7 @@ final class ModuleInstaller {
             ButtonType quitNow = new ButtonType(QTraceI18n.t("update.quit.now"), ButtonBar.ButtonData.OK_DONE);
             ButtonType later   = new ButtonType(QTraceI18n.t("update.later"),    ButtonBar.ButtonData.CANCEL_CLOSE);
             a.getButtonTypes().setAll(quitNow, later);
+            solidAction(a, quitNow);
 
             Optional<ButtonType> result = a.showAndWait();
             boolean quit = result.isPresent() && result.get() == quitNow;
@@ -487,12 +490,23 @@ final class ModuleInstaller {
         ButtonType quitNow = new ButtonType(QTraceI18n.t("update.quit.now"), ButtonBar.ButtonData.OK_DONE);
         ButtonType later   = new ButtonType(QTraceI18n.t("update.later"),    ButtonBar.ButtonData.CANCEL_CLOSE);
         a.getButtonTypes().setAll(quitNow, later);
+        solidAction(a, quitNow);
         a.resultProperty().addListener((obs, was, chosen) -> {
             boolean quit = chosen == quitNow;
             log.info(TAG + "restart notice: user chose {}", quit ? "quit now" : "later");
             if (quit && qupath != null) quitQuPath(qupath);
         });
         a.show();
+    }
+
+    /**
+     * The dialog's default button, solid blue with dark text: under QuPath's dark theme the
+     * stock default button turns pale with white text and cannot be read.
+     */
+    private static void solidAction(Alert alert, ButtonType action) {
+        if (alert.getDialogPane().lookupButton(action) instanceof Button b)
+            b.setStyle("-fx-background-color: #89b4fa; -fx-text-fill: #1e1e2e; -fx-font-weight: bold;"
+                + "-fx-background-radius: 4; -fx-cursor: hand;");
     }
 
     /** QuPath's own quit (same path as File > Quit, incl. the unsaved-changes prompt), once no modal dialog is open. */
