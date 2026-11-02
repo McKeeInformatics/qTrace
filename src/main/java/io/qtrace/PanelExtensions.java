@@ -27,8 +27,7 @@ public final class PanelExtensions {
     public static final String VERSIONS  = "versions";
     /**
      * A button right after Stamp, in the panel's capture group — for a view of the capture
-     * itself (the Logbook). Not in qTrace's own mini-panel: the user adds it there if they wish
-     * ({@link MiniPanelChoice}).
+     * itself (the Logbook). In qTrace's own mini-panel too, right under Stamp.
      */
     public static final String CAPTURE   = "capture";
     /**

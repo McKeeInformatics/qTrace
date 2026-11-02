@@ -336,8 +336,8 @@ public final class QTraceMiniPanel {
     /**
      * qTrace's own mini-panel, as tool names and {@link #SEPARATOR}s between its groups — or, when
      * the organization chose its panel ({@link PanelProfile}), its tools in its order. The
-     * modules' buttons stand under the button they go with; those that follow Stamp in the panel
-     * ({@link PanelExtensions#CAPTURE}) are not in it.
+     * modules' buttons stand under the button they go with: those that follow Stamp in the panel
+     * ({@link PanelExtensions#CAPTURE}, the Logbook) right under Stamp.
      */
     static List<String> defaultLayout() {
         List<String> profile = PanelProfile.tools();
@@ -350,6 +350,7 @@ public final class QTraceMiniPanel {
         boolean uploads = upload == UploadInvite.State.UPLOAD || upload == UploadInvite.State.SIGN_IN;
         List<String> out = new ArrayList<>();
         out.add(PanelProfile.STAMP);
+        for (PanelExtensions.Entry e : PanelExtensions.entitled(PanelExtensions.CAPTURE)) out.add(e.module());
         if (licensed || player || uploads || (versions && !licensed)) out.add(SEPARATOR);
         if (uploads) out.add(PanelProfile.UPLOAD);
         if (player) out.add(PanelProfile.PLAYER);
@@ -384,7 +385,7 @@ public final class QTraceMiniPanel {
 
     private void addModuleButtons(List<Node> nodes, List<PanelExtensions.Entry> entries) {
         for (PanelExtensions.Entry entry : entries) {
-            Color hover = Theme.web(PanelExtensions.DASHBOARD.equals(entry.anchor()) ? QTracePanel.GROUP_TOOLS : QTracePanel.GROUP_WORKSPACE);
+            Color hover = Theme.web(QTracePanel.groupOf(entry));
             Button b = titled(QTracePanel.welcomeMarked(entry.module(), icon(QTracePanel.moduleIcon(entry))), entry.label(), hover);
             TourHighlight.tag(b, entry.module());
             b.setOnAction(e -> QTracePanel.welcomeFirst(entry.module(), () -> QTracePanel.runModuleEntry(entry)));

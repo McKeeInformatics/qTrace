@@ -646,8 +646,13 @@ public class QTracePanel {
      * the profile names the module, whatever button they go with in qTrace's own panel.
      */
     private HBox profileSlot(String module) {
-        return entrySlot(() -> PanelExtensions.ofModule(module),
-            e -> PanelExtensions.DASHBOARD.equals(e.anchor()) ? GROUP_TOOLS : GROUP_WORKSPACE);
+        return entrySlot(() -> PanelExtensions.ofModule(module), QTracePanel::groupOf);
+    }
+
+    /** A module button's group colour: that of the button it goes with in qTrace's own panel. */
+    static String groupOf(PanelExtensions.Entry e) {
+        return PanelExtensions.DASHBOARD.equals(e.anchor()) || PanelExtensions.CAPTURE.equals(e.anchor())
+            ? GROUP_TOOLS : GROUP_WORKSPACE;
     }
 
     private HBox entrySlot(java.util.function.Supplier<java.util.List<PanelExtensions.Entry>> entries,
