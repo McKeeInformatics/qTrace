@@ -72,7 +72,7 @@ public final class ReplaySkip {
     /** A step the replay would run — the only kind that can be taken out or put back. */
     public static boolean isReplayable(JsonObject step) {
         return fragment(step) != null && flag(step, "is_scriptable")
-            && !flag(step, "deleted") && !flag(step, "replay_excluded");
+            && !flag(step, "deleted") && !flag(step, "replay_excluded") && !step.has("undo");
     }
 
     /** The step's script fragment as the replay keys it, or null when it has none. */

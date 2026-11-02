@@ -45,8 +45,9 @@ import java.util.stream.Collectors;
  * that includes retroactively-captured pre-qTrace steps AND dynamically updated
  * annotation fragments (name, class, color, description, locked).
  * Steps marked {@code "deleted": true} are filtered out so that annotations the
- * user drew and then deleted never appear in the replay; so are the instructions the
- * author took out of the replay ({@link ReplaySkip}).
+ * user drew and then deleted never appear in the replay; so are those QuPath's Undo took
+ * back ({@code undo}, see ActionHistory) and the instructions the author took out of the
+ * replay ({@link ReplaySkip}).
  *
  * Deduplication: keeps only the LAST occurrence of each content-identical step,
  * collapsing repeated setImageType / script runs while preserving the final,
@@ -67,9 +68,9 @@ public class MetaScriptGenerator {
         ImageData<BufferedImage> imageData = logger.getCurrentImageData();
         if (imageData == null) throw new IllegalStateException("No active image.");
 
-        // Active captured steps: not deleted, and not taken out of the replay by the author
+        // Active captured steps: in force (not deleted, not undone), and not taken out of the replay by the author
         List<JsonObject> active = logger.getCapturedSteps().stream()
-            .filter(j -> !j.has("deleted") || !j.get("deleted").getAsBoolean())
+            .filter(QTraceExporter::inForce)
             .filter(j -> !ReplaySkip.isSkipped(j))
             .collect(Collectors.toList());
 

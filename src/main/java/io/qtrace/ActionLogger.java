@@ -245,7 +245,21 @@ public class ActionLogger implements WorkflowListener {
     // The session's capture pauses — declared before the listener that reads them.
     private CapturePauses pauses = new CapturePauses();
 
+    // Undo / Redo (docs/architecture/undo-redo.md, "Design"): one number per QuPath action, and
+    // which of them QuPath's own undo stack leaves in force - read from it (UndoLine), never from a key.
+    private volatile ActionHistory history = new ActionHistory();
+    private final java.util.concurrent.atomic.AtomicBoolean undoFollowPending = new java.util.concurrent.atomic.AtomicBoolean();
+    private volatile boolean undoFollowed = true;
+    // The action an annotation was added in: a command's step captured in it means the command made it.
+    private final Map<UUID, Long> annotationAddedIn = new ConcurrentHashMap<>();
+    // The action a correction batch's first removal happened in (its step, "Delete selected objects", is captured in it).
+    private volatile long detectionBatchAction, annotationBatchAction;
+    // The bench (tools/undo-repro) drives a copy of QuPath 0.7.0's manager instead of the running QuPath's.
+    private static volatile Object undoManagerForTest;
+
     private final PathObjectHierarchyListener hierarchyListener = event -> {
+        // Every snapshot QuPath takes, and every Undo / Redo, comes with a hierarchy event.
+        scheduleFollowUndo();
         var type      = event.getEventType();
         boolean ready = System.currentTimeMillis() - attachTime >= 800;
         if (!ready) return;
@@ -271,7 +285,9 @@ public class ActionLogger implements WorkflowListener {
         // captured as a single "Import objects from file" step by recordFileImport() instead.
         if (type == PathObjectHierarchyEvent.HierarchyEventType.ADDED && !scriptRunning && !importInProgress) {
             for (PathObject obj : changed) {
-                if (obj.isAnnotation()) scheduleAnnotationCapture(obj);
+                if (!obj.isAnnotation()) continue;
+                annotationAddedIn.putIfAbsent(obj.getID(), history.current());
+                scheduleAnnotationCapture(obj);
             }
         }
 
@@ -380,6 +396,7 @@ public class ActionLogger implements WorkflowListener {
      */
     public void setCapturePaused(boolean paused) {
         if (paused == pauses.isPaused()) return;
+        history.dropOpen();
         if (paused) {
             pauses.pause(Instant.now());
             ActivityLog.add("Capture paused — what is done now is not recorded; the record will say so.");
@@ -420,6 +437,68 @@ public class ActionLogger implements WorkflowListener {
             notifyChanged();
             return;
         }
+    }
+
+    // ── Undo / Redo: following QuPath's own undo stack (docs/architecture/undo-redo.md) ──
+
+    /** The bench's stand-in for QuPath's UndoRedoManager (tools/undo-repro); null: the running QuPath's. */
+    static void useUndoManager(Object manager) { undoManagerForTest = manager; }
+
+    private Object undoManager() {
+        Object m = undoManagerForTest;
+        if (m != null) return m;
+        return qupath != null ? qupath.getUndoRedoManager() : null;
+    }
+
+    /** The viewer showing the recorded image: QuPath keeps one undo stack per viewer. */
+    private Object viewerOf(ImageData<BufferedImage> imageData) {
+        if (qupath == null) return null;
+        for (var v : qupath.getAllViewers()) if (v.getImageData() == imageData) return v;
+        return qupath.getViewer();
+    }
+
+    /** Once per FX pulse, after QuPath's own listener took its snapshot or restored one. */
+    private void scheduleFollowUndo() {
+        if (qupath == null) return;
+        if (!undoFollowPending.compareAndSet(false, true)) return;
+        Platform.runLater(() -> { undoFollowPending.set(false); followUndo(true); });
+    }
+
+    /**
+     * Reads QuPath's undo line and tells what its Undo / Redo did to the captured actions.
+     * @param claim false at attach: what QuPath holds then is the image as found
+     */
+    private void followUndo(boolean claim) {
+        ImageData<BufferedImage> data = currentImageData;
+        if (data == null || !undoFollowed) return;
+        UndoLine.Line line = UndoLine.read(undoManager(), viewerOf(data));
+        if (line == null) {
+            undoFollowed = false;
+            if (qupath != null) ActivityLog.add("WARNING: QuPath's undo stack cannot be read - an Undo will not show in the record.");
+            return;
+        }
+        List<CaptureEvents.ActionChange> changes = history.follow(line.states(), line.position(), claim && !pauses.isPaused());
+        if (changes.isEmpty()) return;
+        for (CaptureEvents.ActionChange c : changes) ActivityLog.add("Undo / Redo - action" + (c.actions().size() > 1 ? "s " : " ") + c.actions() + " " + c.change());
+        refreshManualAnnotationCount();
+        if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
+        CaptureEvents.changed(changes);
+        notifyChanged();
+    }
+
+    /** The action a capture belongs to: the one under way, its snapshots up to now included. */
+    private long captureAction() {
+        followUndo(true);
+        long action = history.captured();
+        scheduleSeal();
+        return action;
+    }
+
+    /** Next pulse: what is captured until then (the two steps of setImageType) is the same action; a running script stays one. */
+    private void scheduleSeal() {
+        ActionHistory h = history;
+        if (qupath == null) { if (!scriptRunning) h.seal(); return; }
+        Platform.runLater(() -> { if (!scriptRunning) h.seal(); });
     }
 
     /** The pauses the session declares; empty when there was none. */
@@ -468,10 +547,15 @@ public class ActionLogger implements WorkflowListener {
         // MetaScriptGenerator has the complete picture from the beginning, not just
         // steps added after qTrace opened.
         List<WorkflowStep> existing = imageData.getHistoryWorkflow().getSteps();
+        history = new ActionHistory();
         for (int i = 0; i < existing.size(); i++) {
-            capturedSteps.add(serializeStep(existing.get(i), i, true));  // pre-tracking: prior contributor
+            JsonObject json = serializeStep(existing.get(i), i, true);   // pre-tracking: prior contributor
+            history.hold(history.standalone(), json);                    // done before: QuPath cannot undo it
+            capturedSteps.add(json);
         }
         preExistingStepCount = existing.size();
+        undoFollowed = true;
+        followUndo(false); // what QuPath's stack holds now is the image as found, no action's
 
         imageData.getHistoryWorkflow().addWorkflowListener(this);
         imageData.getHierarchy().addListener(hierarchyListener);
@@ -558,6 +642,8 @@ public class ActionLogger implements WorkflowListener {
         lastKnownStepCount    = 0;
         manualAnnotationCount = 0;
         capturedSteps.clear();
+        history = new ActionHistory();
+        annotationAddedIn.clear();
         annotationStepIndex.clear();
         manualAnnotationLatestIndex.clear();
         annotationMoveDebouncePending.clear();
@@ -613,14 +699,18 @@ public class ActionLogger implements WorkflowListener {
             // The compute time goes to the last step of the batch: the one that took it.
             Long duration = i == newSize - 1 ? durationMs(since, Instant.now()) : null;
             if (duration != null) json.addProperty("duration_ms", duration);
+            String kind = CaptureEvents.kindOfStep(step.getName());
+            long action = captureAction();
+            if (!CaptureEvents.ANNOTATION.equals(kind)) history.command(action);
+            history.hold(action, json);
             capturedSteps.add(json);
             ActivityLog.add("Step " + (i + 1) + " captured: " + step.getName());
-            CaptureEvents.captured(CaptureEvents.kindOfStep(step.getName()), step.getName(), json); // whole: a view may make a workflow of it
+            CaptureEvents.captured(kind, step.getName(), json, action); // whole: a view may make a workflow of it
             if (step instanceof ScriptableWorkflowStep s) {
                 detectClassifierFromScript(s.getScript());
                 detectCellIntensityFromScript(s.getScript());
             }
-            retirePreviousManualAnnotationStep(json, capturedSteps.size() - 1);
+            retirePreviousManualAnnotationStep(json, capturedSteps.size() - 1, action);
         }
         lastKnownStepCount = newSize;
         // Detection correction batches are already guarded by !scriptRunning in hierarchyListener,
@@ -777,6 +867,13 @@ public class ActionLogger implements WorkflowListener {
 
     private void captureSettledAnnotation(PathObject obj) {
         UUID uuid = obj.getID();
+        Long addedIn = annotationAddedIn.remove(uuid);
+        if (addedIn != null && history.hasCommand(addedIn) && !annotationStepIndex.containsKey(uuid)) {
+            // Added during an action a command's step was captured for (Expand annotations, Create
+            // objects…): the command's own result, replayed by it - not a drawing to replay again.
+            snapshotAnnotationIds.add(uuid);
+            return;
+        }
         if (annotationStepIndex.containsKey(uuid)) {
             refreshAnnotationCapture(obj);
         } else if (snapshotAnnotationIds.contains(uuid)) {
@@ -851,9 +948,13 @@ public class ActionLogger implements WorkflowListener {
         Integer idx = annotationStepIndex.remove(uuid);
         if (idx == null) return;
         retireStep(idx);
+        long action = history.current();
+        history.supersede(action,
+            () -> { unretireStep(idx); annotationStepIndex.put(uuid, idx); refreshManualAnnotationCount(); },
+            () -> { retireStep(idx); annotationStepIndex.remove(uuid); refreshManualAnnotationCount(); });
         String roiName = (obj.getROI() != null) ? obj.getROI().getRoiName() : "Object";
         ActivityLog.add("Annotation deleted: " + roiName + " (removed from meta-script)");
-        CaptureEvents.captured(CaptureEvents.ANNOTATION, "Annotation deleted: " + roiName, null);
+        CaptureEvents.captured(CaptureEvents.ANNOTATION, "Annotation deleted: " + roiName, null, action);
         refreshManualAnnotationCount();
         if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
     }
@@ -865,6 +966,17 @@ public class ActionLogger implements WorkflowListener {
         j.addProperty("deleted", true);
         if (j.has("script_fragment") && !j.get("script_fragment").isJsonNull()) {
             deletedFragments.add(j.get("script_fragment").getAsString());
+        }
+        notifyChanged();
+    }
+
+    /** The action that retired it was undone in QuPath: the step is in force again. */
+    private void unretireStep(int idx) {
+        if (idx < 0 || idx >= capturedSteps.size()) return;
+        JsonObject j = capturedSteps.get(idx);
+        j.remove("deleted");
+        if (j.has("script_fragment") && !j.get("script_fragment").isJsonNull()) {
+            deletedFragments.remove(j.get("script_fragment").getAsString());
         }
         notifyChanged();
     }
@@ -890,15 +1002,23 @@ public class ActionLogger implements WorkflowListener {
      * variable name (see {@code buildAnnotationFragment}) rather than the full UUID, since that's
      * all a fragment exposes without re-parsing its embedded GeoJSON.
      */
-    private void retirePreviousManualAnnotationStep(JsonObject json, int newIdx) {
+    private void retirePreviousManualAnnotationStep(JsonObject json, int newIdx, long action) {
         if (!json.has("script_fragment") || json.get("script_fragment").isJsonNull()) return;
         java.util.regex.Matcher m = OBJ_VAR_SUFFIX.matcher(json.get("script_fragment").getAsString());
         if (!m.find()) return;
-        Integer prevIdx = manualAnnotationLatestIndex.put(m.group(1), newIdx);
+        String suffix = m.group(1);
+        Integer prevIdx = manualAnnotationLatestIndex.put(suffix, newIdx);
         if (prevIdx == null) return;
         // Same object, new fragment: it stays out of the replay if its author took it out.
         ReplaySkip.copy(capturedSteps.get(prevIdx), json);
         retireStep(prevIdx);
+        // Undone in QuPath (the move, the edit): the object is back where the previous step put it.
+        int prev = prevIdx;
+        history.supersede(action,
+            () -> { unretireStep(prev); manualAnnotationLatestIndex.put(suffix, prev);
+                    annotationStepIndex.replaceAll((u, i) -> i == newIdx ? prev : i); },
+            () -> { retireStep(prev); manualAnnotationLatestIndex.put(suffix, newIdx);
+                    annotationStepIndex.replaceAll((u, i) -> i == prev ? newIdx : i); });
     }
 
     // ── Manual annotation counter ─────────────────────────────────────────────
@@ -919,7 +1039,15 @@ public class ActionLogger implements WorkflowListener {
     public boolean          hasSteps()                    { return !capturedSteps.isEmpty(); }
     public boolean          hasNewSteps()                 { return capturedSteps.size() > preExistingStepCount; }
     public QuPathGUI        getQuPath()                   { return qupath; }
-    public void             setScriptRunning(boolean b)   { scriptRunning = b; }
+    /** A script run from the editor is one action, whatever it writes: sealed when it ends. */
+    public void setScriptRunning(boolean b) {
+        if (b) history.seal();
+        scriptRunning = b;
+        if (!b) scheduleSeal();
+    }
+
+    /** False when QuPath's undo stack could not be read: the record then never says an action was undone. */
+    public boolean isUndoFollowed() { return undoFollowed; }
     public Set<UUID>        getSessionAnnotationIds()     { return Collections.unmodifiableSet(annotationStepIndex.keySet()); }
 
     // ── Replay recording (driven by the Compliance Player's ReplayRecorder) ─────
@@ -967,6 +1095,7 @@ public class ActionLogger implements WorkflowListener {
 
     /** @param command the replayed instruction's title, so a view shows what is running; null for setup */
     public void beginReplayStep(int sourceIndex, String command) {
+        history.seal(); // each replayed instruction is an action of its own
         scriptRunning   = true;
         replayStepIndex = sourceIndex;
         replayKind      = CaptureEvents.kindOfStep(command);
@@ -1005,6 +1134,7 @@ public class ActionLogger implements WorkflowListener {
     private void scheduleDetectionBatch() {
         lastDetectionEventTime = System.currentTimeMillis();
         if (detectionBatchPending) return;
+        detectionBatchAction = history.current();
         detectionBatchPending = true;
         Thread t = new Thread(() -> {
             try {
@@ -1033,17 +1163,18 @@ public class ActionLogger implements WorkflowListener {
 
         String type   = added.isEmpty() ? "deletion" : "split";
         String author = QTraceController.currentContributor();
+        long action   = detectionBatchAction;
 
         if (QTraceConfig.get().isPromptDetectionNote()) {
             showDetectionNoteDialog(type, removed.size(), added.size(),
-                note -> recordDetectionCorrection(type, removed, added, author, note));
+                note -> recordDetectionCorrection(type, removed, added, author, note, action));
         } else {
-            recordDetectionCorrection(type, removed, added, author, "");
+            recordDetectionCorrection(type, removed, added, author, "", action);
         }
     }
 
     private void recordDetectionCorrection(String type, List<JsonObject> removed,
-                                            List<JsonObject> added, String author, String note) {
+                                            List<JsonObject> added, String author, String note, long action) {
         JsonObject record = new JsonObject();
         record.addProperty("type",      type);
         record.addProperty("timestamp", Instant.now().toString());
@@ -1062,7 +1193,9 @@ public class ActionLogger implements WorkflowListener {
             record.add("created", addedArr);
         }
 
+        history.hold(action, record);
         manualDetectionCorrections.add(record);
+        scheduleSeal();
         notifyChanged();
         if (panel != null) panel.setRecordReady(true);
 
@@ -1071,7 +1204,7 @@ public class ActionLogger implements WorkflowListener {
             : "Detection" + (removed.size() > 1 ? "s" : "") + " deleted: " + removed.size();
         if (note != null && !note.isBlank()) msg += " — " + note;
         ActivityLog.add(msg);
-        CaptureEvents.captured(CaptureEvents.CORRECTION, msg, CaptureEvents.scalars(record));
+        CaptureEvents.captured(CaptureEvents.CORRECTION, msg, CaptureEvents.scalars(record), action);
     }
 
     // ── Annotation correction tracking ──────────────────────────────────────
@@ -1079,6 +1212,7 @@ public class ActionLogger implements WorkflowListener {
     private void scheduleAnnotationBatch() {
         lastAnnotationEventTime = System.currentTimeMillis();
         if (annotationBatchPending) return;
+        annotationBatchAction = history.current();
         annotationBatchPending = true;
         Thread t = new Thread(() -> {
             try {
@@ -1102,17 +1236,18 @@ public class ActionLogger implements WorkflowListener {
         pendingRemovedAnnotations.clear();
 
         String author = QTraceController.currentContributor();
+        long action   = annotationBatchAction;
 
         if (QTraceConfig.get().isPromptDetectionNote()) {
             String heading = removed.size() + " annotation" + (removed.size() > 1 ? "s" : "") + " manually deleted";
             showCorrectionNoteDialog("qTrace — Annotation correction", heading,
-                note -> recordAnnotationCorrection(removed, author, note));
+                note -> recordAnnotationCorrection(removed, author, note, action));
         } else {
-            recordAnnotationCorrection(removed, author, "");
+            recordAnnotationCorrection(removed, author, "", action);
         }
     }
 
-    private void recordAnnotationCorrection(List<JsonObject> removed, String author, String note) {
+    private void recordAnnotationCorrection(List<JsonObject> removed, String author, String note, long action) {
         JsonObject record = new JsonObject();
         record.addProperty("type",      "deletion");
         record.addProperty("timestamp", Instant.now().toString());
@@ -1124,14 +1259,16 @@ public class ActionLogger implements WorkflowListener {
         removed.forEach(deletedArr::add);
         record.add("deleted", deletedArr);
 
+        history.hold(action, record);
         manualAnnotationCorrections.add(record);
+        scheduleSeal();
         notifyChanged();
         if (panel != null) panel.setRecordReady(true);
 
         String msg = "Annotation" + (removed.size() > 1 ? "s" : "") + " deleted: " + removed.size();
         if (note != null && !note.isBlank()) msg += " — " + note;
         ActivityLog.add(msg);
-        CaptureEvents.captured(CaptureEvents.CORRECTION, msg, CaptureEvents.scalars(record));
+        CaptureEvents.captured(CaptureEvents.CORRECTION, msg, CaptureEvents.scalars(record), action);
     }
 
     private void showDetectionNoteDialog(String type, int nDeleted, int nAdded,
@@ -1239,6 +1376,8 @@ public class ActionLogger implements WorkflowListener {
         pauses = freshPauses();
 
         capturedSteps.clear();
+        history.forget(); // an Undo after Reset changes nothing recorded
+        annotationAddedIn.clear();
         annotationStepIndex.clear();
         manualAnnotationLatestIndex.clear();
         annotationMoveDebouncePending.clear();
@@ -1345,6 +1484,11 @@ public class ActionLogger implements WorkflowListener {
         cellIntensityRecords.clear();
         cellIntensityRecords.putAll(s.cellIntensityRecords);
         replayedFrom          = s.replayedFrom;
+        // QuPath's undo stack did not survive the crash: what was undone can never be redone.
+        List<JsonObject> held = new ArrayList<>(capturedSteps);
+        held.addAll(manualDetectionCorrections);
+        held.addAll(manualAnnotationCorrections);
+        history.restore(held);
         // The restored image's workflow is the one the draft was taken with, so the step
         // cursor lines up; clamp in case the snapshot is older than the state.
         lastKnownStepCount    = Math.min(s.lastKnownStepCount, currentImageData.getHistoryWorkflow().size());
@@ -1502,7 +1646,7 @@ public class ActionLogger implements WorkflowListener {
             ActivityLog.add("[Alignment] AffineServer detected — moving: " + movingName);
             ActivityLog.add("[Alignment] Matrix: " + Arrays.toString(matrix));
             CaptureEvents.captured(CaptureEvents.ALIGNMENT, "Alignment captured — moving: " + movingName,
-                CaptureEvents.matrix(matrix));
+                CaptureEvents.matrix(matrix), history.standalone());
             if (panel != null) panel.setRecordReady(true);
             return;
         }
@@ -1698,7 +1842,7 @@ public class ActionLogger implements WorkflowListener {
             notifyChanged();
             ActivityLog.add("[MeasurementMap] " + reason + " — measurement: " + measurement
                 + ", colormap: " + colormap + ", range: [" + min + ", " + max + "]");
-            CaptureEvents.captured(CaptureEvents.DISPLAY, "Measurement map: " + measurement + " · " + colormap, null);
+            CaptureEvents.captured(CaptureEvents.DISPLAY, "Measurement map: " + measurement + " · " + colormap, null, history.standalone());
         } catch (Exception e) {
             ActivityLog.add("[MeasurementMap] WARNING: could not capture state — " + e.getMessage());
         }
@@ -1765,7 +1909,7 @@ public class ActionLogger implements WorkflowListener {
                 classListRecords.add(c);
                 ActivityLog.add("[Classes] " + (ClassListRecord.ADD.equals(c.action) ? "Added — " : "Removed — ") + c.name);
                 CaptureEvents.captured(CaptureEvents.DISPLAY,
-                    (ClassListRecord.ADD.equals(c.action) ? "Class added: " : "Class removed: ") + c.name, null);
+                    (ClassListRecord.ADD.equals(c.action) ? "Class added: " : "Class removed: ") + c.name, null, history.standalone());
             }
         } catch (Exception e) {
             ActivityLog.add("[Classes] WARNING: could not read the class list — " + e.getMessage());
@@ -1848,7 +1992,7 @@ public class ActionLogger implements WorkflowListener {
             ActivityLog.add("[DisplaySettings] " + reason + " — " + record.channels.size()
                 + " channel(s), gamma " + record.gamma);
             CaptureEvents.captured(CaptureEvents.DISPLAY, "Display settings: " + record.channels.size()
-                + " channel(s), gamma " + record.gamma, null);
+                + " channel(s), gamma " + record.gamma, null, history.standalone());
         } catch (Exception e) {
             ActivityLog.add("[DisplaySettings] WARNING: could not capture state — " + e.getMessage());
         }
@@ -1968,7 +2112,7 @@ public class ActionLogger implements WorkflowListener {
             null, null, null);
         ActivityLog.add("[Alignment/Warpy] Matrix captured — moving: " + movingName);
         CaptureEvents.captured(CaptureEvents.ALIGNMENT, "Warpy alignment captured — moving: " + movingName,
-            CaptureEvents.matrix(matrix));
+            CaptureEvents.matrix(matrix), history.standalone());
         if (panel != null) panel.setRecordReady(true);
     }
 
@@ -2115,7 +2259,7 @@ public class ActionLogger implements WorkflowListener {
             ActivityLog.add("[Alignment/Warpy] File: " + fname);
             ActivityLog.add("  Source: " + sourceName + "  →  Target: " + targetName);
             CaptureEvents.captured(CaptureEvents.ALIGNMENT, "Warpy alignment: " + sourceName + " → " + targetName,
-                CaptureEvents.matrix(matrix));
+                CaptureEvents.matrix(matrix), history.standalone());
             if (panel != null) panel.setRecordReady(true);
         } catch (Exception e) {
             ActivityLog.add("[Warpy file parse error] " + e.getMessage());
@@ -2277,7 +2421,7 @@ public class ActionLogger implements WorkflowListener {
 
             ActivityLog.add("[Pixel classifier loaded] " + name);
             CaptureEvents.captured(CaptureEvents.CLASSIFIER, "Pixel classifier loaded: " + name,
-                CaptureEvents.classifier(name, sha256));
+                CaptureEvents.classifier(name, sha256), history.standalone());
             ActivityLog.add("  type   : " + meta.type() + " / " + meta.outputType());
             ActivityLog.add("  sha256 : " + sha256.substring(0, 16) + "...");
 
@@ -2431,7 +2575,7 @@ public class ActionLogger implements WorkflowListener {
         notifyChanged();
         ActivityLog.add("[Object classifier saved] " + name
             + (nameValid ? "" : "  ⚠ name does not match naming policy"));
-        CaptureEvents.captured(CaptureEvents.CLASSIFIER, "Object classifier saved: " + name, rec);
+        CaptureEvents.captured(CaptureEvents.CLASSIFIER, "Object classifier saved: " + name, rec, history.standalone());
 
         if (!nameValid) {
             ActivityLog.add("  Expected : YYYYMMDD-SGI-ClassType-[...]");
@@ -2496,7 +2640,7 @@ public class ActionLogger implements WorkflowListener {
             // ── Log ─────────────────────────────────────────────────────────
             ActivityLog.add("[Pixel classifier saved] " + name);
             CaptureEvents.captured(CaptureEvents.CLASSIFIER, "Pixel classifier saved: " + name,
-                CaptureEvents.classifier(name, sha256));
+                CaptureEvents.classifier(name, sha256), history.standalone());
             ActivityLog.add("  user      : " + user);
             ActivityLog.add("  image SHA : " + (imageHash != null ? imageHash.substring(0,16) + "..." : "(pending)"));
             ActivityLog.add("  type      : " + meta.type() + " / " + meta.outputType());

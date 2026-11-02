@@ -356,6 +356,10 @@ public class QTraceExporter {
         session.addProperty("steps_captured",     stepsArr.size());
         session.addProperty("manual_annotations", logger.getManualAnnotationCount());
         session.add("steps", stepsArr);
+        // Done, then undone in QuPath: kept apart, so no reader of steps[] replays it (undo-redo.md).
+        JsonArray undoneArr = undoneSteps(logger.getCapturedSteps());
+        if (undoneArr.size() > 0) session.add("undone_steps", undoneArr);
+        if (!logger.isUndoFollowed()) session.addProperty("undo_tracking", "unavailable");
         // This session came from replaying another .qtrace — keep the link to its source.
         if (logger.getReplayedFrom() != null) session.add("replayed_from", logger.getReplayedFrom().deepCopy());
         // A declared gap: when capture was paused and what the trace does not hold because of it.
@@ -448,14 +452,33 @@ public class QTraceExporter {
     }
 
     /**
-     * The captured steps that belong in a session's {@code steps[]} — deleted ones dropped, and
-     * those a replay left out ({@code replay_excluded}, see ActionLogger#markReplayStart).
+     * The captured steps that belong in a session's {@code steps[]} - those in force: deleted ones
+     * dropped, those QuPath's Undo took back ({@code undo}, see ActionHistory), and those a replay
+     * left out ({@code replay_excluded}, see ActionLogger#markReplayStart).
      */
     public static List<JsonObject> selectSessionSteps(List<JsonObject> captured) {
         List<JsonObject> out = new ArrayList<>();
         for (JsonObject step : captured) {
-            if (flag(step, "deleted") || flag(step, "replay_excluded")) continue;
+            if (!inForce(step) || flag(step, "replay_excluded")) continue;
             out.add(step);
+        }
+        return out;
+    }
+
+    /** Neither retired ({@code deleted}) nor undone in QuPath ({@code undo}): what the hierarchy holds. */
+    public static boolean inForce(JsonObject step) {
+        return !flag(step, "deleted") && !step.has("undo");
+    }
+
+    /**
+     * The session's {@code undone_steps[]}: what was done, then undone in QuPath (undone, or
+     * abandoned once a new change ended the Redo), each with its {@code undo}. Provenance only -
+     * readers of {@code steps[]} never see these, nothing replays them.
+     */
+    public static JsonArray undoneSteps(List<JsonObject> captured) {
+        JsonArray out = new JsonArray();
+        for (JsonObject step : captured) {
+            if (step.has("undo") && !flag(step, "replay_excluded")) out.add(step.deepCopy());
         }
         return out;
     }
