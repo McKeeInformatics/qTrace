@@ -68,8 +68,14 @@ public final class CaptureEvents {
     /**
      * @param text one readable line, as the Activity log words it
      * @param json what the record keeps of it, as compact JSON (a step with its whole script); null when it is kept elsewhere
+     * @param action the number of the QuPath action it is part of (docs/architecture/undo-redo.md, "Design"): every
+     *               capture of one gesture carries the same one, and {@link ActionChange} names it; 0 when it is
+     *               not an action ({@link #IMAGE}, {@link #RESET}, {@link #PAUSE}, {@link #RESUME}, {@link #DURATION}, {@link #STAMP})
      */
-    public record Event(String kind, String text, String json, Instant at) {}
+    public record Event(String kind, String text, String json, Instant at, long action) {
+        /** Not part of an action - and what a module built against an older Core makes. */
+        public Event(String kind, String text, String json, Instant at) { this(kind, text, json, at, 0); }
+    }
 
     /**
      * A long action of one kind started ({@code running}) or ended: a script run from the editor,
@@ -77,9 +83,22 @@ public final class CaptureEvents {
      */
     public record Activity(String kind, String text, boolean running) {}
 
+    /**
+     * What QuPath's Undo / Redo did to captured actions (their {@link Event#action()} numbers), seen
+     * in QuPath's own undo stack, never from a key: {@link #UNDONE} (no longer in force, can be
+     * redone), {@link #REDONE} (in force again), {@link #ABANDONED} (undone, and the Redo is gone for
+     * good: a new change was made after the Undo). Told once per change.
+     */
+    public record ActionChange(String change, List<Long> actions, Instant at) {
+        public static final String UNDONE = "undone", REDONE = "redone", ABANDONED = "abandoned";
+        public ActionChange { actions = List.copyOf(actions); }
+    }
+
     private static final Map<String, Consumer<Event>> LISTENERS = new LinkedHashMap<>();
     private static final ArrayDeque<Event> RECENT = new ArrayDeque<>();
     private static final Map<String, Consumer<Activity>> ACTIVITY = new LinkedHashMap<>();
+    private static final Map<String, Consumer<ActionChange>> ACTIONS = new LinkedHashMap<>();
+    private static final Map<Long, String> NOT_IN_FORCE = new LinkedHashMap<>(); // action → undone | abandoned
     private record Running(String text, Instant since) {}
     private static final Map<String, Running> RUNNING = new LinkedHashMap<>(); // kind → its words, since when
 
@@ -93,6 +112,16 @@ public final class CaptureEvents {
     /** @param module the registering module's Qtrace-Module name — one listener each */
     public static synchronized void registerActivity(String module, Consumer<Activity> onActivity) {
         if (module != null && onActivity != null) ACTIVITY.put(module, onActivity);
+    }
+
+    /** @param module the registering module's Qtrace-Module name - one listener each; called on the thread that saw the change (the FX thread for an Undo) */
+    public static synchronized void registerActions(String module, Consumer<ActionChange> onChange) {
+        if (module != null && onChange != null) ACTIONS.put(module, onChange);
+    }
+
+    /** The actions not in force now ({@link ActionChange#UNDONE} or {@link ActionChange#ABANDONED}), oldest first, for a window opened later. */
+    public static synchronized Map<Long, String> actionStates() {
+        return java.util.Collections.unmodifiableMap(new LinkedHashMap<>(NOT_IN_FORCE));
     }
 
     /** The kinds running right now, for a window opened in the middle of one. */
@@ -146,8 +175,13 @@ public final class CaptureEvents {
     }
 
     static void captured(String kind, String text, JsonElement json) {
+        captured(kind, text, json, 0);
+    }
+
+    /** @param action the QuPath action it is part of ({@link ActionHistory}); 0 when it is not one */
+    static void captured(String kind, String text, JsonElement json, long action) {
         if (kind == null || text == null) return;
-        Event event = new Event(kind, text, json == null ? null : json.toString(), Instant.now());
+        Event event = new Event(kind, text, json == null ? null : json.toString(), Instant.now(), action);
         List<Map.Entry<String, Consumer<Event>>> listeners;
         synchronized (CaptureEvents.class) {
             RECENT.addLast(event);
@@ -163,6 +197,29 @@ public final class CaptureEvents {
                 // A module's view must never get in the way of a capture.
             }
         }
+    }
+
+    /** QuPath undid, redid or dropped captured actions ({@link ActionHistory#follow}): the views are told. */
+    static void changed(List<ActionChange> changes) {
+        if (changes == null || changes.isEmpty()) return;
+        List<Map.Entry<String, Consumer<ActionChange>>> listeners;
+        synchronized (CaptureEvents.class) {
+            for (ActionChange c : changes)
+                for (Long a : c.actions()) {
+                    if (ActionChange.REDONE.equals(c.change())) NOT_IN_FORCE.remove(a);
+                    else NOT_IN_FORCE.put(a, c.change());
+                }
+            listeners = new ArrayList<>(ACTIONS.entrySet());
+        }
+        for (ActionChange c : changes)
+            for (Map.Entry<String, Consumer<ActionChange>> l : listeners) {
+                if (!ModuleEntitlements.isEntitled(l.getKey())) continue;
+                try {
+                    l.getValue().accept(c);
+                } catch (RuntimeException | LinkageError e) {
+                    // A module's view must never get in the way of the work.
+                }
+            }
     }
 
     // ── What a view is shown of a capture ───────────────────────────────────
@@ -192,6 +249,7 @@ public final class CaptureEvents {
     /** Reset: the capture starts over, so does what a window opened later is shown. */
     static synchronized void forgetRecent() {
         RECENT.clear();
+        NOT_IN_FORCE.clear();
     }
 
     static synchronized void clear() {
@@ -199,5 +257,7 @@ public final class CaptureEvents {
         RECENT.clear();
         ACTIVITY.clear();
         RUNNING.clear();
+        ACTIONS.clear();
+        NOT_IN_FORCE.clear();
     }
 }

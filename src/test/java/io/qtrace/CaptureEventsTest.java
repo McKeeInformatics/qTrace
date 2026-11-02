@@ -149,4 +149,53 @@ class CaptureEventsTest {
         CaptureEvents.started(CaptureEvents.COMMAND, "Cell detection");
         assertTrue(seen.isEmpty());
     }
+
+    // ── Actions: their number, and what QuPath's Undo / Redo did to them ────────
+
+    @Test
+    void aCaptureCarriesTheNumberOfItsAction() {
+        ModuleEntitlements.setForTest(Set.of("logbook"));
+        List<CaptureEvents.Event> seen = new ArrayList<>();
+        CaptureEvents.register("logbook", seen::add);
+        CaptureEvents.captured(CaptureEvents.COMMAND, "Set image type", null, 7);
+        CaptureEvents.captured(CaptureEvents.COMMAND, "Set color deconvolution stains", null, 7);
+        CaptureEvents.captured(CaptureEvents.IMAGE, "slide.svs", null);
+        assertEquals(List.of(7L, 7L, 0L), seen.stream().map(CaptureEvents.Event::action).toList());
+    }
+
+    @Test
+    void anEventMadeTheOldWayHasNoAction() {
+        // the Logbook built against an older Core makes its own lines with four arguments
+        CaptureEvents.Event e = new CaptureEvents.Event("error", "boom", null, java.time.Instant.EPOCH);
+        assertEquals(0L, e.action());
+    }
+
+    @Test
+    void aModuleIsToldWhatQuPathUndidAndRedid() {
+        ModuleEntitlements.setForTest(Set.of("logbook"));
+        List<CaptureEvents.ActionChange> seen = new ArrayList<>();
+        CaptureEvents.registerActions("logbook", seen::add);
+        var at = java.time.Instant.now();
+        CaptureEvents.changed(List.of(new CaptureEvents.ActionChange(CaptureEvents.ActionChange.UNDONE, List.of(9L), at)));
+        assertEquals(java.util.Map.of(9L, CaptureEvents.ActionChange.UNDONE), CaptureEvents.actionStates());
+        CaptureEvents.changed(List.of(new CaptureEvents.ActionChange(CaptureEvents.ActionChange.REDONE, List.of(9L), at)));
+        assertTrue(CaptureEvents.actionStates().isEmpty(), "redone: in force again");
+        CaptureEvents.changed(List.of(
+            new CaptureEvents.ActionChange(CaptureEvents.ActionChange.UNDONE, List.of(9L), at),
+            new CaptureEvents.ActionChange(CaptureEvents.ActionChange.ABANDONED, List.of(9L), at)));
+        assertEquals(java.util.Map.of(9L, CaptureEvents.ActionChange.ABANDONED), CaptureEvents.actionStates());
+        assertEquals(List.of("undone", "redone", "undone", "abandoned"),
+            seen.stream().map(CaptureEvents.ActionChange::change).toList());
+        CaptureEvents.forgetRecent(); // Reset
+        assertTrue(CaptureEvents.actionStates().isEmpty());
+    }
+
+    @Test
+    void aModuleTheLicenceDoesNotIncludeIsNotToldOfUndo() {
+        ModuleEntitlements.setForTest(Set.of("compliance"));
+        List<CaptureEvents.ActionChange> seen = new ArrayList<>();
+        CaptureEvents.registerActions("logbook", seen::add);
+        CaptureEvents.changed(List.of(new CaptureEvents.ActionChange(CaptureEvents.ActionChange.UNDONE, List.of(1L), java.time.Instant.now())));
+        assertTrue(seen.isEmpty());
+    }
 }
