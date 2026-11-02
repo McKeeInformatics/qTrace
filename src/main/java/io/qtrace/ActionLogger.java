@@ -294,7 +294,7 @@ public class ActionLogger implements WorkflowListener {
         // Annotation deleted — remove it from the meta-script
         if (type == PathObjectHierarchyEvent.HierarchyEventType.REMOVED) {
             for (PathObject obj : changed) {
-                if (obj.isAnnotation()) onAnnotationRemoved(obj);
+                if (obj.isAnnotation()) onAnnotationRemoved(obj.getID(), obj.getROI() != null ? obj.getROI().getRoiName() : "Object");
             }
             if (!knownClassifiers.isEmpty()) checkTrainingIntegrity(changed);
         }
@@ -372,6 +372,9 @@ public class ActionLogger implements WorkflowListener {
                 .collect(Collectors.toList());
             lastSelectedAnnotations.clear();
             if (!deleted.isEmpty()) {
+                // QuPath 0.7 reports a confirmed deletion without the objects: the annotation's step goes as on REMOVED.
+                for (JsonObject j : deleted)
+                    onAnnotationRemoved(UUID.fromString(j.get("uuid").getAsString()), j.has("roi_type") ? j.get("roi_type").getAsString() : "Object");
                 pendingRemovedAnnotations.addAll(deleted);
                 scheduleAnnotationBatch();
             }
@@ -481,7 +484,7 @@ public class ActionLogger implements WorkflowListener {
         if (changes.isEmpty()) return;
         for (CaptureEvents.ActionChange c : changes) ActivityLog.add("Undo / Redo - action" + (c.actions().size() > 1 ? "s " : " ") + c.actions() + " " + c.change());
         refreshManualAnnotationCount();
-        if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
+        if (panel != null) panel.updateStepCount(getStepCount(), preExistingStepCount, manualAnnotationCount);
         CaptureEvents.changed(changes);
         notifyChanged();
     }
@@ -593,7 +596,7 @@ public class ActionLogger implements WorkflowListener {
 
         refreshManualAnnotationCount();
         if (panel != null) panel.setRecordingActive(!pauses.isPaused());
-        if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
+        if (panel != null) panel.updateStepCount(getStepCount(), preExistingStepCount, manualAnnotationCount);
         if (panel != null) panel.setRecordReady(!capturedSteps.isEmpty());
         ActivityLog.add("Recording started — " + serverName(imageData));
         CaptureEvents.captured(CaptureEvents.IMAGE, serverName(imageData), null);
@@ -718,7 +721,7 @@ public class ActionLogger implements WorkflowListener {
 
         refreshManualAnnotationCount();
 
-        if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
+        if (panel != null) panel.updateStepCount(getStepCount(), preExistingStepCount, manualAnnotationCount);
         if (panel != null) panel.setRecordReady(!capturedSteps.isEmpty());
         notifyChanged();
     }
@@ -940,8 +943,7 @@ public class ActionLogger implements WorkflowListener {
 
     // ── Deletion ──────────────────────────────────────────────────────────────
 
-    private void onAnnotationRemoved(PathObject obj) {
-        UUID uuid = obj.getID();
+    private void onAnnotationRemoved(UUID uuid, String roiName) {
         annotationMoveDebouncePending.remove(uuid);
         annotationMoveLastEventTime.remove(uuid);
         if (snapshotAnnotationIds.contains(uuid)) return;
@@ -952,11 +954,10 @@ public class ActionLogger implements WorkflowListener {
         history.supersede(action,
             () -> { unretireStep(idx); annotationStepIndex.put(uuid, idx); refreshManualAnnotationCount(); },
             () -> { retireStep(idx); annotationStepIndex.remove(uuid); refreshManualAnnotationCount(); });
-        String roiName = (obj.getROI() != null) ? obj.getROI().getRoiName() : "Object";
         ActivityLog.add("Annotation deleted: " + roiName + " (removed from meta-script)");
         CaptureEvents.captured(CaptureEvents.ANNOTATION, "Annotation deleted: " + roiName, null, action);
         refreshManualAnnotationCount();
-        if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
+        if (panel != null) panel.updateStepCount(getStepCount(), preExistingStepCount, manualAnnotationCount);
     }
 
     // ── Retire helper ─────────────────────────────────────────────────────────
@@ -1037,7 +1038,9 @@ public class ActionLogger implements WorkflowListener {
     public ImageData<BufferedImage> getCurrentImageData() { return currentImageData; }
     public int              getManualAnnotationCount()    { return manualAnnotationCount; }
     public boolean          hasSteps()                    { return !capturedSteps.isEmpty(); }
-    public boolean          hasNewSteps()                 { return capturedSteps.size() > preExistingStepCount; }
+    public boolean          hasNewSteps()                 { return getStepCount() > preExistingStepCount; }
+    /** The steps the panel counts and the stamp reminder compares: those QuPath's Undo has not taken back. */
+    public int              getStepCount()                { return QTraceExporter.countStepsNotUndone(capturedSteps); }
     public QuPathGUI        getQuPath()                   { return qupath; }
     /** A script run from the editor is one action, whatever it writes: sealed when it ends. */
     public void setScriptRunning(boolean b) {
@@ -1497,7 +1500,7 @@ public class ActionLogger implements WorkflowListener {
         importCounter         = s.importCounter;
         if (imageHash == null && s.imageHash != null) imageHash = s.imageHash;
 
-        if (panel != null) panel.updateStepCount(capturedSteps.size(), preExistingStepCount, manualAnnotationCount);
+        if (panel != null) panel.updateStepCount(getStepCount(), preExistingStepCount, manualAnnotationCount);
         if (panel != null) panel.setRecordReady(!capturedSteps.isEmpty());
         ActivityLog.add("Capture restored from the live draft — " + capturedSteps.size() + " steps.");
     }

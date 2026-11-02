@@ -470,6 +470,13 @@ public class QTraceExporter {
         return !flag(step, "deleted") && !step.has("undo");
     }
 
+    /** How many steps QuPath's Undo has not taken back ({@code undo} marks the others): what the panel counts. */
+    public static int countStepsNotUndone(List<JsonObject> steps) {
+        int n = 0; // by index: called from the FX thread while a plugin thread may append
+        for (int i = 0; i < steps.size(); i++) if (!steps.get(i).has("undo")) n++;
+        return n;
+    }
+
     /**
      * The session's {@code undone_steps[]}: what was done, then undone in QuPath (undone, or
      * abandoned once a new change ended the Redo), each with its {@code undo}. Provenance only -

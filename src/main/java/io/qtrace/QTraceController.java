@@ -505,7 +505,7 @@ public class QTraceController {
     private void syncPanelState() {
         if (panel == null) return;
         boolean attached = logger.isAttached();
-        int steps        = logger.getCapturedSteps().size();
+        int steps        = logger.getStepCount();
         int preExisting  = logger.getPreExistingStepCount();
         int manual       = logger.getManualAnnotationCount();
         Platform.runLater(() -> {
@@ -1362,7 +1362,7 @@ public class QTraceController {
     private boolean maybePromptForgottenStamp(ImageData<BufferedImage> oldData, Runnable proceed) {
         boolean hasSteps = logger != null && logger.hasNewSteps();
         String  imageHash = logger != null ? logger.getImageHash() : null;
-        int     currentStepCount = logger != null ? logger.getCapturedSteps().size() : 0;
+        int     currentStepCount = logger != null ? logger.getStepCount() : 0;
         boolean alreadyStamped = imageHash != null && lastStamp != null
             && imageHash.equals(lastStamp.imageHash())
             && currentStepCount <= lastStampStepCount;
@@ -1458,7 +1458,7 @@ public class QTraceController {
                     lastStamp = stamp;
                     evidencedStamp = stamp;
                     stampEvidence = ValidationStamper.takeEvidence();
-                    lastStampStepCount = logger.getCapturedSteps().size();
+                    lastStampStepCount = logger.getStepCount();
                     ActivityLog.add("Validation stamp recorded:");
                     ActivityLog.add("  validator  : " + stamp.validator());
                     ActivityLog.add("  scope      : " + stamp.scope());
