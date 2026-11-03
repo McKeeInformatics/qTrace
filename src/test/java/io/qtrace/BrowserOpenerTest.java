@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BrowserOpenerTest {
 
@@ -27,8 +29,27 @@ class BrowserOpenerTest {
     }
 
     @Test
-    void windowsUsesExplorer() {
-        assertEquals(List.of("explorer.exe", URL), BrowserOpener.command("Windows 11", URL, false));
+    void windowsOpensAWebAddressInTheDefaultBrowser() {
+        // explorer.exe <url> opened a File Explorer window at City of Hope (2026-11-04): QuPath's
+        // sign-in page never appeared. The URL protocol handler is ShellExecute, as Desktop.browse.
+        assertEquals(List.of("rundll32.exe", "url.dll,FileProtocolHandler", URL),
+            BrowserOpener.command("Windows 11", URL, false));
+        assertEquals(List.of("rundll32.exe", "url.dll,FileProtocolHandler", "http://localhost:8765/device?code=AB&x=1"),
+            BrowserOpener.command("Windows 10", "http://localhost:8765/device?code=AB&x=1", false));
+    }
+
+    @Test
+    void windowsOpensAFileOrFolderWithExplorer() {
+        assertEquals(List.of("explorer.exe", "C:\\Users\\jane\\qTrace"), BrowserOpener.command("Windows 11", "C:\\Users\\jane\\qTrace", false));
+    }
+
+    @Test
+    void aWebAddressIsHttpOrHttpsOnly() {
+        assertTrue(BrowserOpener.isWebAddress("https://www.qtrace.ca/device"));
+        assertTrue(BrowserOpener.isWebAddress("HTTP://localhost:8765"));
+        assertFalse(BrowserOpener.isWebAddress("C:\\Users\\jane"));
+        assertFalse(BrowserOpener.isWebAddress("/home/jane/x.log"));
+        assertFalse(BrowserOpener.isWebAddress("file:///C:/x"));
     }
 
     @Test

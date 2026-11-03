@@ -34,7 +34,12 @@ import java.util.Locale;
  * {@code Terminal=true}, so a terminal app set as the default (Neovim for a .log) ran with no
  * window at all and the button seemed to do nothing. gio honours it (xdg-terminal-exec).
  *
- * Windows goes through explorer.exe, never {@code cmd /c start}: Java quotes an argument that
+ * Windows opens a web address through the URL protocol handler ({@code rundll32 url.dll,
+ * FileProtocolHandler}, ShellExecute, as {@code Desktop.browse} does): {@code explorer.exe <url>}
+ * opened a File Explorer window instead of the browser on a hospital workstation (City of Hope,
+ * 2026-11-04), so QuPath's sign-in page never appeared.
+ *
+ * A file or folder goes through explorer.exe, never {@code cmd /c start}: Java quotes an argument that
  * holds a space, and {@code start} takes its first quoted argument as the title of a new console
  * window, so a path like {@code C:\Users\Jane Doe\project} opened a command prompt instead of
  * Explorer. cmd also reads {@code &} in a URL as a command separator.
@@ -61,7 +66,14 @@ public final class BrowserOpener {
         String os = osName.toLowerCase(Locale.ROOT);
         if (os.contains("linux")) return hasGio ? List.of("gio", "open", url) : List.of("xdg-open", url);
         if (os.contains("mac"))   return List.of("open", url);
+        if (isWebAddress(url)) return List.of("rundll32.exe", "url.dll,FileProtocolHandler", url);
         return List.of("explorer.exe", url);
+    }
+
+    /** An http(s) address, opened in the browser; anything else is a file or a folder. */
+    static boolean isWebAddress(String target) {
+        String t = target.trim().toLowerCase(Locale.ROOT);
+        return t.startsWith("https://") || t.startsWith("http://");
     }
 
     private static boolean isWindows() {
