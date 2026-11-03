@@ -18,6 +18,9 @@ The ⚙ character is missing from many Linux fonts and left an empty button; the
 ### Fixed - An image no longer shows a duplicate's record
 In a project with "Slide" and "Slide (1)", the Dashboard and the Cohort map showed the record of one for the other. Each image now takes the record that bears exactly its name.
 
+### Fixed - Sign in from QuPath on Windows
+**Sign in** and **Open the page again** in Getting started opened a File Explorer window on some Windows computers instead of qtrace.ca: web links now open in the default browser. A new **Sign in** replaces the code shown before, and Getting started says where to type the code when the page opened in another browser (qtrace.ca/device).
+
 ## What's new in v1.2.13
 
 ### Fixed - Windows: Open Project Folder opens Explorer
