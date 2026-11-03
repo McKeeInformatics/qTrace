@@ -39,7 +39,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 /**
  * Getting started without WebView (loader.md § 17): welcome → network check → Sign in /
@@ -56,7 +56,7 @@ final class GettingStartedDialog {
     private final Provisioner provisioner;
     private final Stage stage = new Stage();
     private final VBox root = new VBox(14);
-    private final AtomicBoolean cancelled = new AtomicBoolean();
+    private final SignInAttempts signIns = new SignInAttempts();
     /** The name of the basic account this sign-in ended on (empty if none), null for a certificate. */
     private volatile String accountName;
 
@@ -69,7 +69,7 @@ final class GettingStartedDialog {
         root.setPadding(new Insets(24));
         root.setPrefWidth(520);
         stage.setScene(new Scene(root));
-        stage.setOnHidden(e -> cancelled.set(true));
+        stage.setOnHidden(e -> signIns.cancel());
     }
 
     void show() {
@@ -119,7 +119,7 @@ final class GettingStartedDialog {
     }
 
     private void signIn() {
-        cancelled.set(false);
+        BooleanSupplier cancelled = signIns.next();
         accountName = null;
         Label code = new Label("…");
         code.setStyle("-fx-font-size: 28px; -fx-font-family: monospace; -fx-font-weight: bold;");
@@ -129,7 +129,7 @@ final class GettingStartedDialog {
         Button reopen = new Button("Open the page again");
         reopen.setDisable(true);
         Button cancel = new Button("Cancel");
-        cancel.setOnAction(e -> { cancelled.set(true); welcome(); });
+        cancel.setOnAction(e -> { signIns.cancel(); welcome(); });
 
         setContent(
             title("Sign in to qtrace.ca"),
@@ -137,11 +137,13 @@ final class GettingStartedDialog {
                 + "“Authorize QuPath”:"),
             code,
             new HBox(10, spin, status),
-            new HBox(8, reopen, cancel));
+            new HBox(8, reopen, cancel),
+            muted("Signed in to qtrace.ca in another browser? Open qtrace.ca/device there and type this code."));
 
         provisioner.signIn(new Provisioner.SignIn() {
             public void starting() { }
             public void waiting(String userCode, String verificationUrl) {
+                if (cancelled.getAsBoolean()) return; // a sign-in started since shows its own code
                 Platform.runLater(() -> {
                     code.setText(userCode);
                     status.setText("Waiting for your approval in the browser…");
@@ -153,8 +155,8 @@ final class GettingStartedDialog {
             public void signedInToAccount(String name) { accountName = name == null ? "" : name; }
             public void installing() { Platform.runLater(GettingStartedDialog.this::installing); }
             public void installed(int modules) { Platform.runLater(() -> done(modules)); }
-            public void failed(String message) { Platform.runLater(() -> GettingStartedDialog.this.failed(message)); }
-        }, cancelled::get, true, null);
+            public void failed(String message) { if (cancelled.getAsBoolean()) return; Platform.runLater(() -> GettingStartedDialog.this.failed(message)); }
+        }, cancelled, true, null);
     }
 
     private void installing() {

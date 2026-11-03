@@ -36,6 +36,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 /**
  * "Getting started" played by the HTML player embedded in this module (loader.md § 17): the
@@ -90,7 +91,7 @@ final class TrunkPlayer {
         }
         String playerUrl = TrunkPlayer.class.getResource("player/player.html").toExternalForm();
 
-        AtomicBoolean cancelled = new AtomicBoolean();
+        SignInAttempts signIns = new SignInAttempts();
         PlayerBridge bridge = new PlayerBridge();
         PlayerWindow w = new PlayerWindow(qupath.getStage(), "Getting started with qTrace", playerUrl, content, bridge);
         PlayerSize.apply(w.stage());
@@ -101,8 +102,8 @@ final class TrunkPlayer {
                     provisioner.checkNetwork((name, ok) -> w.emit("network", Map.of("name", name, "ok", ok)));
             })
             // One path: with an invitation code or an existing account, the browser does the rest.
-            .on("sign-in", a -> signIn(w, cancelled, null))
-            .on("invite", code -> signIn(w, cancelled, code))
+            .on("sign-in", a -> signIn(w, signIns, null))
+            .on("invite", code -> signIn(w, signIns, code))
             .on("continue", a -> {
                 provisioner.gettingStartedDone();
                 w.gotoSlide("ready");
@@ -118,19 +119,20 @@ final class TrunkPlayer {
             })
             .on("open-url", BrowserOpener::open);
 
-        w.stage().setOnHidden(e -> { cancelled.set(true); TourHighlight.set(""); });
+        w.stage().setOnHidden(e -> { signIns.cancel(); TourHighlight.set(""); });
         w.show();
         if (slide != null) w.gotoSlide(slide);
     }
 
-    private void signIn(PlayerWindow w, AtomicBoolean cancelled, String invite) {
-        cancelled.set(false);
+    private void signIn(PlayerWindow w, SignInAttempts signIns, String invite) {
+        BooleanSupplier cancelled = signIns.next();
         w.gotoSlide("code");
         provisioner.signIn(new Provisioner.SignIn() {
             String code = "";
             String url = "";
             public void starting() { w.emit("device", Map.of("state", "starting")); }
             public void waiting(String userCode, String verificationUrl) {
+                if (cancelled.getAsBoolean()) return; // a sign-in started since shows its own code
                 code = userCode;
                 url = verificationUrl;
                 w.emit("device", Map.of("state", "waiting", "code", code, "url", url));
@@ -165,8 +167,9 @@ final class TrunkPlayer {
                 }
             }
             public void failed(String message) {
+                if (cancelled.getAsBoolean()) return;
                 w.emit("device", Map.of("state", "failed", "message", message, "code", code));
             }
-        }, cancelled::get, false, invite);
+        }, cancelled, false, invite);
     }
 }

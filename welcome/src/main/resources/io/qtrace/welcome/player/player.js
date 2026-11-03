@@ -113,7 +113,10 @@
       '<div class="flow"><b>QuPath</b><span>→</span><span>qtrace.ca</span><span>→</span><b>Authorize QuPath</b></div>' +
       '<div class="check ' + cls + '" style="width:100%;max-width:340px"><span class="dot">' +
       (d.state === 'approved' || d.state === 'account' ? '✓' : d.state === 'failed' ? '!' : '') + '</span><span>' + esc(line) + '</span></div>' +
-      (retry || reopen ? '<div class="actions">' + retry + reopen + '</div>' : '') + '</div>';
+      (retry || reopen ? '<div class="actions">' + retry + reopen + '</div>' : '') +
+      // QuPath opens the computer's default browser, not always the one signed in to qtrace.ca.
+      (d.state === 'waiting' ? '<p class="elsewhere">Signed in to qtrace.ca in another browser? Open <b>qtrace.ca/device</b> there and type this code.</p>' : '') +
+      '</div>';
   }
 
   function installHTML() {
@@ -582,8 +585,8 @@
       var acc = isAccount();
       var title = (acc && s.account.title) || s.title;
       var text = (acc && s.account.text) ? signedInLine() + ' ' + s.account.text : s.text;
-      el.querySelector('h2').textContent = title;
-      el.querySelector('p').textContent = text;
+      el.querySelector('.copy h2').textContent = title;
+      el.querySelector('.copy p').textContent = text;
     });
     // In QuPath every event arrives here (through the URL fragment): the install slide follows its state.
     refreshInstallCopy();
@@ -704,7 +707,7 @@
     var el = document.querySelector('.slide[data-id="install"]');
     if (!el || !content) return;
     var s = content.slides.filter(function (x) { return x.id === 'install'; })[0];
-    var h = el.querySelector('h2'), p = el.querySelector('p'), i = state.install;
+    var h = el.querySelector('.copy h2'), p = el.querySelector('.copy p'), i = state.install;
     var failed = (i.modules || []).some(function (m) { return m.failed; });
     // The restart is offered once every module has arrived; the line says so at its arrival.
     Array.prototype.forEach.call(el.querySelectorAll('[data-act="quit"]'), function (b) { b.disabled = i.state !== 'done'; });
