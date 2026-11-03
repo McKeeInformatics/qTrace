@@ -62,6 +62,7 @@ final class ActionHistory {
         String state = ACTIVE;
         boolean captured;
         boolean command;      // a command's step was captured for it (not a "Manual annotation")
+        boolean drawing;      // opened by a hand edit of an annotation, waiting for its debounced step
         String undoneAt;
         String abandonedAt;
         final List<Object> snapshots = new ArrayList<>();      // those QuPath still holds, oldest first
@@ -74,6 +75,7 @@ final class ActionHistory {
     private final IdentityHashMap<Object, Long> seenAt = new IdentityHashMap<>(); // snapshot → order first seen
     private final IdentityHashMap<Object, Boolean> unrestorable = new IdentityHashMap<>();
     private long seen = 0;
+    private long known = 0;    // snapshots seen before this order were there at the last full follow
     private Object standing;   // the snapshot whose hierarchy QuPath holds now
     private Action open;
 
@@ -94,6 +96,43 @@ final class ActionHistory {
         return open.number;
     }
 
+    /**
+     * A step captured outside a drawing's own capture: it never goes into an open drawing, unless the
+     * drawing was opened in the same pulse (a command that adds an annotation on the FX thread).
+     * @param sameGesture the drawing opened in this pulse, 0 for none
+     */
+    synchronized long captured(long sameGesture) {
+        if (open != null && open.drawing && open.number != sameGesture) open = null;
+        return captured();
+    }
+
+    /** The debounced step of a hand edit, captured for the action its first event opened. */
+    synchronized long capturedIn(long action) {
+        Action a = actions.get(action);
+        if (a == null) return captured(0); // forgotten (Reset): an action of its own
+        a.captured = true;
+        return action;
+    }
+
+    /**
+     * A hand edit of an annotation starts (an event on the FX thread): an action of its own, so two
+     * drawings within the 400 ms debounce are two actions. The open one is reused when nothing was
+     * gathered for it yet (a command removing then adding objects in one call).
+     */
+    synchronized long drawing() {
+        if (open != null && (open.drawing || open.captured || !open.snapshots.isEmpty()
+                || !open.records.isEmpty() || !open.retired.isEmpty())) open = null;
+        current();
+        open.drawing = true;
+        return open.number;
+    }
+
+    /** A command's hierarchy event (off the FX thread), or a hand deletion: never part of an open drawing. */
+    synchronized long beyondDrawing() {
+        if (open != null && open.drawing) open = null;
+        return current();
+    }
+
     /** An action of its own, outside the one under way: a capture that never touches the hierarchy. */
     synchronized long standalone() {
         Action a = add(NEXT.getAndIncrement());
@@ -106,9 +145,10 @@ final class ActionHistory {
         if (open != null && open.captured) open = null;
     }
 
-    /** Capture paused or resumed: what the open action gathered without a capture belongs to no action. */
+    /** Capture paused or resumed: the open action closes; one that gathered nothing is forgotten. */
     synchronized void dropOpen() {
-        if (open != null && !open.captured) actions.remove(open.number);
+        if (open != null && !open.captured && open.snapshots.isEmpty() && open.records.isEmpty() && open.retired.isEmpty())
+            actions.remove(open.number);
         open = null;
     }
 
@@ -168,11 +208,39 @@ final class ActionHistory {
      * @return what changed, at most one change of each kind (undone, redone, abandoned)
      */
     synchronized List<CaptureEvents.ActionChange> follow(List<?> line, int position, boolean claim) {
+        return follow(line, position, claim, true);
+    }
+
+    /**
+     * Reads QuPath's line and follows it in one go, so a line read before a newer one is never applied
+     * after it (the FX thread and a plugin's thread both follow).
+     * @param transitions false off the FX thread: only claims new snapshots; what an Undo did is
+     *                    decided on the FX thread, where the records it marks are read
+     * @return null when the line cannot be read; empty when {@code read} gives null states (not sure: skipped)
+     */
+    synchronized List<CaptureEvents.ActionChange> follow(java.util.function.Supplier<UndoLine.Line> read, boolean claim, boolean transitions) {
+        UndoLine.Line line = read.get();
+        if (line == null) return null;
+        if (line == UndoLine.Line.UNSURE) return List.of();
+        return follow(line.states(), line.position(), claim, transitions);
+    }
+
+    private List<CaptureEvents.ActionChange> follow(List<?> line, int position, boolean claim, boolean transitions) {
+        if (!transitions) {
+            for (int i = 0; i <= position && i < line.size(); i++) {
+                Object s = line.get(i);
+                if (seenAt.containsKey(s)) continue;
+                seenAt.put(s, seen++);
+                if (holdsTiles(s)) unrestorable.put(s, true);
+                if (claim) actions.get(current()).snapshots.add(s);
+            }
+            return List.of();
+        }
         IdentityHashMap<Object, Integer> index = new IdentityHashMap<>();
         for (int i = 0; i < line.size(); i++) index.put(line.get(i), i);
         long branch = -1; // the newest snapshot already known that QuPath still holds
         Object branchAt = null;
-        for (Object s : line) { Long o = seenAt.get(s); if (o != null && o > branch) { branch = o; branchAt = s; } }
+        for (Object s : line) { Long o = seenAt.get(s); if (o != null && o < known && o > branch) { branch = o; branchAt = s; } }
         // A new change made right after QuPath failed to restore a snapshot: taken from the hierarchy it kept.
         boolean afterFailedRestore = branchAt != null && unrestorable.containsKey(branchAt);
         for (int i = 0; i < line.size(); i++) {
@@ -185,7 +253,10 @@ final class ActionHistory {
         // Where QuPath's hierarchy is: where its line stands, unless it could not restore that snapshot.
         Object before = standing;
         int held = position;
-        if (position >= 0 && unrestorable.containsKey(line.get(position)) && before != null && index.containsKey(before))
+        // Only a move onto a snapshot already there (an Undo, a Redo): a new one with tiles is a running detection.
+        Object at0 = position >= 0 ? line.get(position) : null;
+        boolean moved = at0 != null && seenAt.get(at0) < known;
+        if (moved && unrestorable.containsKey(at0) && before != null && index.containsKey(before))
             held = index.get(before);
         standing = held >= 0 ? line.get(held) : null;
 
@@ -221,6 +292,7 @@ final class ActionHistory {
         }
 
         // Only what QuPath still holds.
+        known = seen;
         seenAt.keySet().removeIf(s -> !index.containsKey(s));
         unrestorable.keySet().removeIf(s -> !index.containsKey(s));
         for (Action a : actions.values()) a.snapshots.removeIf(s -> !index.containsKey(s));

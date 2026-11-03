@@ -38,6 +38,8 @@ final class UndoLine {
     /** Snapshots oldest first (undo stack, current, redo stack), and the index of the current one; empty with -1 when QuPath keeps none. */
     record Line(List<Object> states, int position) {
         static final Line NONE = new Line(List.of(), -1);
+        /** A read that cannot be trusted (no stack seen while QuPath says it can undo): skipped. */
+        static final Line UNSURE = new Line(List.of(), -1);
     }
 
     private UndoLine() {}
@@ -63,6 +65,17 @@ final class UndoLine {
             }
         } catch (ReflectiveOperationException | RuntimeException e) {
             return null;
+        }
+    }
+
+    /** QuPath's own {@code canUndo()} for the current viewer; false when it cannot be read. */
+    static boolean canUndo(Object manager) {
+        if (manager == null) return false;
+        try {
+            Object p = manager.getClass().getMethod("canUndo").invoke(manager);
+            return p instanceof javafx.beans.value.ObservableValue<?> v && Boolean.TRUE.equals(v.getValue());
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            return false;
         }
     }
 

@@ -248,10 +248,19 @@ public class ActionLogger implements WorkflowListener {
     // Undo / Redo (docs/architecture/undo-redo.md, "Design"): one number per QuPath action, and
     // which of them QuPath's own undo stack leaves in force - read from it (UndoLine), never from a key.
     private volatile ActionHistory history = new ActionHistory();
+    // Every change to the capture, never going back: what the "already stamped" reminder compares.
+    private final CaptureChanges changes = new CaptureChanges();
     private final java.util.concurrent.atomic.AtomicBoolean undoFollowPending = new java.util.concurrent.atomic.AtomicBoolean();
     private volatile boolean undoFollowed = true;
-    // The action an annotation was added in: a command's step captured in it means the command made it.
-    private final Map<UUID, Long> annotationAddedIn = new ConcurrentHashMap<>();
+    // The action an annotation's capture goes to: a hand edit (FX thread) opens one of its own, so two
+    // drawings within the 400 ms debounce are two actions; a command's (off the FX thread) is the command's.
+    private final Map<UUID, Long> annotationActionOf = new ConcurrentHashMap<>();
+    // Added (not edited): a command's step captured in its action means the command made it.
+    private final Set<UUID> annotationAdded = ConcurrentHashMap.newKeySet();
+    // The drawing opened in this FX pulse: a command adding an annotation on the FX thread writes its step in the same call.
+    private volatile long pulseDrawing;
+    // The action a hand edit's debounced step is captured for (set around its addStep, FX thread).
+    private volatile Long captureInto;
     // The action a correction batch's first removal happened in (its step, "Delete selected objects", is captured in it).
     private volatile long detectionBatchAction, annotationBatchAction;
     // The bench (tools/undo-repro) drives a copy of QuPath 0.7.0's manager instead of the running QuPath's.
@@ -260,6 +269,8 @@ public class ActionLogger implements WorkflowListener {
     private final PathObjectHierarchyListener hierarchyListener = event -> {
         // Every snapshot QuPath takes, and every Undo / Redo, comes with a hierarchy event.
         scheduleFollowUndo();
+        // Off the FX thread, a command is running (no hand tool works there): never part of a drawing.
+        leaveDrawingOffFx();
         var type      = event.getEventType();
         boolean ready = System.currentTimeMillis() - attachTime >= 800;
         if (!ready) return;
@@ -286,7 +297,7 @@ public class ActionLogger implements WorkflowListener {
         if (type == PathObjectHierarchyEvent.HierarchyEventType.ADDED && !scriptRunning && !importInProgress) {
             for (PathObject obj : changed) {
                 if (!obj.isAnnotation()) continue;
-                annotationAddedIn.putIfAbsent(obj.getID(), history.current());
+                annotationAdded.add(obj.getID());
                 scheduleAnnotationCapture(obj);
             }
         }
@@ -453,11 +464,11 @@ public class ActionLogger implements WorkflowListener {
         return qupath != null ? qupath.getUndoRedoManager() : null;
     }
 
-    /** The viewer showing the recorded image: QuPath keeps one undo stack per viewer. */
+    /** The viewer showing the recorded image (QuPath keeps one undo stack per viewer); null when none shows it. */
     private Object viewerOf(ImageData<BufferedImage> imageData) {
         if (qupath == null) return null;
         for (var v : qupath.getAllViewers()) if (v.getImageData() == imageData) return v;
-        return qupath.getViewer();
+        return null;
     }
 
     /** Once per FX pulse, after QuPath's own listener took its snapshot or restored one. */
@@ -474,14 +485,25 @@ public class ActionLogger implements WorkflowListener {
     private void followUndo(boolean claim) {
         ImageData<BufferedImage> data = currentImageData;
         if (data == null || !undoFollowed) return;
-        UndoLine.Line line = UndoLine.read(undoManager(), viewerOf(data));
-        if (line == null) {
+        Object manager = undoManager(), viewer = viewerOf(data);
+        if (qupath != null && viewer == null) return; // no viewer shows the image: no stack of its own to follow
+        // Off the FX thread (a plugin's step captured) only the new snapshots are claimed; what an
+        // Undo did is decided on the FX thread, which also reads the records it marks.
+        boolean fx = qupath == null || Platform.isFxApplicationThread();
+        if (!fx) scheduleFollowUndo();
+        List<CaptureEvents.ActionChange> changes = history.follow(() -> {
+            UndoLine.Line l = UndoLine.read(manager, viewer);
+            // No stack while QuPath says it can undo: a read caught mid-change, not undo switched off.
+            if (l != null && l.position() < 0 && UndoLine.canUndo(manager)) return UndoLine.Line.UNSURE;
+            return l;
+        }, claim && !pauses.isPaused(), fx);
+        if (changes == null) {
             undoFollowed = false;
             if (qupath != null) ActivityLog.add("WARNING: QuPath's undo stack cannot be read - an Undo will not show in the record.");
             return;
         }
-        List<CaptureEvents.ActionChange> changes = history.follow(line.states(), line.position(), claim && !pauses.isPaused());
         if (changes.isEmpty()) return;
+        this.changes.bump();
         for (CaptureEvents.ActionChange c : changes) ActivityLog.add("Undo / Redo - action" + (c.actions().size() > 1 ? "s " : " ") + c.actions() + " " + c.change());
         refreshManualAnnotationCount();
         if (panel != null) panel.updateStepCount(getStepCount(), preExistingStepCount, manualAnnotationCount);
@@ -492,7 +514,8 @@ public class ActionLogger implements WorkflowListener {
     /** The action a capture belongs to: the one under way, its snapshots up to now included. */
     private long captureAction() {
         followUndo(true);
-        long action = history.captured();
+        Long into = captureInto;
+        long action = into != null ? history.capturedIn(into) : history.captured(pulseDrawing);
         scheduleSeal();
         return action;
     }
@@ -646,7 +669,8 @@ public class ActionLogger implements WorkflowListener {
         manualAnnotationCount = 0;
         capturedSteps.clear();
         history = new ActionHistory();
-        annotationAddedIn.clear();
+        annotationActionOf.clear();
+        annotationAdded.clear();
         annotationStepIndex.clear();
         manualAnnotationLatestIndex.clear();
         annotationMoveDebouncePending.clear();
@@ -707,6 +731,7 @@ public class ActionLogger implements WorkflowListener {
             if (!CaptureEvents.ANNOTATION.equals(kind)) history.command(action);
             history.hold(action, json);
             capturedSteps.add(json);
+            changes.bump();
             ActivityLog.add("Step " + (i + 1) + " captured: " + step.getName());
             CaptureEvents.captured(kind, step.getName(), json, action); // whole: a view may make a workflow of it
             if (step instanceof ScriptableWorkflowStep s) {
@@ -843,6 +868,7 @@ public class ActionLogger implements WorkflowListener {
      */
     private void scheduleAnnotationCapture(PathObject obj) {
         UUID uuid = obj.getID();
+        annotationActionOf.computeIfAbsent(uuid, k -> annotationEventAction());
         annotationMoveLastEventTime.put(uuid, System.currentTimeMillis());
         if (!annotationMoveDebouncePending.add(uuid)) return; // already debouncing this object
 
@@ -868,22 +894,41 @@ public class ActionLogger implements WorkflowListener {
         t.start();
     }
 
+    private void leaveDrawingOffFx() {
+        if (qupath != null && !Platform.isFxApplicationThread()) history.beyondDrawing();
+    }
+
+    /** The action of an annotation's first event in a debounce: a hand edit's own on the FX thread, the command's otherwise. */
+    private long annotationEventAction() {
+        if (qupath == null || !Platform.isFxApplicationThread()) return history.current();
+        long n = history.drawing();
+        pulseDrawing = n;
+        Platform.runLater(() -> { if (pulseDrawing == n) pulseDrawing = 0; });
+        return n;
+    }
+
     private void captureSettledAnnotation(PathObject obj) {
         UUID uuid = obj.getID();
-        Long addedIn = annotationAddedIn.remove(uuid);
-        if (addedIn != null && history.hasCommand(addedIn) && !annotationStepIndex.containsKey(uuid)) {
+        Long action = annotationActionOf.remove(uuid);
+        boolean added = annotationAdded.remove(uuid);
+        if (added && action != null && history.hasCommand(action) && !annotationStepIndex.containsKey(uuid)) {
             // Added during an action a command's step was captured for (Expand annotations, Create
             // objects…): the command's own result, replayed by it - not a drawing to replay again.
             snapshotAnnotationIds.add(uuid);
             return;
         }
-        if (annotationStepIndex.containsKey(uuid)) {
-            refreshAnnotationCapture(obj);
-        } else if (snapshotAnnotationIds.contains(uuid)) {
-            snapshotAnnotationIds.remove(uuid);
-            captureManualAnnotation(obj);
-        } else {
-            captureManualAnnotation(obj);
+        captureInto = action;
+        try {
+            if (annotationStepIndex.containsKey(uuid)) {
+                refreshAnnotationCapture(obj);
+            } else if (snapshotAnnotationIds.contains(uuid)) {
+                snapshotAnnotationIds.remove(uuid);
+                captureManualAnnotation(obj);
+            } else {
+                captureManualAnnotation(obj);
+            }
+        } finally {
+            captureInto = null;
         }
     }
 
@@ -950,7 +995,7 @@ public class ActionLogger implements WorkflowListener {
         Integer idx = annotationStepIndex.remove(uuid);
         if (idx == null) return;
         retireStep(idx);
-        long action = history.current();
+        long action = history.beyondDrawing(); // a deletion is not part of a drawing still debouncing
         history.supersede(action,
             () -> { unretireStep(idx); annotationStepIndex.put(uuid, idx); refreshManualAnnotationCount(); },
             () -> { retireStep(idx); annotationStepIndex.remove(uuid); refreshManualAnnotationCount(); });
@@ -1027,7 +1072,9 @@ public class ActionLogger implements WorkflowListener {
     private void refreshManualAnnotationCount() {
         // Only count annotations drawn *after* qTrace attached — those in annotationStepIndex.
         // Pre-existing annotations (snapshotAnnotationIds) are never tracked here.
-        manualAnnotationCount = annotationStepIndex.size();
+        // Those whose step is in force: one QuPath's Undo took back is not in the record.
+        manualAnnotationCount = (int) annotationStepIndex.values().stream()
+            .filter(i -> i >= 0 && i < capturedSteps.size() && QTraceExporter.inForce(capturedSteps.get(i))).count();
     }
 
     // ── Getters (consumed by Phase 3) ────────────────────────────────────────
@@ -1041,6 +1088,8 @@ public class ActionLogger implements WorkflowListener {
     public boolean          hasNewSteps()                 { return getStepCount() > preExistingStepCount; }
     /** The steps the panel counts and the stamp reminder compares: those QuPath's Undo has not taken back. */
     public int              getStepCount()                { return QTraceExporter.countStepsNotUndone(capturedSteps); }
+    /** How many changes the capture went through, never going back: equal at two moments means nothing changed between. */
+    public long             getChangeCount()              { return changes.now(); }
     public QuPathGUI        getQuPath()                   { return qupath; }
     /** A script run from the editor is one action, whatever it writes: sealed when it ends. */
     public void setScriptRunning(boolean b) {
@@ -1137,7 +1186,7 @@ public class ActionLogger implements WorkflowListener {
     private void scheduleDetectionBatch() {
         lastDetectionEventTime = System.currentTimeMillis();
         if (detectionBatchPending) return;
-        detectionBatchAction = history.current();
+        detectionBatchAction = history.beyondDrawing();
         detectionBatchPending = true;
         Thread t = new Thread(() -> {
             try {
@@ -1197,6 +1246,7 @@ public class ActionLogger implements WorkflowListener {
         }
 
         history.hold(action, record);
+        changes.bump();
         manualDetectionCorrections.add(record);
         scheduleSeal();
         notifyChanged();
@@ -1215,7 +1265,7 @@ public class ActionLogger implements WorkflowListener {
     private void scheduleAnnotationBatch() {
         lastAnnotationEventTime = System.currentTimeMillis();
         if (annotationBatchPending) return;
-        annotationBatchAction = history.current();
+        annotationBatchAction = history.beyondDrawing();
         annotationBatchPending = true;
         Thread t = new Thread(() -> {
             try {
@@ -1263,6 +1313,7 @@ public class ActionLogger implements WorkflowListener {
         record.add("deleted", deletedArr);
 
         history.hold(action, record);
+        changes.bump();
         manualAnnotationCorrections.add(record);
         scheduleSeal();
         notifyChanged();
@@ -1380,7 +1431,8 @@ public class ActionLogger implements WorkflowListener {
 
         capturedSteps.clear();
         history.forget(); // an Undo after Reset changes nothing recorded
-        annotationAddedIn.clear();
+        annotationActionOf.clear();
+        annotationAdded.clear();
         annotationStepIndex.clear();
         manualAnnotationLatestIndex.clear();
         annotationMoveDebouncePending.clear();

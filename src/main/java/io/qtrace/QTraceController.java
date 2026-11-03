@@ -197,7 +197,7 @@ public class QTraceController {
     // Captured-step count at the moment of lastStamp — imageHash alone (pixel content)
     // doesn't change when new steps/annotations are added to the same image, so it can't
     // tell "stamped" from "stamped, then more work happened" on its own.
-    private int              lastStampStepCount = -1;
+    private long             lastStampChanges = -1; // the capture's change count at the last stamp (CaptureChanges)
 
     // "Don't ask again this session" for the forgotten-stamp reminder — in-memory only,
     // resets on QuPath restart by design.
@@ -1362,10 +1362,9 @@ public class QTraceController {
     private boolean maybePromptForgottenStamp(ImageData<BufferedImage> oldData, Runnable proceed) {
         boolean hasSteps = logger != null && logger.hasNewSteps();
         String  imageHash = logger != null ? logger.getImageHash() : null;
-        int     currentStepCount = logger != null ? logger.getStepCount() : 0;
         boolean alreadyStamped = imageHash != null && lastStamp != null
             && imageHash.equals(lastStamp.imageHash())
-            && currentStepCount <= lastStampStepCount;
+            && lastStampChanges >= 0 && logger.getChangeCount() == lastStampChanges;
 
         if (skipStampReminder || !QTraceConfig.get().isPromptUnstampedReminder()
             || oldData == null || logger == null || !hasSteps) return false;
@@ -1458,7 +1457,7 @@ public class QTraceController {
                     lastStamp = stamp;
                     evidencedStamp = stamp;
                     stampEvidence = ValidationStamper.takeEvidence();
-                    lastStampStepCount = logger.getStepCount();
+                    lastStampChanges = logger.getChangeCount();
                     ActivityLog.add("Validation stamp recorded:");
                     ActivityLog.add("  validator  : " + stamp.validator());
                     ActivityLog.add("  scope      : " + stamp.scope());
@@ -2120,7 +2119,7 @@ public class QTraceController {
         logger.resetCapture();
         drafts.discard();
         lastStamp = null;
-        lastStampStepCount = -1;
+        lastStampChanges = -1;
         if (panel != null) {
             panel.setValidated(false, "");
             panel.setRecordingActive(!logger.isCapturePaused());

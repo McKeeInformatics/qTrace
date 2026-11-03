@@ -330,16 +330,73 @@ class ActionHistoryTest {
 
     @Test
     void aHandDrawingIsOneActionWithTheStepCapturedAfterItsDebounce() {
-        long added = history.current();            // ADDED, noted by the hierarchy listener
+        long drawn = history.drawing();             // ADDED on the FX thread, noted by the hierarchy listener
         qupath.snap("a");
         follow();
         history.seal();                             // pulses go by during the 400 ms debounce
-        assertFalse(history.hasCommand(added), "no command captured it: a hand drawing");
-        assertEquals(added, history.captured());    // the "Manual annotation" step
+        assertFalse(history.hasCommand(drawn), "no command captured it: a hand drawing");
+        assertEquals(drawn, history.capturedIn(drawn)); // the "Manual annotation" step
         history.seal();
         qupath.undo();
         follow();
-        assertEquals(ActionHistory.UNDONE, history.state(added));
+        assertEquals(ActionHistory.UNDONE, history.state(drawn));
+    }
+
+    @Test
+    void twoDrawingsWithinTheDebounceAreTwoActions() {
+        long first = history.drawing();
+        qupath.snap("a");
+        follow();
+        long second = history.drawing();            // less than 400 ms later: the first is not captured yet
+        qupath.snap("a+b");
+        follow();
+        assertNotEquals(first, second);
+        history.capturedIn(first);
+        history.capturedIn(second);
+        history.seal();
+        qupath.undo();
+        follow();
+        assertEquals(ActionHistory.UNDONE, history.state(second));
+        assertEquals(ActionHistory.ACTIVE, history.state(first), "Ctrl+Z undoes the last drawing, not the one before");
+    }
+
+    @Test
+    void aCommandRunWithinADrawingsDebounceIsAnActionOfItsOwn() {
+        long drawn = history.drawing();
+        qupath.snap("a");
+        follow();
+        history.beyondDrawing();                    // the plugin's hierarchy events, off the FX thread
+        qupath.snap("a+cells");
+        follow();
+        long command = history.captured(0);         // its step
+        history.command(command);
+        history.seal();
+        assertNotEquals(drawn, command);
+        assertFalse(history.hasCommand(drawn), "the drawing keeps its own step");
+        history.capturedIn(drawn);
+        qupath.undo();
+        follow();
+        assertEquals(ActionHistory.UNDONE, history.state(command));
+        assertEquals(ActionHistory.ACTIVE, history.state(drawn));
+    }
+
+    @Test
+    void aStepWithoutHierarchyEventWithinADrawingsDebounceIsNotTheDrawings() {
+        long drawn = history.drawing();
+        qupath.snap("a");
+        follow();
+        long imageType = history.captured(0);       // setImageType, another pulse
+        assertNotEquals(drawn, imageType);
+        assertFalse(history.hasCommand(drawn));
+    }
+
+    @Test
+    void aCommandThatAddsAnAnnotationOnTheFxThreadOwnsIt() {
+        long added = history.drawing();             // ADDED on the FX thread, same call as the command's step
+        long command = history.captured(added);     // same pulse: the same gesture
+        history.command(command);
+        assertEquals(added, command);
+        assertTrue(history.hasCommand(added));
     }
 
     @Test
@@ -359,6 +416,77 @@ class ActionHistoryTest {
         long added = history.current();             // one ADDED event, two annotations
         history.captured();                         // the first one's "Manual annotation" step
         assertFalse(history.hasCommand(added), "the other one was not made by a command either");
+    }
+
+    @Test
+    void aDeletionJustBeforeAPauseCanStillBeUndone() {
+        long drawn = command("a");
+        long deletion = history.beyondDrawing();    // the annotation's step retired, no step of its own yet
+        List<String> effects = new ArrayList<>();
+        history.supersede(deletion, () -> effects.add("step back"), () -> effects.add("retired again"));
+        qupath.snap("empty");
+        follow();
+        history.dropOpen();                         // capture paused
+        qupath.undo();
+        follow();
+        assertEquals(List.of("step back"), effects);
+        assertEquals(ActionHistory.ACTIVE, history.state(drawn));
+    }
+
+    @Test
+    void aNewSnapshotHoldingTilesIsNoFailedRestore() {
+        long hand = command("hand");
+        // a pulse while the detection runs: its tiles are in the hierarchy, the snapshot is new
+        history.beyondDrawing();
+        qupath.snap(TILES);
+        assertTrue(follow().isEmpty(), "no Undo happened");
+        qupath.snap("hand+cells");
+        assertTrue(follow().isEmpty());
+        long detection = history.captured(0);
+        history.seal();
+        assertEquals(ActionHistory.ACTIVE, history.state(detection));
+        assertEquals(ActionHistory.ACTIVE, history.state(hand));
+    }
+
+    @Test
+    void aLineReadBeforeANewerOneNeverUndoesWhatIsInForce() throws Exception {
+        command("a");
+        // Two threads follow at once: the first reads its line, the second snaps and follows before it applies.
+        java.util.concurrent.CountDownLatch read = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch newer = new java.util.concurrent.CountDownLatch(1);
+        Thread slow = new Thread(() -> history.follow(() -> {
+            UndoLine.Line l = new UndoLine.Line(qupath.line(), qupath.position());
+            read.countDown();
+            try { newer.await(300, java.util.concurrent.TimeUnit.MILLISECONDS); } catch (InterruptedException e) { }
+            return l;
+        }, true, true));
+        slow.start();
+        read.await();
+        Thread fast = new Thread(() -> {
+            synchronized (qupath) { qupath.snap("a+b"); }
+            history.follow(() -> new UndoLine.Line(qupath.line(), qupath.position()), true, true);
+            newer.countDown();
+        });
+        fast.start();
+        slow.join();
+        fast.join();
+        long b = history.captured(0);
+        follow();
+        assertEquals(ActionHistory.ACTIVE, history.state(b), "the older line came first or not at all");
+        assertTrue(history.notInForce().isEmpty());
+    }
+
+    @Test
+    void aFollowWithoutTransitionsOnlyClaimsSnapshots() {
+        long a = command("a");
+        qupath.undo();
+        qupath.snap("a2");                          // Undo then a new change, seen first by a plugin thread
+        assertTrue(history.follow(() -> new UndoLine.Line(qupath.line(), qupath.position()), true, false).isEmpty());
+        long b = history.captured(0);
+        history.seal();
+        follow();                                   // the FX pulse: a was undone and its Redo dropped
+        assertEquals(ActionHistory.ABANDONED, history.state(a));
+        assertEquals(ActionHistory.ACTIVE, history.state(b));
     }
 
     @Test

@@ -351,7 +351,7 @@ public class QTraceExporter {
         List<JsonObject> sessionSteps = selectSessionSteps(logger.getCapturedSteps());
         // A stamp answers for the image's whole history, not only for this session.
         if (stamp != null) sessionSteps = withEarlierWork(existingRoot, sessionSteps, logger.getCapturedSteps());
-        for (JsonObject captured : sessionSteps) stepsArr.add(captured);
+        for (JsonObject captured : sessionSteps) stepsArr.add(captured.deepCopy()); // the capture's own objects change on an Undo
         session.addProperty("steps_raw",         rawSteps.size());
         session.addProperty("steps_captured",     stepsArr.size());
         session.addProperty("manual_annotations", logger.getManualAnnotationCount());
@@ -509,11 +509,12 @@ public class QTraceExporter {
      *
      * Only what each session did itself is carried (not what it inherited from QuPath's
      * history), and nothing the capture already holds ({@code captured}: all of it, deleted
-     * steps included).
+     * steps included, those QuPath's Undo took back excluded).
      */
     public static List<JsonObject> withEarlierWork(JsonObject root, List<JsonObject> live, List<JsonObject> captured) {
         java.util.Set<String> held = new java.util.HashSet<>();
-        for (JsonObject step : captured) held.add(stepKey(step));
+        // Not what QuPath's Undo took back: that is not the image's, the earlier session's work still is.
+        for (JsonObject step : captured) if (!step.has("undo")) held.add(stepKey(step));
 
         LinkedHashMap<String, JsonObject> carried = new LinkedHashMap<>();
         List<JsonObject> sessions = ReplaySkip.sessions(root);
