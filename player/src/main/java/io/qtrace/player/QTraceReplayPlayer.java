@@ -127,10 +127,10 @@ class QTraceReplayPlayer {
     private final javafx.beans.property.DoubleProperty stepColWidth   = new javafx.beans.property.SimpleDoubleProperty(55);
     private final javafx.beans.property.DoubleProperty statusColWidth = new javafx.beans.property.SimpleDoubleProperty(150);
     private final javafx.beans.property.DoubleProperty timerColWidth  = new javafx.beans.property.SimpleDoubleProperty(60);
-    private Button playBtn, nextBtn, stampBtn, openLogsBtn;
+    private Button playBtn, stampBtn, openLogsBtn;
     private TextArea logArea;
     // The Activity log starts folded (header and status line only): the instructions get the
-    // room when the Player opens; ▶ or ▶│ unfolds it, its header folds it again.
+    // room when the Player opens; ▶ (or the mini-player's ▶│) unfolds it, its header folds it again.
     private boolean consoleExpanded = false;
     private Label consoleChevron;
     private VBox bottomPane;
@@ -322,12 +322,13 @@ class QTraceReplayPlayer {
         StackPane playlistSection = buildPlaylistSection();
 
         // ── Transport — sits below Instructions, above Console ─────────────
+        // ▶ alone, on the left edge like the section titles: no ▶│ step-by-step here for now, it
+        // does not work from this window (the mini-player keeps its own).
         playBtn  = transportButton("▶", e -> togglePlay());
-        nextBtn  = transportButton("▶│", e -> stepForward());
 
-        HBox transportGroup = new HBox(6, playBtn, nextBtn);
+        HBox transportGroup = new HBox(6, playBtn);
         transportGroup.setId("transport-group"); // looked up by the screenshot harness — see PlayerScreenshotHarness
-        transportGroup.setAlignment(Pos.CENTER);
+        transportGroup.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(transportGroup, Priority.ALWAYS);
 
         stampBtn = new Button("🏅 Stamp");
@@ -351,7 +352,7 @@ class QTraceReplayPlayer {
         exportCodeBtn.setOnAction(e -> exportCode());
 
         HBox transportRow = new HBox(8, transportGroup, exportCodeBtn, stampHolder);
-        transportRow.setAlignment(Pos.CENTER);
+        transportRow.setAlignment(Pos.CENTER_LEFT);
         transportRow.setPadding(new Insets(8, 0, 0, 0));
         setTransportEnabled(false);
 
@@ -2721,7 +2722,6 @@ class QTraceReplayPlayer {
 
     private void setTransportEnabled(boolean enabled) {
         playBtn.setDisable(!enabled);
-        nextBtn.setDisable(!enabled);
     }
 
     private Button transportButton(String text, javafx.event.EventHandler<javafx.event.ActionEvent> action) {
