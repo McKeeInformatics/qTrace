@@ -241,6 +241,10 @@ public class ActionLogger implements WorkflowListener {
     // can identify which detections were just removed even though changed() is empty.
     private final List<JsonObject>        lastSelectedDetections = new ArrayList<>();
     private PathObjectSelectionListener   selectionListener      = null;
+    // Whether the current selection was set by a recorded command (selectAnnotations(),
+    // resetSelection()…): false once the user selects by hand. A command that runs on the
+    // selection is then given the objects it ran on (SelectionScope) — QuPath records none.
+    private volatile boolean              selectionSetByScript   = false;
 
     // The session's capture pauses — declared before the listener that reads them.
     private CapturePauses pauses = new CapturePauses();
@@ -563,6 +567,8 @@ public class ActionLogger implements WorkflowListener {
         lastKnownStepCount  = imageData.getHistoryWorkflow().size();
         imageHash           = null;
         attachTime          = System.currentTimeMillis();
+        // A selection that predates the recording was not set by a recorded command.
+        selectionSetByScript = false;
 
         // Snapshot existing annotations — ADDED events for these UUIDs are always ignored.
         snapshotAnnotationIds.clear();
@@ -586,6 +592,7 @@ public class ActionLogger implements WorkflowListener {
         imageData.getHistoryWorkflow().addWorkflowListener(this);
         imageData.getHierarchy().addListener(hierarchyListener);
         selectionListener = (selected, deselected, allSelected) -> {
+            selectionSetByScript = false;
             lastSelectedDetections.clear();
             lastSelectedAnnotations.clear();
             if (allSelected != null)
@@ -697,6 +704,10 @@ public class ActionLogger implements WorkflowListener {
         // A replay instruction is running: its workflow entries are reconciled first (exactly
         // one per OK instruction, none otherwise) and captured by endReplayStep().
         if (replayStepIndex != null) return;
+        // QuPath replaces, rather than adds, a selection command repeated at once: no new step,
+        // but the selection is still the one it records.
+        if (workflow.getLastStep() instanceof ScriptableWorkflowStep last
+                && SelectionScope.setsSelection(last.getScript())) selectionSetByScript = true;
         // A command run by hand: its start is not known to qTrace, so neither is its compute time.
         captureNewSteps(workflow.getSteps(), null, null);
     }
@@ -723,6 +734,7 @@ public class ActionLogger implements WorkflowListener {
             WorkflowStep step = steps.get(i);
             JsonObject json   = serializeStep(step, i);
             if (replayedStep != null) json.addProperty("replayed_step", replayedStep);
+            scopeToSelection(json);
             // The compute time goes to the last step of the batch: the one that took it.
             Long duration = i == newSize - 1 ? durationMs(since, Instant.now()) : null;
             if (duration != null) json.addProperty("duration_ms", duration);
@@ -749,6 +761,52 @@ public class ActionLogger implements WorkflowListener {
         if (panel != null) panel.updateStepCount(getStepCount(), preExistingStepCount, manualAnnotationCount);
         if (panel != null) panel.setRecordReady(!capturedSteps.isEmpty());
         notifyChanged();
+    }
+
+    /**
+     * A command QuPath ran on a selection made by hand (the pixel classifier's "Current
+     * selection"…) records nothing of it: its fragment first selects the same objects again, and
+     * the step names them ({@code selection}). See {@link SelectionScope}.
+     */
+    private void scopeToSelection(JsonObject json) {
+        if (!json.has("script_fragment") || json.get("script_fragment").isJsonNull()) return;
+        String script = json.get("script_fragment").getAsString();
+        if (SelectionScope.setsSelection(script)) { selectionSetByScript = true; return; }
+        if (selectionSetByScript || SelectionScope.isScoped(script) || !SelectionScope.dependsOnSelection(script)) return;
+        List<SelectionScope.Target> targets = selectionTargets(script);
+        if (targets.isEmpty()) return;
+        json.addProperty("script_fragment", SelectionScope.scoped(script, targets));
+        json.add("selection", SelectionScope.toJson(targets));
+    }
+
+    /** Above this much geometry (WKT characters), a selection is found again by its IDs only. */
+    private static final int SELECTION_WKT_MAX = 200_000;
+
+    /** The objects selected when {@code script} ran — the parents of what it selected, for SELECT_NEW. */
+    private List<SelectionScope.Target> selectionTargets(String script) {
+        if (currentImageData == null) return List.of();
+        Collection<PathObject> selected = currentImageData.getHierarchy().getSelectionModel().getSelectedObjects();
+        java.util.stream.Stream<PathObject> objs = selected.stream();
+        if (script.contains("\"SELECT_NEW\"")) objs = objs.map(PathObject::getParent).filter(java.util.Objects::nonNull);
+        List<PathObject> list = objs.filter(o -> !o.isRootObject()).distinct().toList();
+        List<String> wkts = new ArrayList<>();
+        long total = 0;
+        for (PathObject o : list) {
+            String w = o.hasROI() ? o.getROI().getGeometry().toText() : null;
+            wkts.add(w);
+            total += w == null ? 0 : w.length();
+        }
+        boolean byGeometry = total <= SELECTION_WKT_MAX;
+        List<SelectionScope.Target> out = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            PathObject o = list.get(i);
+            out.add(new SelectionScope.Target(o.getID().toString(),
+                o.hasROI() ? o.getROI().getRoiName() : null,
+                o.getName(),
+                o.getPathClass() == null ? null : o.getPathClass().toString(),
+                byGeometry ? wkts.get(i) : null));
+        }
+        return out;
     }
 
     // ── Serialization ────────────────────────────────────────────────────────
