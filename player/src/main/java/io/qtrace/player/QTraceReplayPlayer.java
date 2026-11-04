@@ -129,6 +129,12 @@ class QTraceReplayPlayer {
     private final javafx.beans.property.DoubleProperty timerColWidth  = new javafx.beans.property.SimpleDoubleProperty(60);
     private Button playBtn, nextBtn, stampBtn, openLogsBtn;
     private TextArea logArea;
+    // The Activity log starts folded (header and status line only): the instructions get the
+    // room when the Player opens; ▶ or ▶│ unfolds it, its header folds it again.
+    private boolean consoleExpanded = false;
+    private Label consoleChevron;
+    private VBox bottomPane;
+    private static final double CONSOLE_EXPANDED_MIN_HEIGHT = 180;
     private SplitPane splitPane;
 
     // ── Milestone info — macro-level progress, distinct from Console's per-step detail ──────
@@ -352,7 +358,15 @@ class QTraceReplayPlayer {
         // ── Console — draggable split so it can be enlarged, same idea as the
         // dashboard panel's own resize grip, just scoped to this one region instead of the
         // whole window. ──────────────────────────────────────────────────────────────────
-        Label logHeader = headerLabel("Activity log", -1);
+        consoleChevron = new Label("▾");
+        Theme.text(consoleChevron, MUTED);
+        consoleChevron.setFont(Font.font("System", 10));
+        HBox logHeader = new HBox(6, consoleChevron, headerLabel("Activity log", -1));
+        logHeader.setId("console-header"); // looked up by the screenshot harness: PlayerScreenshotHarness
+        logHeader.setAlignment(Pos.CENTER_LEFT);
+        logHeader.setCursor(javafx.scene.Cursor.HAND);
+        Tooltip.install(logHeader, new Tooltip("Show or hide the activity log: it opens by itself when a replay starts"));
+        logHeader.setOnMouseClicked(e -> setConsoleExpanded(!consoleExpanded));
 
         logArea = new TextArea();
         logArea.setId("activity-log"); // looked up by the screenshot harness — see PlayerScreenshotHarness
@@ -403,8 +417,9 @@ class QTraceReplayPlayer {
         // Below Instructions: transport bar, then the resizable console — the console grows
         // to fill whatever vertical space the window has, instead of leaving a blank strip
         // under it when the window is taller than the content.
-        VBox bottomPane = new VBox(transportRow, logSection);
+        bottomPane = new VBox(transportRow, logSection);
         VBox.setVgrow(bottomPane, Priority.ALWAYS);
+        applyConsoleExpanded();
 
         // Target's header is a splitPane item too (always present, height-capped to its own
         // content — see buildTargetImagesPanel), not a fixed VBox sibling before splitPane.
@@ -1255,6 +1270,25 @@ class QTraceReplayPlayer {
     // (as little as 1-2 rows) instead of opening up to a usable size.
     private static final double TARGET_EXPANDED_MIN_HEIGHT = 172;
 
+    private void setConsoleExpanded(boolean expanded) {
+        if (consoleExpanded == expanded) return;
+        consoleExpanded = expanded;
+        applyConsoleExpanded();
+    }
+
+    /**
+     * Folded: the log area goes, and the pane under Instructions is locked to its content (the
+     * transport, the header, the status line), so Instructions takes the rest. Unfolded: the
+     * log area is back and the divider can move, with room for a few lines right away.
+     */
+    private void applyConsoleExpanded() {
+        consoleChevron.setText(consoleExpanded ? "▴" : "▾");
+        logArea.setVisible(consoleExpanded);
+        logArea.setManaged(consoleExpanded);
+        bottomPane.setMaxHeight(consoleExpanded ? Double.MAX_VALUE : Region.USE_PREF_SIZE);
+        bottomPane.setMinHeight(consoleExpanded ? CONSOLE_EXPANDED_MIN_HEIGHT : Region.USE_PREF_SIZE);
+    }
+
     private void applyTargetExpanded() {
         targetChevron.setText(targetExpanded ? "▴" : "▾");
         if (targetExpanded) {
@@ -2034,6 +2068,7 @@ class QTraceReplayPlayer {
             new Alert(Alert.AlertType.INFORMATION, "Select a Target to execute the instructions.").showAndWait();
             return;
         }
+        setConsoleExpanded(true);
         TargetRow target = checked.stream().filter(this::isTargetActive).findFirst().orElse(checked.get(0));
         if (cursor == 0 && activeBatch == null) resetRunCounters();
         setTransportEnabled(false);
@@ -2097,6 +2132,7 @@ class QTraceReplayPlayer {
     }
 
     private void startPlayingUi() {
+        setConsoleExpanded(true);
         playing = true;
         playBtn.setText("⏸");
         setTransportEnabled(false);
