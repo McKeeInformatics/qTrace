@@ -992,8 +992,8 @@ class QTraceReplayPlayer {
             : "Replay the whole history of this image: every session, each instruction once"));
         all.setOnAction(e -> selectAllPackets());
         all.disableProperty().bind(runningProperty);
-        // Level with the circles, under the author's name and badge.
-        HBox.setMargin(all, new Insets(48, 10, 0, 0));
+        // Level with the circles, under the author's badge.
+        HBox.setMargin(all, new Insets(37, 10, 0, 0));
         packetStrip.getChildren().add(all);
 
         for (int i = 0; i < packetTitles.size(); i++) {
@@ -1022,15 +1022,13 @@ class QTraceReplayPlayer {
 
     /**
      * One node of the strip, laid out like the record page's Version graph (web CommitGraph):
-     * the author and their initials above, the numbered circle on the line, then the title,
+     * the author's initials above, the numbered circle on the line, then the title,
      * who validated it and the day. A workflow's packet has no author nor stamp: it says how
      * many instructions it holds. The ring around the circle is where the run is.
      */
     private VBox sessionNode(int packet, RecordSessions.Node session, String title, long count, PacketState state) {
         boolean first = packet == 0, last = packet == packetTitles.size() - 1;
 
-        Label author = new Label(session != null ? ellipsis(session.contributor(), 18) : " ");
-        author.setStyle("-fx-text-fill: " + TEXT_SUB + "; -fx-font-size: 10;");
         Label initials = new Label(session != null ? session.initials() : "");
         initials.setStyle("-fx-text-fill: " + BG + "; -fx-font-weight: bold; -fx-font-size: 9;");
         javafx.scene.layout.StackPane badge = new javafx.scene.layout.StackPane(initials);
@@ -1085,7 +1083,7 @@ class QTraceReplayPlayer {
         Label date = new Label(session != null ? session.date() : "");
         date.setStyle("-fx-text-fill: " + MUTED + "; -fx-font-size: 9;");
 
-        VBox node = new VBox(2, author, badge, lane, name, who, date);
+        VBox node = new VBox(2, badge, lane, name, who, date);
         node.setAlignment(Pos.TOP_CENTER);
         node.setMinWidth(150);
         node.setPrefWidth(150);
@@ -1628,9 +1626,9 @@ class QTraceReplayPlayer {
         packetScroll = new ScrollPane(packetStrip);
         packetScroll.setFitToHeight(true);
         packetScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        // Six rows per node (author, badge, circle, title, validator, day) and the scroll bar.
-        packetScroll.setMinHeight(172);
-        packetScroll.setPrefHeight(172);
+        // Five rows per node (badge, circle, title, validator, day) and the scroll bar.
+        packetScroll.setMinHeight(156);
+        packetScroll.setPrefHeight(156);
         packetScroll.setStyle("-fx-background: " + BG + "; -fx-background-color: " + BG + ";"
             + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4;");
         packetScroll.setVisible(false);
