@@ -1,3 +1,14 @@
+## What's new in v1.2.15
+
+### Fixed - A command run on your selection replays on the same objects
+Run the pixel classifier on **Current selection** (the rectangle you just drew), a cell detection inside the annotation you clicked, InstanSeg on a selected region: QuPath does not record that selection, so the replay used to run the command on the whole image. qTrace now keeps the selected objects with the instruction, and the replay selects them again first (by their ID, or by their shape). If one of them is missing on the target image, the instruction stops with a clear message instead of running on other objects.
+
+### Fixed - The record follows QuPath's Undo / Redo
+What you undo with `Ctrl+Z` (or **Edit › Undo**) leaves the replay script and the record's steps, and comes back on Redo; the step counter and the "already stamped" reminder ignore undone steps. The first Undo after a cell detection no longer marks the detection as failed, and an annotation deleted with confirmation leaves the script.
+
+### New - The Logbook shows replays and selections
+A replay from the Player opens with a line naming what it replays, and every instruction it runs is marked **↻ replayed**. A command run on a selection says so: "Pixel classifier create annotations · on the selected Rectangle". Undone actions show **↶ Canceled**, and come back on Redo.
+
 ## What's new in v1.2.14
 
 ### New - Choose the mini-panel's buttons
