@@ -118,6 +118,7 @@ class QTraceReplayPlayer {
     // replayed, or the whole history ("All") — see RecordSessions.
     private boolean sessionStrip;
     private List<Integer> sessionInstructionCounts = List.of();
+    private List<RecordSessions.Node> sessionNodes = List.of();
 
     // ── Instructions columns — resizable by dragging the header separators; both the header
     // and every row's labels are bound to the same width property so they never drift apart ──
@@ -737,6 +738,7 @@ class QTraceReplayPlayer {
                 List<String> packets = workflow ? WorkflowSource.packetTitles(qtraceJson)
                     : RecordSessions.titles(qtraceJson, certIdx);
                 List<Integer> sessionCounts = workflow ? List.of() : RecordSessions.instructionCounts(qtraceJson);
+                List<RecordSessions.Node> nodes = workflow ? List.of() : RecordSessions.nodes(qtraceJson, certIdx);
                 // A workflow opens with all its packets chosen — or the one a training step names.
                 // A certificate opens on the session it covers; a local .qtrace on its whole history.
                 List<Integer> chosen = new ArrayList<>();
@@ -769,6 +771,7 @@ class QTraceReplayPlayer {
                     this.workflowLoaded = workflow;
                     this.sessionStrip = !workflow && !packets.isEmpty();
                     this.sessionInstructionCounts = sessionCounts;
+                    this.sessionNodes = nodes;
                     packetTitles = packets;
                     selectedPackets.clear();
                     selectedPackets.addAll(chosen);
@@ -989,52 +992,130 @@ class QTraceReplayPlayer {
             : "Replay the whole history of this image: every session, each instruction once"));
         all.setOnAction(e -> selectAllPackets());
         all.disableProperty().bind(runningProperty);
+        // Level with the circles, under the author's name and badge.
+        HBox.setMargin(all, new Insets(48, 10, 0, 0));
         packetStrip.getChildren().add(all);
 
         for (int i = 0; i < packetTitles.size(); i++) {
             int packet = i;
             boolean chosen = selectedPackets.contains(packet);
             PacketState state = chosen ? packetState(packet) : PacketState.PENDING;
-            String fill = !chosen ? "transparent" : switch (state) {
-                case DONE -> GREEN;
-                case FAILED -> RED;
-                default -> PACKET;
-            };
-            Label number = new Label(state == PacketState.DONE ? "✓" : "#" + (packet + 1));
-            number.setStyle("-fx-text-fill: " + (chosen ? BG : MUTED) + "; -fx-font-weight: bold; -fx-font-size: 12;");
-            javafx.scene.layout.StackPane circle = new javafx.scene.layout.StackPane(number);
-            circle.setMinSize(34, 34);
-            circle.setMaxSize(34, 34);
-            circle.setStyle("-fx-background-color: " + fill + "; -fx-background-radius: 17; -fx-border-radius: 17;"
-                + "-fx-border-width: " + (state == PacketState.CURRENT ? 3 : 2) + ";"
-                + "-fx-border-color: " + (state == PacketState.CURRENT ? BLUE : chosen ? fill : MUTED) + ";"
-                + (chosen ? "" : "-fx-border-style: dashed;"));
-            String title = packetTitles.get(packet).isBlank() ? (workflowLoaded ? "Packet " : "Session ") + (packet + 1) : packetTitles.get(packet);
-            Label name = new Label(title.length() > 22 ? title.substring(0, 21) + "…" : title);
-            name.setStyle("-fx-text-fill: " + (chosen ? TEXT : MUTED) + "; -fx-font-size: 10; -fx-font-weight: bold;");
+            RecordSessions.Node session = !workflowLoaded && packet < sessionNodes.size() ? sessionNodes.get(packet) : null;
+            String title = session != null ? session.title()
+                : packetTitles.get(packet).isBlank() ? "Packet " + (packet + 1) : packetTitles.get(packet);
             long count = workflowLoaded ? rows.stream().filter(r -> r.packet == packet).count()
                 : packet < sessionInstructionCounts.size() ? sessionInstructionCounts.get(packet) : 0;
-            Label sub = new Label(!chosen ? "not played" : state == PacketState.CURRENT ? "playing…" : count + (count == 1 ? " instruction" : " instructions"));
-            sub.setStyle("-fx-text-fill: " + (state == PacketState.CURRENT ? BLUE : MUTED) + "; -fx-font-size: 9;");
-            VBox node = new VBox(2, circle, name, sub);
-            node.setAlignment(Pos.CENTER);
-            node.setMinWidth(120);
+            VBox node = sessionNode(packet, session, title, count, state);
+            node.setOpacity(chosen ? 1 : 0.4);
             node.setCursor(javafx.scene.Cursor.HAND);
+            String instructions = count + (count == 1 ? " instruction" : " instructions");
             Tooltip.install(node, new Tooltip(workflowLoaded
-                ? title + "\nClick: this packet only · Ctrl+click: add or take out · Shift+click: up to here"
-                : title + (packet == certifiedSession ? "\nThe session this certificate covers" : "")
+                ? title + "\n" + instructions + "\nClick: this packet only · Ctrl+click: add or take out · Shift+click: up to here"
+                : title + "\n" + packetTitles.get(packet) + " · " + instructions
+                    + (packet == certifiedSession ? "\nThe session this certificate covers" : "")
+                    + (chosen ? "" : "\nNot played")
                     + "\nClick: replay this session only · All: the whole history of the image"));
             node.setOnMouseClicked(e -> clickPacket(packet, e.isShortcutDown(), e.isShiftDown()));
-            if (packet > 0) {
-                Region line = new Region();
-                line.setMinSize(24, 2);
-                line.setMaxSize(24, 2);
-                line.setStyle("-fx-background-color: " + BORDER + ";");
-                HBox.setMargin(line, new Insets(16, 0, 0, 0));
-                packetStrip.getChildren().add(line);
-            }
             packetStrip.getChildren().add(node);
         }
+    }
+
+    /**
+     * One node of the strip, laid out like the record page's Version graph (web CommitGraph):
+     * the author and their initials above, the numbered circle on the line, then the title,
+     * who validated it and the day. A workflow's packet has no author nor stamp: it says how
+     * many instructions it holds. The ring around the circle is where the run is.
+     */
+    private VBox sessionNode(int packet, RecordSessions.Node session, String title, long count, PacketState state) {
+        boolean first = packet == 0, last = packet == packetTitles.size() - 1;
+
+        Label author = new Label(session != null ? ellipsis(session.contributor(), 18) : " ");
+        author.setStyle("-fx-text-fill: " + TEXT_SUB + "; -fx-font-size: 10;");
+        Label initials = new Label(session != null ? session.initials() : "");
+        initials.setStyle("-fx-text-fill: " + BG + "; -fx-font-weight: bold; -fx-font-size: 9;");
+        javafx.scene.layout.StackPane badge = new javafx.scene.layout.StackPane(initials);
+        badge.setMinSize(24, 24);
+        badge.setMaxSize(24, 24);
+        // hsb(h, 50%, 83%) is the record page's hsl(h, 55%, 62%).
+        badge.setStyle("-fx-background-radius: 12; -fx-background-color: "
+            + (session != null ? "hsb(" + RecordSessions.hue(session.contributor()) + ", 50%, 83%)" : "transparent") + ";");
+
+        boolean filled = session == null || session.stamped();
+        String fill = session == null ? PACKET : session.stamped() ? toneColor(session.tone()) : BG;
+        Label number = new Label("#" + (packet + 1));
+        number.setStyle("-fx-text-fill: " + (filled ? BG : MUTED) + "; -fx-font-weight: bold; -fx-font-size: 12;");
+        javafx.scene.layout.StackPane circle = new javafx.scene.layout.StackPane(number);
+        circle.setMinSize(36, 36);
+        circle.setMaxSize(36, 36);
+        circle.setStyle("-fx-background-color: " + fill + "; -fx-background-radius: 18; -fx-border-radius: 18;"
+            + (filled ? "" : "-fx-border-color: " + MUTED + "; -fx-border-width: 2; -fx-border-style: dashed;"));
+        String ringColor = switch (state) {
+            case CURRENT -> BLUE;
+            case DONE -> GREEN;
+            case FAILED -> RED;
+            default -> "transparent";
+        };
+        javafx.scene.layout.StackPane ring = new javafx.scene.layout.StackPane(circle);
+        ring.setMinSize(46, 46);
+        ring.setMaxSize(46, 46);
+        ring.setStyle("-fx-border-color: " + ringColor + "; -fx-border-width: 2.5; -fx-border-radius: 23;");
+
+        // The line between two nodes runs through the circles: half of it on each side.
+        Region before = edge(!first), after = edge(!last);
+        HBox lane = new HBox(before, ring, after);
+        lane.setAlignment(Pos.CENTER);
+        HBox.setHgrow(before, Priority.ALWAYS);
+        HBox.setHgrow(after, Priority.ALWAYS);
+        lane.setMaxWidth(Double.MAX_VALUE);
+
+        Label name = new Label(ellipsis(title, 20));
+        name.setStyle("-fx-text-fill: " + TEXT + "; -fx-font-size: 11; -fx-font-weight: bold;");
+        Label who;
+        if (session == null) {
+            who = new Label(count + (count == 1 ? " instruction" : " instructions"));
+            who.setStyle("-fx-text-fill: " + PACKET + "; -fx-font-size: 10; -fx-font-weight: bold;");
+        } else if (!session.stamped()) {
+            who = new Label("Unstamped");
+            who.setStyle("-fx-text-fill: " + MUTED + "; -fx-font-size: 10; -fx-font-weight: bold;");
+        } else {
+            String validator = session.validator() != null ? ellipsis(session.validator(), 20) : "";
+            who = new Label((session.signed() ? "✓ " : "") + validator);
+            who.setStyle("-fx-text-fill: " + (session.signed() ? GREEN : MUTED) + "; -fx-font-size: 10;");
+        }
+        Label date = new Label(session != null ? session.date() : "");
+        date.setStyle("-fx-text-fill: " + MUTED + "; -fx-font-size: 9;");
+
+        VBox node = new VBox(2, author, badge, lane, name, who, date);
+        node.setAlignment(Pos.TOP_CENTER);
+        node.setMinWidth(150);
+        node.setPrefWidth(150);
+        node.setMaxWidth(150);
+        return node;
+    }
+
+    /** Half of the line between two nodes, or an empty space at either end of the strip. */
+    private static Region edge(boolean shown) {
+        Region line = new Region();
+        line.setMinSize(0, 3);
+        line.setPrefHeight(3);
+        line.setMaxSize(Double.MAX_VALUE, 3);
+        line.setStyle("-fx-background-color: " + (shown ? BORDER : "transparent") + ";");
+        return line;
+    }
+
+    /** The colour of a stamped session's circle, as on the record page. */
+    private static String toneColor(RecordSessions.Tone tone) {
+        return switch (tone) {
+            case HIGH -> GREEN;
+            case MEDIUM, DEGRADED -> PEACH;
+            case LOW, COMPROMISED -> RED;
+            case OTHER -> BLUE;
+            case NONE -> MUTED;
+        };
+    }
+
+    private static String ellipsis(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 
     /** "image — N step(s) [— certified session i/n] — compat X" line under the source field. */
@@ -1541,13 +1622,15 @@ class QTraceReplayPlayer {
         validatedOnlyCheckBox.disableProperty().bind(runningProperty.or(javafx.beans.binding.Bindings.isEmpty(rows)));
         Region titleSpacer = new Region();
         HBox.setHgrow(titleSpacer, Priority.ALWAYS);
-        packetStrip = new HBox(6);
+        packetStrip = new HBox(0);
         packetStrip.setAlignment(Pos.TOP_LEFT);
         packetStrip.setPadding(new Insets(8, 10, 8, 10));
         packetScroll = new ScrollPane(packetStrip);
         packetScroll.setFitToHeight(true);
         packetScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        packetScroll.setMinHeight(92);
+        // Six rows per node (author, badge, circle, title, validator, day) and the scroll bar.
+        packetScroll.setMinHeight(172);
+        packetScroll.setPrefHeight(172);
         packetScroll.setStyle("-fx-background: " + BG + "; -fx-background-color: " + BG + ";"
             + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4;");
         packetScroll.setVisible(false);
