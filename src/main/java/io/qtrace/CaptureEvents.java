@@ -62,6 +62,8 @@ public final class CaptureEvents {
     public static final String RESUME     = "resume";
     /** Not a capture: a step's compute time, known once it ended (json: its timestamp, command, duration_ms). */
     public static final String DURATION   = "duration";
+    /** Not a capture: the Player starts replaying on this image (text: what it replays; json: the trace's replayed_from). What it runs comes next, tagged replayed_step. */
+    public static final String REPLAY     = "replay";
 
     public static final int MAX_RECENT = 200;
 
@@ -166,6 +168,29 @@ public final class CaptureEvents {
     }
 
     /** What a QuPath workflow step was made by, from the name qTrace or QuPath gave it. */
+    /** How a view words a replay start: "Replay from the Player · workflow test-rectangle · packet Step 1". */
+    public static String replayText(JsonObject from) {
+        StringBuilder sb = new StringBuilder("Replay from the Player");
+        if (from == null) return sb.toString();
+        String source = str(from, "source");
+        if (source != null) {
+            sb.append(" · ");
+            if ("workflow".equals(str(from, "kind"))) sb.append("workflow ");
+            sb.append(source);
+        }
+        String cert = str(from, "cert_id");
+        if (cert != null) sb.append(" (").append(cert).append(')');
+        String packet = str(from, "packet_title");
+        if (packet != null) sb.append(" · packet ").append(packet);
+        return sb.toString();
+    }
+
+    private static String str(JsonObject o, String k) {
+        if (!o.has(k) || !o.get(k).isJsonPrimitive()) return null;
+        String v = o.get(k).getAsString();
+        return v.isBlank() ? null : v;
+    }
+
     static String kindOfStep(String command) {
         if (command == null) return COMMAND;
         if (command.startsWith("Manual annotation")) return ANNOTATION;

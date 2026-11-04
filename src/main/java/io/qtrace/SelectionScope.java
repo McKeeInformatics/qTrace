@@ -111,6 +111,41 @@ public final class SelectionScope {
         return sb.toString();
     }
 
+    private static final Pattern TARGET_LINE = Pattern.compile(
+        "^    \\['id': ('(?:[^'\\\\]|\\\\.)*'|null), 'label': ('(?:[^'\\\\]|\\\\.)*'|null), 'wkt': ('(?:[^'\\\\]|\\\\.)*'|null)\\],$",
+        Pattern.MULTILINE);
+
+    /** The objects a scoped fragment selects first (none for another fragment) — a replayed instruction names them again. */
+    public static List<Target> targetsOf(String script) {
+        if (!isScoped(script)) return List.of();
+        int end = script.indexOf("\n]\n");
+        String head = end < 0 ? script : script.substring(0, end + 1);
+        List<Target> out = new java.util.ArrayList<>();
+        var m = TARGET_LINE.matcher(head);
+        while (m.find()) {
+            String label = unquote(m.group(2));
+            String type = label, name = null;
+            int q = label == null ? -1 : label.indexOf(" \"");
+            if (q > 0 && label.endsWith("\"")) { type = label.substring(0, q); name = label.substring(q + 2, label.length() - 1); }
+            out.add(new Target(unquote(m.group(1)), type, name, null, unquote(m.group(3))));
+        }
+        return out;
+    }
+
+    private static String unquote(String q) {
+        if (q == null || q.equals("null")) return null;
+        String s = q.substring(1, q.length() - 1);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) {
+                char n = s.charAt(++i);
+                sb.append(n == 'n' ? '\n' : n == 'r' ? '\r' : n);
+            } else sb.append(c);
+        }
+        return sb.toString();
+    }
+
     /** What the step JSON keeps of the selection, for the views (the geometry is in the script only). */
     public static JsonArray toJson(List<Target> targets) {
         JsonArray a = new JsonArray();

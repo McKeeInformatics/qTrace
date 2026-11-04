@@ -198,4 +198,19 @@ class CaptureEventsTest {
         CaptureEvents.changed(List.of(new CaptureEvents.ActionChange(CaptureEvents.ActionChange.UNDONE, List.of(1L), java.time.Instant.now())));
         assertTrue(seen.isEmpty());
     }
+
+    @Test
+    void aReplayStartSaysWhatThePlayerReplays() {
+        com.google.gson.JsonObject from = new com.google.gson.JsonObject();
+        from.addProperty("source", "test-rectangle");
+        assertEquals("Replay from the Player · test-rectangle", CaptureEvents.replayText(from));
+        from.addProperty("kind", "workflow");
+        from.addProperty("packet_title", "Step 1");
+        assertEquals("Replay from the Player · workflow test-rectangle · packet Step 1", CaptureEvents.replayText(from));
+        from = new com.google.gson.JsonObject();
+        from.addProperty("source", "ROI24 v1");
+        from.addProperty("cert_id", "qtc_01ABC");
+        assertEquals("Replay from the Player · ROI24 v1 (qtc_01ABC)", CaptureEvents.replayText(from));
+        assertEquals("Replay from the Player", CaptureEvents.replayText(null));
+    }
 }

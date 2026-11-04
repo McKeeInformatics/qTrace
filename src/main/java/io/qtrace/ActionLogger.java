@@ -772,7 +772,13 @@ public class ActionLogger implements WorkflowListener {
         if (!json.has("script_fragment") || json.get("script_fragment").isJsonNull()) return;
         String script = json.get("script_fragment").getAsString();
         if (SelectionScope.setsSelection(script)) { selectionSetByScript = true; return; }
-        if (selectionSetByScript || SelectionScope.isScoped(script) || !SelectionScope.dependsOnSelection(script)) return;
+        if (SelectionScope.isScoped(script)) {
+            // A replayed instruction: it selects its objects itself, and the step names them again.
+            List<SelectionScope.Target> again = SelectionScope.targetsOf(script);
+            if (!again.isEmpty()) json.add("selection", SelectionScope.toJson(again));
+            return;
+        }
+        if (selectionSetByScript || !SelectionScope.dependsOnSelection(script)) return;
         List<SelectionScope.Target> targets = selectionTargets(script);
         if (targets.isEmpty()) return;
         json.addProperty("script_fragment", SelectionScope.scoped(script, targets));
@@ -1173,6 +1179,7 @@ public class ActionLogger implements WorkflowListener {
      */
     public void markReplayStart(JsonObject replayedFrom, boolean keepHistory) {
         this.replayedFrom = replayedFrom;
+        CaptureEvents.captured(CaptureEvents.REPLAY, CaptureEvents.replayText(replayedFrom), replayedFrom);
         if (keepHistory) return;
         for (JsonObject step : capturedSteps) step.addProperty("replay_excluded", true);
     }

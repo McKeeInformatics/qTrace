@@ -96,4 +96,22 @@ class SelectionScopeTest {
         assertEquals("Rectangle", a.get(0).getAsJsonObject().get("roi_type").getAsString());
         assertFalse(a.get(0).getAsJsonObject().has("wkt"), "the geometry is in the script, not twice");
     }
+
+    @Test
+    void aScopedFragmentTellsItsObjectsBack() {
+        // A replayed instruction comes back with its scoped fragment: the step names its objects again.
+        var named = new SelectionScope.Target("id-2", "Polygon", "Tumor 'A'", null, null);
+        String scoped = SelectionScope.scoped(CLASSIFY, List.of(RECT, named));
+        var back = SelectionScope.targetsOf(scoped);
+        assertEquals(2, back.size());
+        assertEquals(RECT.id(), back.get(0).id());
+        assertEquals("Rectangle", back.get(0).roiType());
+        assertNull(back.get(0).name());
+        assertEquals(RECT.wkt(), back.get(0).wkt());
+        assertEquals("Polygon", back.get(1).roiType());
+        assertEquals("Tumor 'A'", back.get(1).name());
+        assertNull(back.get(1).wkt());
+        assertTrue(SelectionScope.targetsOf(CLASSIFY).isEmpty());
+        assertTrue(SelectionScope.targetsOf(null).isEmpty());
+    }
 }
