@@ -86,6 +86,32 @@ final class ObjectClassifierReplay {
         int problems() { return missing.size() + differs.size() + notCaptured.size(); }
     }
 
+    /** How the files of a record opened by its ID are fetched: into the given folder (see {@link QTraceReplayEngine#downloadObjectClassifiers}). */
+    @FunctionalInterface
+    interface Downloader {
+        QTraceReplayEngine.DownloadResult download(String certId, Path dir) throws Exception;
+    }
+
+    /**
+     * The check of a record's object classifier files, wherever they are: beside a local record, or - for a
+     * record opened by its ID ({@code certId}) - downloaded first into the Player's temp folder. A download that
+     * cannot be done is said so in the answer, for each classifier, never an empty answer that reads as "none needed".
+     */
+    static Result resolve(String source, String qtraceJson, Path tempDir, String certId, Downloader downloader) {
+        if (versions(qtraceJson).isEmpty() || RecordSource.parse(source).local()) return prepare(source, qtraceJson, tempDir);
+        if (certId == null) return prepare(source, qtraceJson, tempDir, null, "the record has no ID to download its files from");
+        Path downloaded = tempDir.resolve("downloaded_object_classifiers");
+        try {
+            downloader.download(certId, downloaded);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return prepare(source, qtraceJson, tempDir, null, "download interrupted");
+        } catch (Exception e) {
+            return prepare(source, qtraceJson, tempDir, null, "download failed: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+        }
+        return prepare(source, qtraceJson, tempDir, downloaded, null);
+    }
+
     /** The version of each name a replay of that scope uses: the last one saved up to the scope's last session. */
     static List<JsonObject> inScope(String qtraceJson, int sessionIndex) {
         JsonArray sessions = sessions(qtraceJson);
@@ -112,6 +138,18 @@ final class ObjectClassifierReplay {
      * script warns then.
      */
     static Result prepare(String source, String qtraceJson, Path tempDir) {
+        return prepare(source, qtraceJson, tempDir, null, null, true);
+    }
+
+    /**
+     * The same, for the files in {@code beside}: the folder next to a local record, or where a record opened by its
+     * ID had its files downloaded; null when there is none ({@code whyNone} says why: the download failed).
+     */
+    static Result prepare(String source, String qtraceJson, Path tempDir, Path beside, String whyNone) {
+        return prepare(source, qtraceJson, tempDir, beside, whyNone, false);
+    }
+
+    private static Result prepare(String source, String qtraceJson, Path tempDir, Path givenBeside, String whyNone, boolean fromSource) {
         Map<String, JsonObject> latest = new LinkedHashMap<>();
         inScope(qtraceJson, -1).forEach(r -> latest.put(name(r), r));
         List<String> verified = new ArrayList<>();
@@ -119,15 +157,16 @@ final class ObjectClassifierReplay {
         if (latest.isEmpty()) return new Result(verified, missing, differs, notCaptured, Map.of());
 
         boolean local = RecordSource.parse(source).local();
-        Path beside = local ? ObjectClassifierFiles.companionDir(Path.of(source.strip())) : null;
+        // From the source alone: the folder next to a local record; a record opened by its ID has had nothing downloaded
+        Path beside = fromSource ? (local ? ObjectClassifierFiles.companionDir(Path.of(source.strip())) : null) : givenBeside;
+        if (fromSource && !local) whyNone = "its file was not downloaded from the workspace";
         Map<String, ObjectClassifierFiles.Check> checkOfVersion = new LinkedHashMap<>();
         for (JsonObject v : versions(qtraceJson)) {
             ObjectClassifierFiles.Check check;
             Path file = beside == null || !v.has("classifier_file") ? null
                 : beside.resolve(Path.of(v.get("classifier_file").getAsString()).getFileName());
-            if (!local && v.has("sha256")) {
-                check = new ObjectClassifierFiles.Check(ObjectClassifierFiles.Status.MISSING,
-                    "the workspace does not serve object classifier files yet - replay from the local .qtrace and its .files folder");
+            if (beside == null && v.has("sha256")) {
+                check = new ObjectClassifierFiles.Check(ObjectClassifierFiles.Status.MISSING, whyNone != null ? whyNone : "no folder to look in");
             } else {
                 check = ObjectClassifierFiles.verify(v, file);
             }

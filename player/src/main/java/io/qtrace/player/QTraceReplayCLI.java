@@ -105,7 +105,8 @@ public class QTraceReplayCLI {
             // Object classifiers: the copy beside the .qtrace, checked against its recorded sha256
             if (!ObjectClassifierReplay.versions(qtraceJson).isEmpty()) {
                 if (classifierDir == null) classifierDir = Files.createTempDirectory("qtrace_classifiers_");
-                ObjectClassifierReplay.Result oc = ObjectClassifierReplay.prepare(source, qtraceJson, classifierDir);
+                ObjectClassifierReplay.Result oc = ObjectClassifierReplay.resolve(source, qtraceJson, classifierDir,
+                    certId, QTraceReplayEngine::downloadObjectClassifiers);
                 System.err.println("[qtrace-replay] Object classifiers: " + oc.summary());
             }
 

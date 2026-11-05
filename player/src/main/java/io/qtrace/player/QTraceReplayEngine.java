@@ -147,6 +147,48 @@ public class QTraceReplayEngine {
     }
 
     /**
+     * Downloads the object classifier files of a record into {@code dir}, byte for byte (qtrace.ca lists
+     * them, with a signed URL each: {@code GET /api/verify/<id>/object-classifiers}). Each is saved under the
+     * name it has in the record; whether it is the file the record vouches for is checked afterwards, against
+     * the sha256 in the .qtrace ({@link ObjectClassifierReplay#prepare}). A file that cannot be fetched is
+     * reported, the others are still taken; a list that cannot be read throws, so that nobody mistakes it for
+     * "this record has none".
+     */
+    public static DownloadResult downloadObjectClassifiers(String certId, Path dir) throws IOException, InterruptedException {
+        return downloadObjectClassifiers(BASE_URL, certId, TOKEN_BY_CERT.get(certId), dir);
+    }
+
+    static DownloadResult downloadObjectClassifiers(String base, String certId, String token, Path dir) throws IOException, InterruptedException {
+        Files.createDirectories(dir);
+        JsonArray entries = JsonParser.parseString(fetchUrl(RecordSource.contentUrl(base, certId, "object-classifiers", token))).getAsJsonArray();
+        HttpClient client = newClient();
+        List<String> succeeded = new ArrayList<>();
+        Map<String, String> failed = new LinkedHashMap<>();
+        for (JsonElement el : entries) {
+            JsonObject entry = el.getAsJsonObject();
+            String name = entry.get("name").getAsString();
+            // A name is a file name, never a path out of the folder.
+            if (name.isBlank() || name.contains("/") || name.contains("\\") || name.contains("..")) {
+                failed.put(name, "not a plain file name");
+                continue;
+            }
+            try {
+                HttpResponse<byte[]> resp = client.send(HttpRequest.newBuilder().uri(URI.create(entry.get("url").getAsString()))
+                    .timeout(Duration.ofSeconds(30)).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+                if (resp.statusCode() >= 300) {
+                    failed.put(name, "HTTP " + resp.statusCode());
+                    continue;
+                }
+                Files.write(dir.resolve(name), resp.body());
+                succeeded.add(name);
+            } catch (IOException e) {
+                failed.put(name, e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            }
+        }
+        return new DownloadResult(succeeded, failed);
+    }
+
+    /**
      * Names of every pixel classifier referenced across all sessions of a .qtrace, in
      * first-seen order (classifiers are identical across sessions — same source used by
      * {@link #buildPreamble}'s restoration loop). Used by the Player to know what to expect

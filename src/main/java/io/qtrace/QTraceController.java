@@ -1836,6 +1836,9 @@ public class QTraceController {
         }
         java.util.Collection<ClassifierRecord> classifiers = logger.getKnownClassifiers().values();
         java.util.Collection<ImportedObjectFileRecord> importedFiles = logger.getImportedFiles().values();
+        // The object classifiers' files the record references, each checked against its recorded sha256
+        java.util.List<ObjectClassifierFiles.PushFile> objectClassifierFiles =
+            ObjectClassifierFiles.forPush(lastQtracePath, ObjectClassifierFiles.copiesDir());
         if (panel != null) {
             ActivityLog.add("☁ Pushing to workspace…");
             ActivityLog.add("  · " + lastQtracePath.getFileName());
@@ -1847,6 +1850,8 @@ public class QTraceController {
             }
             for (ClassifierRecord clf : classifiers)
                 ActivityLog.add("  · classifiers/" + clf.name + ".json");
+            for (ObjectClassifierFiles.PushFile f : objectClassifierFiles)
+                ActivityLog.add("  · object_classifiers/" + f.fileName());
             for (ImportedObjectFileRecord imp : importedFiles)
                 for (ImportedObjectFileRecord.Companion c : imp.companions())
                     ActivityLog.add("  · imports/" + c.filename());
@@ -1856,7 +1861,7 @@ public class QTraceController {
             panel.startPushProgress();
         }
         ep.push(new WorkspacePush.Request(lastStamp, sel.certPath(), chainLog, lastQtracePath, classifiers,
-              lastThumbnailPath, importedFiles, lastGeojsonPath, sel.recordId(), restampedFrom))
+              lastThumbnailPath, importedFiles, lastGeojsonPath, sel.recordId(), restampedFrom, objectClassifierFiles))
           .thenAccept(url -> {
               if (panel != null) panel.stopPushProgress();
               if (url != null && !url.startsWith("ERROR:")) {

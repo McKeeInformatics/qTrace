@@ -749,7 +749,8 @@ class QTraceReplayPlayer {
                         newClassifierDir = java.nio.file.Files.createTempDirectory("qtrace_player_classifiers_");
                         leakGuard[0] = newClassifierDir;
                     }
-                    objectClassifierResult = ObjectClassifierReplay.prepare(source, qtraceJson, newClassifierDir);
+                    objectClassifierResult = ObjectClassifierReplay.resolve(source, qtraceJson, newClassifierDir,
+                        QTraceReplayEngine.extractCertId(source), QTraceReplayEngine::downloadObjectClassifiers);
                 }
                 java.nio.file.Path classifierDir = newClassifierDir;
 

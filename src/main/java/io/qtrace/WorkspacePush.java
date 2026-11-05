@@ -37,13 +37,28 @@ public interface WorkspacePush {
      * {@code qtb_…} id. For a certified record {@code recordId} is null (its id is the
      * certificate's).
      *
+     * <p>{@code objectClassifiers} are the object classifiers' files the record references (verified against their
+     * sha256, see {@link ObjectClassifierFiles#forPush}); they are sent so that a replay of the record opened by its ID
+     * uses exactly the recorded classifier.
+     *
      * <p>{@code restampedFrom} is the {@code qtb_…} id a <b>certified</b> record declares it
      * certifies (it re-stamps a basic record); null in every other case.
      */
     record Request(ValidationStamp stamp, Path certPath, Path chainLogPath, Path qtraceFile,
                    Collection<ClassifierRecord> classifiers, Path thumbnailPath,
                    Collection<ImportedObjectFileRecord> importedFiles, Path geojsonPath,
-                   String recordId, String restampedFrom) {}
+                   String recordId, String restampedFrom,
+                   Collection<ObjectClassifierFiles.PushFile> objectClassifiers) {
+
+        /** A request without object classifier files: what a caller built before they travelled with the record. */
+        public Request(ValidationStamp stamp, Path certPath, Path chainLogPath, Path qtraceFile,
+                       Collection<ClassifierRecord> classifiers, Path thumbnailPath,
+                       Collection<ImportedObjectFileRecord> importedFiles, Path geojsonPath,
+                       String recordId, String restampedFrom) {
+            this(stamp, certPath, chainLogPath, qtraceFile, classifiers, thumbnailPath, importedFiles, geojsonPath,
+                recordId, restampedFrom, java.util.List.of());
+        }
+    }
 
     /**
      * Sends the record, off the FX thread. Resolves to the workspace URL of the record, or to

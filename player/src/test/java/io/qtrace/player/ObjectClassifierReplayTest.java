@@ -358,4 +358,106 @@ class ObjectClassifierReplayTest {
         assertFalse(groovy.contains("WARNING"), groovy);
         assertTrue(groovy.contains("OC-CK19") && groovy.contains("embedded in OC-Panel"), groovy);
     }
+
+    // ── a record opened by its ID: the files come from the workspace, into a folder ──
+
+    private static Path downloaded(Path dir, JsonObject rec, byte[] raw) throws Exception {
+        Path d = dir.resolve("downloaded");
+        Files.createDirectories(d);
+        Files.write(d.resolve(rec.get("classifier_file").getAsString()), raw);
+        return d;
+    }
+
+    @Test
+    void theFilesDownloadedForARecordOpenedByItsIdAreCheckedLikeThoseBesideALocalOne(@TempDir Path dir) throws Exception {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        Path d = downloaded(dir, r, CK19_V1);
+        var res = ObjectClassifierReplay.prepare("qtc_01ABCDEF", qtrace(List.of(r)), dir.resolve("temp"), d, null);
+        assertEquals(List.of("OC-CK19"), res.verified());
+        assertTrue(res.allVerified());
+        assertArrayEquals(CK19_V1, Files.readAllBytes(dir.resolve("temp/object_classifiers").resolve(r.get("classifier_file").getAsString())));
+    }
+
+    @Test
+    void aDownloadedFileThatIsNotTheRecordedOneIsRefusedAndNeverReplayed(@TempDir Path dir) throws Exception {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        Path d = downloaded(dir, r, CK19_V2);
+        var res = ObjectClassifierReplay.prepare("qtc_01ABCDEF", qtrace(List.of(r)), dir.resolve("temp"), d, null);
+        assertEquals(java.util.Set.of("OC-CK19"), res.differs().keySet());
+        assertFalse(Files.exists(dir.resolve("temp/object_classifiers").resolve(r.get("classifier_file").getAsString())));
+    }
+
+    @Test
+    void aFileTheWorkspaceDidNotGiveIsMissing(@TempDir Path dir) throws Exception {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        Files.createDirectories(dir.resolve("downloaded"));
+        var res = ObjectClassifierReplay.prepare("qtc_01ABCDEF", qtrace(List.of(r)), dir.resolve("temp"), dir.resolve("downloaded"), null);
+        assertEquals(java.util.Set.of("OC-CK19"), res.missing().keySet());
+    }
+
+    @Test
+    void aDownloadThatFailedSaysWhyForEveryClassifier(@TempDir Path dir) {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        var res = ObjectClassifierReplay.prepare("qtc_01ABCDEF", qtrace(List.of(r)), dir.resolve("temp"), null, "download failed: HTTP 502");
+        assertTrue(res.missing().get("OC-CK19").contains("download failed: HTTP 502"), res.missing().toString());
+    }
+
+    @Test
+    void aLocalRecordStillLooksBesideItselfWhenGivenItsOwnFolder(@TempDir Path dir) throws Exception {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        Path q = local(dir, r, CK19_V1);
+        var res = ObjectClassifierReplay.prepare(q.toString(), qtrace(List.of(r)), dir.resolve("temp"),
+            io.qtrace.ObjectClassifierFiles.companionDir(q), null);
+        assertTrue(res.allVerified());
+    }
+
+    // ── resolve: beside a local record, or downloaded for one opened by its ID ──
+
+    @Test
+    void aLocalRecordLooksBesideItselfAndDownloadsNothing(@TempDir Path dir) throws Exception {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        Path q = local(dir, r, CK19_V1);
+        var res = ObjectClassifierReplay.resolve(q.toString(), qtrace(List.of(r)), dir.resolve("temp"), null,
+            (id, d) -> { throw new AssertionError("a local record downloads nothing"); });
+        assertTrue(res.allVerified());
+    }
+
+    @Test
+    void aRecordOpenedByItsIdHasItsFilesDownloadedThenChecked(@TempDir Path dir) throws Exception {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        String[] asked = new String[1];
+        var res = ObjectClassifierReplay.resolve("qtc_01ABCDEF", qtrace(List.of(r)), dir.resolve("temp"), "qtc_01ABCDEF", (id, d) -> {
+            asked[0] = id;
+            Files.createDirectories(d);
+            Files.write(d.resolve(r.get("classifier_file").getAsString()), CK19_V1);
+            return new QTraceReplayEngine.DownloadResult(List.of(r.get("classifier_file").getAsString()), java.util.Map.of());
+        });
+        assertEquals("qtc_01ABCDEF", asked[0]);
+        assertTrue(res.allVerified(), res.toString());
+    }
+
+    @Test
+    void aDownloadThatCannotBeDoneSaysWhyInsteadOfAnEmptyAnswer(@TempDir Path dir) {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        var res = ObjectClassifierReplay.resolve("qtc_01ABCDEF", qtrace(List.of(r)), dir.resolve("temp"), "qtc_01ABCDEF",
+            (id, d) -> { throw new java.io.IOException("HTTP 502"); });
+        assertEquals(java.util.Set.of("OC-CK19"), res.missing().keySet());
+        assertTrue(res.missing().get("OC-CK19").contains("download failed: HTTP 502"), res.missing().toString());
+        assertEquals(ObjectClassifierReplay.Level.BAD, res.level());
+    }
+
+    @Test
+    void aRecordWithoutAnIdCannotBeDownloaded(@TempDir Path dir) {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        var res = ObjectClassifierReplay.resolve("https://example.org/x", qtrace(List.of(r)), dir.resolve("temp"), null,
+            (id, d) -> { throw new AssertionError("nothing to ask for"); });
+        assertEquals(java.util.Set.of("OC-CK19"), res.missing().keySet());
+    }
+
+    @Test
+    void aRecordThatNeedsNoClassifierDownloadsNothing(@TempDir Path dir) {
+        var res = ObjectClassifierReplay.resolve("qtc_01ABCDEF", "{\"sessions\":[{\"steps\":[]}]}", dir.resolve("temp"), "qtc_01ABCDEF",
+            (id, d) -> { throw new AssertionError("nothing to fetch"); });
+        assertTrue(res.none());
+    }
 }

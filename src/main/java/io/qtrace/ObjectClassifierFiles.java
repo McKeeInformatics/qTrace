@@ -158,6 +158,53 @@ public final class ObjectClassifierFiles {
         return "Object classifier saved: " + record.get("name").getAsString() + (rule.isEmpty() ? "" : " (" + rule + ")");
     }
 
+    /** One object classifier file an upload sends: its classifier's name, the file's name in the record, its sha256, and where it is. */
+    public record PushFile(String name, String fileName, String sha256, Path file) {}
+
+    /**
+     * The files an upload sends with this .qtrace: every version of every object classifier it records (an older
+     * session stays replayable), each found beside the record or among the kept copies and checked against its
+     * recorded sha256. A file that cannot be vouched for (missing, or another content) is never sent: the record
+     * then says what it knows, and the Player will say the file is missing.
+     */
+    public static java.util.List<PushFile> forPush(Path qtraceFile, Path copiesDir) {
+        java.util.List<PushFile> out = new java.util.ArrayList<>();
+        if (qtraceFile == null || !Files.isRegularFile(qtraceFile)) return out;
+        JsonElement root;
+        try {
+            root = JsonParser.parseString(Files.readString(qtraceFile));
+        } catch (IOException | RuntimeException e) {
+            return out;
+        }
+        if (!root.isJsonObject() || !root.getAsJsonObject().has("sessions") || !root.getAsJsonObject().get("sessions").isJsonArray()) return out;
+        Path beside = companionDir(qtraceFile);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (JsonElement session : root.getAsJsonObject().getAsJsonArray("sessions")) {
+            if (!session.isJsonObject() || !session.getAsJsonObject().has("object_classifiers")
+                    || !session.getAsJsonObject().get("object_classifiers").isJsonArray()) continue;
+            for (JsonElement el : session.getAsJsonObject().getAsJsonArray("object_classifiers")) {
+                if (!el.isJsonObject() || !el.getAsJsonObject().has("classifier_file") || !el.getAsJsonObject().has("sha256")) continue;
+                JsonObject rec = el.getAsJsonObject();
+                String fileName = Path.of(rec.get("classifier_file").getAsString()).getFileName().toString();
+                if (!seen.add(fileName)) continue;
+                Path found = null;
+                Check last = null;
+                for (Path dir : new Path[] {beside, copiesDir}) {
+                    if (dir == null) continue;
+                    Path candidate = dir.resolve(fileName);
+                    last = verify(rec, candidate);
+                    if (last.status() == Status.OK) { found = candidate; break; }
+                }
+                if (found == null) {
+                    ActivityLog.add("  WARNING: object classifier file " + fileName + " is not sent - " + (last == null ? "no folder to look in" : last.reason()));
+                    continue;
+                }
+                out.add(new PushFile(rec.get("name").getAsString(), fileName, rec.get("sha256").getAsString(), found));
+            }
+        }
+        return out;
+    }
+
     public static Check verify(JsonObject record, Path file) {
         if (record == null || !record.has("sha256"))
             return new Check(Status.NOT_CAPTURED, "recorded before the classifier's content was captured");
