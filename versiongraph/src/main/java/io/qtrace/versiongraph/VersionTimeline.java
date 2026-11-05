@@ -182,6 +182,7 @@ public final class VersionTimeline {
                 putIf(d, "graph.rec.oc.filter", word(str(content, "filter", null)));
                 putIf(d, "graph.rec.oc.model", str(content, "model", null));
                 putIf(d, "graph.rec.oc.measurements", String.join(", ", strings(content, "measurements")));
+                putIf(d, "graph.rec.oc.preprocessing", String.join(", ", strings(content, "preprocessing")));
                 putIf(d, "graph.rec.classes", String.join(", ", strings(content, "classes")));
                 List<String> params = new ArrayList<>();
                 if (content.has("model_params") && content.get("model_params").isJsonObject())
@@ -244,7 +245,7 @@ public final class VersionTimeline {
                 if (content != null) objectClassifierDetails(d, content);
                 putIf(d, "graph.rec.oc.file", sha.length() >= 16 ? sha.substring(0, 16) : null);
                 out.add(new Entry(Kind.STEP, Source.OBJECT_CLASSIFIER, index, time(ts, zone), ts,
-                    "Save object classifier", truncate(name + (headline.isEmpty() ? "" : " · " + headline), MAX_SUMMARY),
+                    bool(c, "restored_by_replay") ? "Restore object classifier (replay)" : "Save object classifier", truncate(name + (headline.isEmpty() ? "" : " · " + headline), MAX_SUMMARY),
                     null, d, false, false, false, false, null));
             }
         }

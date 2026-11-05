@@ -138,4 +138,40 @@ class ObjectClassifierContentTest {
         var rec = ObjectClassifierFiles.record("OC-CD20-thr", raw, java.time.Instant.now(), "u", true);
         assertEquals("Cell: CD20 mean >= 200.25", ObjectClassifierContent.headline(rec.getAsJsonObject("content")));
     }
+
+    // ── a trained classifier whose features are normalized or projected: QuPath wraps the extractor ──
+
+    @Test
+    void aNormalizedClassifierStillNamesItsMeasurements() throws Exception {
+        JsonObject s = ObjectClassifierContent.summarize(fixture("OC-Trained-minmax"));
+        assertEquals("[\"Cell: CK19 mean\",\"Cell: CD3 mean\",\"Cell: Ki67 mean\"]", s.getAsJsonArray("measurements").toString());
+        assertEquals("[\"normalization\"]", s.getAsJsonArray("preprocessing").toString());
+        assertEquals("RTrees on 3 measurements", ObjectClassifierContent.headline(s));
+    }
+
+    @Test
+    void aProjectedClassifierStillNamesItsMeasurements() throws Exception {
+        JsonObject s = ObjectClassifierContent.summarize(fixture("OC-Trained-pca"));
+        assertEquals(3, s.getAsJsonArray("measurements").size());
+        assertEquals("[\"pca\"]", s.getAsJsonArray("preprocessing").toString());
+    }
+
+    @Test
+    void preprocessingIsListedInTheOrderItIsApplied() throws Exception {
+        JsonObject s = ObjectClassifierContent.summarize(fixture("OC-Trained-minmax-pca"));
+        assertEquals(3, s.getAsJsonArray("measurements").size());
+        assertEquals("[\"normalization\",\"pca\"]", s.getAsJsonArray("preprocessing").toString());
+        assertEquals("RTrees on Cell: CK19 mean, Cell: CD3 mean, Cell: Ki67 mean (normalization, pca) -> Neg, Pos", ObjectClassifierContent.describe(s));
+    }
+
+    @Test
+    void aPlainTrainedClassifierHasNoPreprocessing() throws Exception {
+        JsonObject s = ObjectClassifierContent.summarize(fixture("OC-Trained-rtrees"));
+        assertEquals(0, s.getAsJsonArray("preprocessing").size());
+    }
+
+    @Test
+    void theFittedNormalizerAndProjectionAreNotCopiedIntoTheSummary() throws Exception {
+        assertTrue(ObjectClassifierContent.summarize(fixture("OC-Trained-minmax-pca")).toString().length() < 1500);
+    }
 }

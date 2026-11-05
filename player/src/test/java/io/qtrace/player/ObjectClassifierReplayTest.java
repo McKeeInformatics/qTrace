@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.qtrace.ObjectClassifierFiles;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -53,6 +54,7 @@ class ObjectClassifierReplayTest {
     }
 
     /** A .qtrace whose sessions each saved the given object classifiers. */
+    @SafeVarargs
     private static String qtrace(List<JsonObject>... perSession) {
         JsonObject root = new JsonObject();
         JsonArray sessions = new JsonArray();
@@ -267,5 +269,93 @@ class ObjectClassifierReplayTest {
             assertFalse(t.startsWith("{") || t.startsWith("("), "a line must not open a block or a call: " + t);
             if (t.startsWith("println(")) assertTrue(t.endsWith(");"), "an unterminated call: " + t);
         }
+    }
+
+    @Test
+    void theScriptTellsCoreTheFileComesFromAReplayBeforeWritingIt(@TempDir Path dir) throws Exception {
+        JsonObject r = rec("OC-CK19", CK19_V1);
+        Path q = local(dir, r, CK19_V1);
+        String json = qtrace(List.of(r));
+        ObjectClassifierReplay.prepare(q.toString(), json, dir.resolve("temp"));
+        String groovy = ObjectClassifierReplay.restoreBlocks(json, -1, dir.resolve("temp"));
+        int announce = groovy.indexOf("ObjectClassifierRestores.expect('OC-CK19', '" + r.get("sha256").getAsString() + "')");
+        int write = groovy.indexOf("_f.bytes = _bytes");
+        assertTrue(announce > 0, groovy);
+        assertTrue(announce < write, "announced before the file is written, or the watcher wins the race");
+    }
+
+    // ── a composite carries its components: a missing standalone file is information, not a problem ──
+
+    private static byte[] compositeOf(byte[]... parts) {
+        StringBuilder sb = new StringBuilder("{\"object_classifier_type\":\"CompositeClassifier\",\"classifiers\":[");
+        for (int i = 0; i < parts.length; i++) sb.append(i > 0 ? "," : "").append(new String(parts[i], StandardCharsets.UTF_8));
+        return sb.append("]}").toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** A record whose only step runs the given script. */
+    private static String qtraceRunning(String script, List<JsonObject> recs) {
+        JsonObject root = JsonParser.parseString(qtrace(recs)).getAsJsonObject();
+        JsonObject step = new JsonObject();
+        step.addProperty("command", "Run object classifier");
+        step.addProperty("script_fragment", script);
+        step.addProperty("is_scriptable", true);
+        JsonArray steps = new JsonArray();
+        steps.add(step);
+        root.getAsJsonArray("sessions").get(0).getAsJsonObject().add("steps", steps);
+        return root.toString();
+    }
+
+    @Test
+    void aMissingComponentThatAVerifiedCompositeCarriesIsInformationNotAProblem(@TempDir Path dir) throws Exception {
+        byte[] comp = compositeOf(CK19_V1, CD3);
+        JsonObject ck = rec("OC-CK19", CK19_V1), panel = rec("OC-Panel", comp);
+        Path q = local(dir, panel, comp);                              // the composite is there, the standalone CK19 file is not
+        String json = qtraceRunning("runObjectClassifier(\"OC-Panel\")", List.of(ck, panel));
+        var res = ObjectClassifierReplay.prepare(q.toString(), json, dir.resolve("temp"));
+        assertEquals(0, res.problems(), res.toString());
+        assertEquals(ObjectClassifierReplay.Level.OK, res.level());
+        assertTrue(res.embedded().get("OC-CK19").contains("OC-Panel"), res.embedded().toString());
+        assertTrue(res.summary().contains("embedded in OC-Panel"), res.summary());
+    }
+
+    @Test
+    void aMissingComponentThatAStepRunsByNameIsStillAProblem(@TempDir Path dir) throws Exception {
+        byte[] comp = compositeOf(CK19_V1, CD3);
+        JsonObject ck = rec("OC-CK19", CK19_V1), panel = rec("OC-Panel", comp);
+        Path q = local(dir, panel, comp);
+        String json = qtraceRunning("runObjectClassifier(\"OC-CK19\")", List.of(ck, panel));
+        var res = ObjectClassifierReplay.prepare(q.toString(), json, dir.resolve("temp"));
+        assertEquals(java.util.Set.of("OC-CK19"), res.missing().keySet());
+        assertEquals(ObjectClassifierReplay.Level.BAD, res.level());
+    }
+
+    @Test
+    void aMissingCompositeLeavesItsMissingComponentAProblemToo(@TempDir Path dir) {
+        byte[] comp = compositeOf(CK19_V1, CD3);
+        JsonObject ck = rec("OC-CK19", CK19_V1), panel = rec("OC-Panel", comp);
+        var res = ObjectClassifierReplay.prepare(dir.resolve("slide.png.qtrace").toString(), qtraceRunning("x()", List.of(ck, panel)), dir.resolve("temp"));
+        assertEquals(java.util.Set.of("OC-CK19", "OC-Panel"), res.missing().keySet());
+        assertTrue(res.embedded().isEmpty());
+    }
+
+    @Test
+    void aComponentWithAnotherThresholdIsNotTheOneTheCompositeCarries(@TempDir Path dir) throws Exception {
+        byte[] comp = compositeOf(CK19_V2, CD3);                        // the composite carries 135.5
+        JsonObject ck = rec("OC-CK19", CK19_V1), panel = rec("OC-Panel", comp);   // the standalone is 120
+        Path q = local(dir, panel, comp);
+        var res = ObjectClassifierReplay.prepare(q.toString(), qtraceRunning("x()", List.of(ck, panel)), dir.resolve("temp"));
+        assertEquals(java.util.Set.of("OC-CK19"), res.missing().keySet());
+    }
+
+    @Test
+    void theScriptSaysANonRestoredComponentIsCarriedByTheCompositeInsteadOfWarning(@TempDir Path dir) throws Exception {
+        byte[] comp = compositeOf(CK19_V1, CD3);
+        JsonObject ck = rec("OC-CK19", CK19_V1), panel = rec("OC-Panel", comp);
+        Path q = local(dir, panel, comp);
+        String json = qtraceRunning("runObjectClassifier(\"OC-Panel\")", List.of(ck, panel));
+        ObjectClassifierReplay.prepare(q.toString(), json, dir.resolve("temp"));
+        String groovy = ObjectClassifierReplay.restoreBlocks(json, -1, dir.resolve("temp"));
+        assertFalse(groovy.contains("WARNING"), groovy);
+        assertTrue(groovy.contains("OC-CK19") && groovy.contains("embedded in OC-Panel"), groovy);
     }
 }

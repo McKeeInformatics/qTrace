@@ -24,7 +24,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -108,12 +110,21 @@ public final class ObjectClassifierContent {
         JsonObject classifier = o.has("classifier") && o.get("classifier").isJsonObject() ? o.getAsJsonObject("classifier") : new JsonObject();
         s.addProperty("model", str(classifier, "class"));
         s.add("model_params", modelParams(classifier));
+        // QuPath wraps the extractor when features are normalized or projected (PCA): the measurements sit in the innermost one
         JsonArray measurements = new JsonArray();
-        if (o.has("featureExtractor") && o.get("featureExtractor").isJsonObject()) {
-            JsonObject fe = o.getAsJsonObject("featureExtractor");
-            if (fe.has("measurements") && fe.get("measurements").isJsonArray()) measurements = fe.getAsJsonArray("measurements").deepCopy();
+        List<String> outerToInner = new ArrayList<>();
+        JsonObject fe = o.has("featureExtractor") && o.get("featureExtractor").isJsonObject() ? o.getAsJsonObject("featureExtractor") : null;
+        for (int depth = 0; fe != null && depth < 8; depth++) {
+            if (fe.has("measurements") && fe.get("measurements").isJsonArray()) { measurements = fe.getAsJsonArray("measurements").deepCopy(); break; }
+            String type = str(fe, "feature_extractor_type");
+            outerToInner.add(type.contains("Normaliz") ? "normalization" : type.contains("PCA") ? "pca"
+                : type.replace("FeatureExtractor", "").toLowerCase(java.util.Locale.ROOT));
+            fe = fe.has("featureExtractor") && fe.get("featureExtractor").isJsonObject() ? fe.getAsJsonObject("featureExtractor") : null;
         }
         s.add("measurements", measurements);
+        JsonArray preprocessing = new JsonArray();   // in the order they are applied: innermost first
+        for (int i = outerToInner.size() - 1; i >= 0; i--) preprocessing.add(outerToInner.get(i));
+        s.add("preprocessing", preprocessing);
         Set<String> classes = new LinkedHashSet<>();
         if (o.has("pathClasses") && o.get("pathClasses").isJsonArray())
             for (JsonElement el : o.getAsJsonArray("pathClasses")) { String n = className(el); if (n != null) classes.add(n); }
@@ -176,7 +187,9 @@ public final class ObjectClassifierContent {
                 return sb.toString();
             }
             case "trained":
-                return str(s, "model") + " on " + join(s.getAsJsonArray("measurements")) + " -> " + join(s.getAsJsonArray("classes"));
+                String pre = s.has("preprocessing") && s.getAsJsonArray("preprocessing").size() > 0
+                    ? " (" + join(s.getAsJsonArray("preprocessing")) + ")" : "";
+                return str(s, "model") + " on " + join(s.getAsJsonArray("measurements")) + pre + " -> " + join(s.getAsJsonArray("classes"));
             case "unknown": return "unknown classifier type " + str(s, "type");
             default: return "unreadable classifier file";
         }

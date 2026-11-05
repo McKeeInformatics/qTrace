@@ -79,6 +79,9 @@ import java.time.Instant;
 import java.util.*;
 import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -128,7 +131,9 @@ public class ActionLogger implements WorkflowListener {
     private final Map<String, ClassifierRecord> knownClassifiers = new ConcurrentHashMap<>();
     private volatile Thread watcherThread    = null;
     private volatile Thread objClassifierWatcherThread = null;
-    private final Map<String, Long>    objClassifierWarnedAt  = new ConcurrentHashMap<>();
+    /** Reads of object classifier files in progress, by name: a later change to the file re-arms its read. */
+    private final Map<String, Future<?>> objClassifierPending = new ConcurrentHashMap<>();
+    private ExecutorService objClassifierReader;
     private final List<JsonObject>     knownObjectClassifiers = new ArrayList<>();
 
     private static final java.util.regex.Pattern CLASSIFIER_NAME_PATTERN =
@@ -654,7 +659,6 @@ public class ActionLogger implements WorkflowListener {
         stopObjectClassifierWatcher();
         knownClassifiers.clear();
         knownObjectClassifiers.clear();
-        objClassifierWarnedAt.clear();
         cellIntensityRecords.clear();
         knownImportedFiles.clear();
         importCounter = 0;
@@ -2649,10 +2653,7 @@ public class ActionLogger implements WorkflowListener {
                         if (ev.kind() == StandardWatchEventKinds.OVERFLOW) continue;
                         @SuppressWarnings("unchecked")
                         Path changed = watchDir.resolve(((WatchEvent<Path>) ev).context());
-                        if (changed.toString().endsWith(".json")) {
-                            Thread.sleep(300);
-                            Platform.runLater(() -> onObjectClassifierSaved(changed));
-                        }
+                        if (changed.toString().endsWith(".json")) scheduleObjectClassifierRead(changed);
                     }
                     if (!key.reset()) break;
                 }
@@ -2671,45 +2672,67 @@ public class ActionLogger implements WorkflowListener {
             objClassifierWatcherThread.interrupt();
             objClassifierWatcherThread = null;
         }
+        objClassifierPending.values().forEach(f -> f.cancel(true));
+        objClassifierPending.clear();
     }
 
-    private void onObjectClassifierSaved(Path classifierFile) {
+    /**
+     * QuPath writes a classifier straight into its file, so a big model can be half on disk when the folder watcher
+     * fires. The file is read only once it has stopped changing and is one complete JSON object; a later change to the
+     * same file cancels the read in progress and starts it again.
+     */
+    private void scheduleObjectClassifierRead(Path file) {
+        String name = file.getFileName().toString().replaceAll("\\.json$", "");
+        synchronized (objClassifierPending) {
+            if (objClassifierReader == null) objClassifierReader = Executors.newCachedThreadPool(r -> {
+                Thread t = new Thread(r, "qtrace-object-classifier-reader");
+                t.setDaemon(true);
+                return t;
+            });
+            Future<?> previous = objClassifierPending.get(name);
+            if (previous != null) previous.cancel(true);
+            objClassifierPending.put(name, objClassifierReader.submit(() -> {
+                try {
+                    byte[] raw = StableFile.awaitJson(file, 300, 30_000);
+                    if (raw == null) {
+                        if (Files.exists(file)) Platform.runLater(() -> ActivityLog.add("[Object classifier] " + name
+                            + ": the file never became a complete JSON classifier - not recorded"));
+                        return;
+                    }
+                    Platform.runLater(() -> onObjectClassifierSaved(file, raw));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();   // a later change re-armed the read
+                }
+            }));
+        }
+    }
+
+    private void onObjectClassifierSaved(Path classifierFile, byte[] raw) {
         String name = classifierFile.getFileName().toString().replaceAll("\\.json$", "");
-        long now = System.currentTimeMillis();
-        Long lastSeen = objClassifierWarnedAt.get(name);
-        if (lastSeen != null && now - lastSeen < 3000) return;
         if (pauses.isPaused()) { pauses.missedChange("object classifier", 1); return; }
-        objClassifierWarnedAt.put(name, now);
 
         boolean nameValid = CLASSIFIER_NAME_PATTERN.matcher(name).matches();
         String user = QTraceController.currentContributor();
 
-        // Always record - with what the classifier is (measurement, threshold, classes, components...) and a
-        // fingerprint + copy of its file, so the Player can replay with exactly this classifier.
-        JsonObject rec;
-        byte[] raw = null;
-        try {
-            raw = Files.readAllBytes(classifierFile);
-        } catch (Exception e) {
-            ActivityLog.add("[Object classifier] cannot read " + name + ": " + e.getMessage());
-        }
-        if (raw != null) {
-            rec = ObjectClassifierFiles.record(name, raw, Instant.now(), user, nameValid);
-            // Saved again with the same content (or restored by a replay): nothing new to record.
-            for (JsonObject known : knownObjectClassifiers)
-                if (name.equals(known.get("name").getAsString()) && known.has("sha256")
-                        && known.get("sha256").equals(rec.get("sha256"))) return;
-            ObjectClassifierFiles.keepCopy(ObjectClassifierFiles.copiesDir(), rec, raw);
-        } else {
-            rec = new JsonObject();
-            rec.addProperty("name",              name);
-            rec.addProperty("saved_at",          Instant.now().toString());
-            rec.addProperty("saved_by_user",     user);
-            rec.addProperty("name_policy_valid", nameValid);
-        }
+        // What the classifier is (measurement, threshold, classes, components...) and a fingerprint + copy of its
+        // file, so the Player can replay with exactly this classifier.
+        JsonObject rec = ObjectClassifierFiles.record(name, raw, Instant.now(), user, nameValid);
+        // Saved again with the same content: nothing new to record.
+        for (JsonObject known : knownObjectClassifiers)
+            if (name.equals(known.get("name").getAsString()) && known.has("sha256")
+                    && known.get("sha256").equals(rec.get("sha256"))) return;
+        ObjectClassifierFiles.keepCopy(ObjectClassifierFiles.copiesDir(), rec, raw);
+        // A replay putting its recorded file back is not the user saving a classifier: kept in the record (so the
+        // replay's own trace stays replayable), without a "saved" event or a naming alert.
+        boolean restored = ObjectClassifierRestores.consume(name, rec.get("sha256").getAsString());
+        if (restored) rec.addProperty("restored_by_replay", true);
         knownObjectClassifiers.removeIf(o -> name.equals(o.get("name").getAsString()));
         knownObjectClassifiers.add(rec);
         notifyChanged();
+        if (restored) {
+            ActivityLog.add("[Object classifier restored by the replay] " + name);
+            return;
+        }
         ActivityLog.add("[" + ObjectClassifierFiles.eventText(rec).replaceFirst(": ", "] ")
             + (nameValid ? "" : "  ⚠ name does not match naming policy"));
         CaptureEvents.captured(CaptureEvents.CLASSIFIER, ObjectClassifierFiles.eventText(rec), rec, history.standalone());

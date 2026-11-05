@@ -451,4 +451,29 @@ class VersionTimelineTest {
             .filter(e -> e.source() == VersionTimeline.Source.OBJECT_CLASSIFIER).map(VersionTimeline.Entry::summary).toList();
         assertEquals(List.of("OC-CK19 · Cell: CK19 mean >= 120", "OC-CK19 · Cell: CK19 mean >= 135.5"), summaries);
     }
+
+    @Test
+    void aTrainedClassifierShowsHowItsFeaturesWerePreprocessed() {
+        JsonObject rec = JsonParser.parseString("{\"name\":\"T\",\"saved_at\":\"2026-09-27T09:15:00Z\",\"sha256\":\"0123456789abcdef0123\","
+            + "\"content\":{\"kind\":\"trained\",\"model\":\"RTrees\",\"measurements\":[\"a\",\"b\"],\"classes\":[\"x\",\"y\"],"
+            + "\"preprocessing\":[\"normalization\",\"pca\"],\"model_params\":{}}}").getAsJsonObject();
+        JsonObject r = root();
+        JsonArray ocs = new JsonArray();
+        ocs.add(rec);
+        r.getAsJsonArray("sessions").get(0).getAsJsonObject().add("object_classifiers", ocs);
+        assertEquals("normalization, pca", objectRow(r).details().get("graph.rec.oc.preprocessing"));
+    }
+
+    @Test
+    void aClassifierPutBackByAReplayIsShownAsRestoredNotAsSaved() {
+        JsonObject rec = objectClassifier("OC-CK19", "2026-09-27T09:15:00Z", thresholdFile("Cell: CK19 mean", 120.0, "CK19"));
+        rec.addProperty("restored_by_replay", true);
+        JsonObject r = root();
+        JsonArray ocs = new JsonArray();
+        ocs.add(rec);
+        r.getAsJsonArray("sessions").get(0).getAsJsonObject().add("object_classifiers", ocs);
+        VersionTimeline.Entry e = objectRow(r);
+        assertEquals("Restore object classifier (replay)", e.command());
+        assertEquals("OC-CK19 · Cell: CK19 mean >= 120", e.summary());
+    }
 }

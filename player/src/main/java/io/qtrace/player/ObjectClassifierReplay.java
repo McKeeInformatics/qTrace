@@ -55,7 +55,10 @@ final class ObjectClassifierReplay {
 
     /** What the pre-flight check knows about the object classifiers a record needs, by classifier name. */
     record Result(List<String> verified, Map<String, String> missing, Map<String, String> differs,
-                  Map<String, String> notCaptured) {
+                  Map<String, String> notCaptured, Map<String, String> embedded) {
+        Result(List<String> verified, Map<String, String> missing, Map<String, String> differs, Map<String, String> notCaptured) {
+            this(verified, missing, differs, notCaptured, Map.of());
+        }
         boolean none() { return verified.isEmpty() && problems() == 0; }
 
         Level level() {
@@ -72,6 +75,11 @@ final class ObjectClassifierReplay {
                 parts.add(notCaptured.size() + " recorded before qTrace kept their content, cannot be replayed exactly: "
                     + String.join(", ", notCaptured.keySet()));
             if (!verified.isEmpty()) parts.add(verified.size() + " verified by sha256");
+            if (!embedded.isEmpty()) {
+                List<String> notes = new ArrayList<>();
+                embedded.forEach((name, carrier) -> notes.add(name + " (embedded in " + carrier + ")"));
+                parts.add("info, no file needed: " + String.join(", ", notes));
+            }
             return String.join("; ", parts);
         }
         boolean allVerified() { return problems() == 0 && !verified.isEmpty(); }
@@ -108,7 +116,7 @@ final class ObjectClassifierReplay {
         inScope(qtraceJson, -1).forEach(r -> latest.put(name(r), r));
         List<String> verified = new ArrayList<>();
         Map<String, String> missing = new LinkedHashMap<>(), differs = new LinkedHashMap<>(), notCaptured = new LinkedHashMap<>();
-        if (latest.isEmpty()) return new Result(verified, missing, differs, notCaptured);
+        if (latest.isEmpty()) return new Result(verified, missing, differs, notCaptured, Map.of());
 
         boolean local = RecordSource.parse(source).local();
         Path beside = local ? ObjectClassifierFiles.companionDir(Path.of(source.strip())) : null;
@@ -135,16 +143,24 @@ final class ObjectClassifierReplay {
                 }
             }
         }
+        List<JsonObject> okRecords = new ArrayList<>();
+        for (JsonObject r : latest.values())
+            if (checkOfVersion.get(key(r)).status() == ObjectClassifierFiles.Status.OK) okRecords.add(r);
+        Map<String, String> embedded = new LinkedHashMap<>();
         for (JsonObject r : latest.values()) {
             ObjectClassifierFiles.Check c = checkOfVersion.get(key(r));
             switch (c.status()) {
                 case OK -> verified.add(name(r));
-                case MISSING -> missing.put(name(r), c.reason());
+                case MISSING -> {
+                    // A composite carries its components: the replay stays exact without the standalone file, unless a step runs it by name
+                    String carrier = carrierOf(r, okRecords, qtraceJson);
+                    if (carrier != null) embedded.put(name(r), carrier); else missing.put(name(r), c.reason());
+                }
                 case DIFFERS -> differs.put(name(r), c.reason());
                 case NOT_CAPTURED -> notCaptured.put(name(r), c.reason());
             }
         }
-        return new Result(verified, missing, differs, notCaptured);
+        return new Result(verified, missing, differs, notCaptured, embedded);
     }
 
     /** The script lines that put each classifier a replay of that scope needs back into the open project. */
@@ -157,6 +173,14 @@ final class ObjectClassifierReplay {
                 : classifierDir.resolve(DIR).resolve(Path.of(rec.get("classifier_file").getAsString()).getFileName());
             String q = groovy(name);
             boolean plain = !name.contains("/") && !name.contains("\\") && !name.contains("..");
+            if (plain && (file == null || !Files.isRegularFile(file))) {
+                String carrier = carrierOf(rec, restoredIn(qtraceJson, sessionIndex, classifierDir), qtraceJson);
+                if (carrier != null) {
+                    sb.append("println('[QTrace] object classifier \"").append(q).append("\" is not restored on its own: its rule is embedded in ")
+                      .append(groovy(carrier)).append(", which is restored');\n\n");
+                    continue;
+                }
+            }
             if (file == null || !Files.isRegularFile(file) || !plain) {
                 String why = !rec.has("sha256") ? "it was saved before qTrace kept the content of object classifiers"
                     : !plain ? "its name is not a plain file name"
@@ -194,6 +218,9 @@ final class ObjectClassifierReplay {
                 sb.append("        _f.renameTo(_old)\n");
                 sb.append("        println('⚠ Object classifier ").append(q).append(": the project had a different file, kept as ' + _old.name);\n");
                 sb.append("      }\n");
+                // Core's folder watcher must take the write for a restore, not for the user saving a classifier
+                sb.append("      try { io.qtrace.ObjectClassifierRestores.expect('").append(q).append("', '")
+                  .append(rec.get("sha256").getAsString()).append("') } catch (Throwable _t) { }\n");
                 sb.append("      _f.bytes = _bytes\n");
                 sb.append("      println('✓ Object classifier ").append(q).append(" restored to the project');\n");
                 sb.append("    }\n");
@@ -205,6 +232,55 @@ final class ObjectClassifierReplay {
             }
         }
         return sb.toString();
+    }
+
+    // ── a composite carries its components ───────────────────────────────────
+
+    /** The in-scope records whose verified file is in the folder: the ones a replay really restores. */
+    private static List<JsonObject> restoredIn(String qtraceJson, int sessionIndex, Path classifierDir) {
+        List<JsonObject> out = new ArrayList<>();
+        if (classifierDir == null) return out;
+        for (JsonObject r : inScope(qtraceJson, sessionIndex))
+            if (r.has("classifier_file") && Files.isRegularFile(classifierDir.resolve(DIR).resolve(Path.of(r.get("classifier_file").getAsString()).getFileName())))
+                out.add(r);
+        return out;
+    }
+
+    /**
+     * The name of a restored composite that carries this classifier's rule inside it, when no step runs the
+     * classifier by its own name (then its standalone file is not needed for an exact replay); else null.
+     */
+    private static String carrierOf(JsonObject standalone, List<JsonObject> restored, String qtraceJson) {
+        if (!standalone.has("content") || !standalone.get("content").isJsonObject()) return null;
+        if (runsByName(qtraceJson, name(standalone))) return null;
+        JsonObject rule = standalone.getAsJsonObject("content");
+        for (JsonObject c : restored) {
+            if (!c.has("content") || !c.get("content").isJsonObject() || name(c).equals(name(standalone))) continue;
+            if (carries(c.getAsJsonObject("content"), rule)) return name(c);
+        }
+        return null;
+    }
+
+    private static boolean carries(JsonObject composite, JsonObject rule) {
+        if (!"composite".equals(composite.has("kind") ? composite.get("kind").getAsString() : "")) return false;
+        for (JsonElement el : composite.getAsJsonArray("components")) {
+            if (!el.isJsonObject()) continue;
+            if (el.getAsJsonObject().equals(rule) || carries(el.getAsJsonObject(), rule)) return true;
+        }
+        return false;
+    }
+
+    /** Whether a recorded step runs the classifier by its name ({@code runObjectClassifier("name")}). */
+    private static boolean runsByName(String qtraceJson, String name) {
+        for (JsonElement s : sessions(qtraceJson)) {
+            if (!s.isJsonObject() || !s.getAsJsonObject().has("steps") || !s.getAsJsonObject().get("steps").isJsonArray()) continue;
+            for (JsonElement st : s.getAsJsonObject().getAsJsonArray("steps")) {
+                if (!st.isJsonObject() || !st.getAsJsonObject().has("script_fragment")) continue;
+                String script = st.getAsJsonObject().get("script_fragment").getAsString();
+                if (script.contains("runObjectClassifier") && (script.contains("\"" + name + "\"") || script.contains("'" + name + "'"))) return true;
+            }
+        }
+        return false;
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
