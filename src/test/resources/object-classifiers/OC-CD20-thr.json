@@ -1,0 +1,52 @@
+{
+  "object_classifier_type": "SimpleClassifier",
+  "function": {
+    "classifier_fun": "ClassifyByMeasurementFunction",
+    "measurement": "Cell: CD20 mean",
+    "pathClassBelow": {
+      "name": "CD20-",
+      "color": [
+        196,
+        87,
+        199
+      ]
+    },
+    "pathClassEquals": {
+      "name": "CD20+",
+      "color": [
+        196,
+        224,
+        30
+      ]
+    },
+    "pathClassAbove": {
+      "name": "CD20+",
+      "color": [
+        196,
+        224,
+        30
+      ]
+    },
+    "threshold": 200.25
+  },
+  "pathClasses": [
+    {
+      "name": "CD20-",
+      "color": [
+        196,
+        87,
+        199
+      ]
+    },
+    {
+      "name": "CD20+",
+      "color": [
+        196,
+        224,
+        30
+      ]
+    }
+  ],
+  "filter": "CELLS",
+  "timestamp": 1793848832756
+}

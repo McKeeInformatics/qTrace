@@ -1,0 +1,52 @@
+{
+  "object_classifier_type": "SimpleClassifier",
+  "function": {
+    "classifier_fun": "ClassifyByMeasurementFunction",
+    "measurement": "Cell: CD8 mean",
+    "pathClassBelow": {
+      "name": "CD8-",
+      "color": [
+        39,
+        171,
+        123
+      ]
+    },
+    "pathClassEquals": {
+      "name": "CD8+",
+      "color": [
+        39,
+        53,
+        210
+      ]
+    },
+    "pathClassAbove": {
+      "name": "CD8+",
+      "color": [
+        39,
+        53,
+        210
+      ]
+    },
+    "threshold": 64.0
+  },
+  "pathClasses": [
+    {
+      "name": "CD8-",
+      "color": [
+        39,
+        171,
+        123
+      ]
+    },
+    {
+      "name": "CD8+",
+      "color": [
+        39,
+        53,
+        210
+      ]
+    }
+  ],
+  "filter": "CELLS",
+  "timestamp": 1793848831244
+}

@@ -174,6 +174,8 @@ class QTraceReplayPlayer {
     // produces a DownloadResult with every name in failed(), never a null result.
     private List<String> currentClassifierNames = List.of();
     private QTraceReplayEngine.DownloadResult currentClassifierResult;
+    // Object classifiers: verified against the sha256 the .qtrace recorded; null when it records none.
+    private ObjectClassifierReplay.Result currentObjectClassifierResult;
     // Temp dir holding this load's downloaded classifier JSONs (see loadQtrace) — deleted on
     // the next load and on window close, mirroring the CLI/Dialog replay paths' own cleanup.
     private java.nio.file.Path classifierTempDir;
@@ -739,6 +741,16 @@ class QTraceReplayPlayer {
                         classifierResult = new QTraceReplayEngine.DownloadResult(List.of(), allFailed);
                     }
                 }
+                // Object classifiers: the copy beside the .qtrace, checked against its recorded sha256. Every
+                // version goes in the temp folder: the preamble is rebuilt for whichever sessions get chosen.
+                ObjectClassifierReplay.Result objectClassifierResult = null;
+                if (!ObjectClassifierReplay.versions(qtraceJson).isEmpty()) {
+                    if (newClassifierDir == null) {
+                        newClassifierDir = java.nio.file.Files.createTempDirectory("qtrace_player_classifiers_");
+                        leakGuard[0] = newClassifierDir;
+                    }
+                    objectClassifierResult = ObjectClassifierReplay.prepare(source, qtraceJson, newClassifierDir);
+                }
                 java.nio.file.Path classifierDir = newClassifierDir;
 
                 // A certificate covers one stamped session, not the image's whole history (earlier
@@ -774,11 +786,13 @@ class QTraceReplayPlayer {
 
                 java.nio.file.Path finalClassifierDir = newClassifierDir;
                 QTraceReplayEngine.DownloadResult finalClassifierResult = classifierResult;
+                ObjectClassifierReplay.Result finalObjectClassifierResult = objectClassifierResult;
                 Platform.runLater(() -> {
                     deleteClassifierTempDir(); // drop the previous load's temp dir before adopting this one
                     classifierTempDir = finalClassifierDir;
                     currentClassifierNames = classifierNames;
                     currentClassifierResult = finalClassifierResult;
+                    currentObjectClassifierResult = finalObjectClassifierResult;
                     loadingSpinner.setVisible(false);
                     loadingSpinner.setManaged(false);
                     this.loadedQtraceJson = qtraceJson;
@@ -1594,7 +1608,18 @@ class QTraceReplayPlayer {
         precheckDetailBox.getChildren().add(precheckRow(classifiersDot, "Pixel Classifiers",
             classifiersText, classifiersColor));
 
-        boolean allOk = extensionsOk && modelsOk && versionOk && classifiersOk;
+        // Object classifiers: shown only when the record has some; each is checked against its recorded sha256.
+        boolean objectClassifiersOk = true;
+        if (currentObjectClassifierResult != null && !currentObjectClassifierResult.none()) {
+            var oc = currentObjectClassifierResult;
+            objectClassifiersOk = oc.level() == ObjectClassifierReplay.Level.OK;
+            precheckDetailBox.getChildren().add(precheckRow(
+                switch (oc.level()) { case OK -> "🟢"; case WARN -> "🟡"; case BAD -> "🔴"; },
+                "Object Classifiers", oc.summary(),
+                switch (oc.level()) { case OK -> GREEN; case WARN -> PEACH; case BAD -> RED; }));
+        }
+
+        boolean allOk = extensionsOk && modelsOk && versionOk && classifiersOk && objectClassifiersOk;
         precheckHeaderText.setText(allOk ? "✓ Check OK" : "⚠ Check your configuration");
         Theme.text(precheckHeaderText, allOk ? GREEN : PEACH);
 

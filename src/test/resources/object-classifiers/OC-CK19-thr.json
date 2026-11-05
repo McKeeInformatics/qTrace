@@ -1,0 +1,52 @@
+{
+  "object_classifier_type": "SimpleClassifier",
+  "function": {
+    "classifier_fun": "ClassifyByMeasurementFunction",
+    "measurement": "Cell: CK19 mean",
+    "pathClassBelow": {
+      "name": "CK19-",
+      "color": [
+        164,
+        174,
+        97
+      ]
+    },
+    "pathClassEquals": {
+      "name": "CK19+",
+      "color": [
+        164,
+        17,
+        93
+      ]
+    },
+    "pathClassAbove": {
+      "name": "CK19+",
+      "color": [
+        164,
+        17,
+        93
+      ]
+    },
+    "threshold": 120.0
+  },
+  "pathClasses": [
+    {
+      "name": "CK19-",
+      "color": [
+        164,
+        174,
+        97
+      ]
+    },
+    {
+      "name": "CK19+",
+      "color": [
+        164,
+        17,
+        93
+      ]
+    }
+  ],
+  "filter": "CELLS",
+  "timestamp": 1793848828212
+}

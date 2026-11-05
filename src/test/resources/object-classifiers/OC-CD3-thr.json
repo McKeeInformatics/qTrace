@@ -1,0 +1,52 @@
+{
+  "object_classifier_type": "SimpleClassifier",
+  "function": {
+    "classifier_fun": "ClassifyByMeasurementFunction",
+    "measurement": "Cell: CD3 mean",
+    "pathClassBelow": {
+      "name": "CD3-",
+      "color": [
+        31,
+        183,
+        2
+      ]
+    },
+    "pathClassEquals": {
+      "name": "CD3+",
+      "color": [
+        31,
+        64,
+        89
+      ]
+    },
+    "pathClassAbove": {
+      "name": "CD3+",
+      "color": [
+        31,
+        64,
+        89
+      ]
+    },
+    "threshold": 80.5
+  },
+  "pathClasses": [
+    {
+      "name": "CD3-",
+      "color": [
+        31,
+        183,
+        2
+      ]
+    },
+    {
+      "name": "CD3+",
+      "color": [
+        31,
+        64,
+        89
+      ]
+    }
+  ],
+  "filter": "CELLS",
+  "timestamp": 1793848829738
+}

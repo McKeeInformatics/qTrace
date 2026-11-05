@@ -403,7 +403,7 @@ public class QTraceExporter {
         session.add("pixel_classifiers", buildClassifiersArray());
 
         // Object classifiers
-        session.add("object_classifiers", buildObjectClassifiersArray());
+        session.add("object_classifiers", buildObjectClassifiersArray(outputDir, imageName));
 
         // Imported object files (File > Import objects from file) — writes each companion
         // file into outputDir next to the .qtrace, same call site as ThumbnailGenerator.
@@ -663,9 +663,15 @@ public class QTraceExporter {
         return arr;
     }
 
-    private JsonArray buildObjectClassifiersArray() {
+    /**
+     * Each saved object classifier: its name and who saved it (as ever), what it is (measurement, threshold,
+     * classes, components...), its fingerprint, and a copy of its file in {@code <file>.qtrace.files/object_classifiers/}
+     * that the Player replays with.
+     */
+    private JsonArray buildObjectClassifiersArray(Path outputDir, String imageName) {
         JsonArray arr = new JsonArray();
         for (JsonObject obj : logger.getKnownObjectClassifiers()) arr.add(obj);
+        ObjectClassifierFiles.exportCompanions(arr, ObjectClassifierFiles.copiesDir(), fileFor(outputDir, imageName));
         return arr;
     }
 

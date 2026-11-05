@@ -2684,18 +2684,35 @@ public class ActionLogger implements WorkflowListener {
         boolean nameValid = CLASSIFIER_NAME_PATTERN.matcher(name).matches();
         String user = QTraceController.currentContributor();
 
-        // Always record
-        JsonObject rec = new JsonObject();
-        rec.addProperty("name",              name);
-        rec.addProperty("saved_at",          Instant.now().toString());
-        rec.addProperty("saved_by_user",     user);
-        rec.addProperty("name_policy_valid", nameValid);
+        // Always record - with what the classifier is (measurement, threshold, classes, components...) and a
+        // fingerprint + copy of its file, so the Player can replay with exactly this classifier.
+        JsonObject rec;
+        byte[] raw = null;
+        try {
+            raw = Files.readAllBytes(classifierFile);
+        } catch (Exception e) {
+            ActivityLog.add("[Object classifier] cannot read " + name + ": " + e.getMessage());
+        }
+        if (raw != null) {
+            rec = ObjectClassifierFiles.record(name, raw, Instant.now(), user, nameValid);
+            // Saved again with the same content (or restored by a replay): nothing new to record.
+            for (JsonObject known : knownObjectClassifiers)
+                if (name.equals(known.get("name").getAsString()) && known.has("sha256")
+                        && known.get("sha256").equals(rec.get("sha256"))) return;
+            ObjectClassifierFiles.keepCopy(ObjectClassifierFiles.copiesDir(), rec, raw);
+        } else {
+            rec = new JsonObject();
+            rec.addProperty("name",              name);
+            rec.addProperty("saved_at",          Instant.now().toString());
+            rec.addProperty("saved_by_user",     user);
+            rec.addProperty("name_policy_valid", nameValid);
+        }
         knownObjectClassifiers.removeIf(o -> name.equals(o.get("name").getAsString()));
         knownObjectClassifiers.add(rec);
         notifyChanged();
-        ActivityLog.add("[Object classifier saved] " + name
+        ActivityLog.add("[" + ObjectClassifierFiles.eventText(rec).replaceFirst(": ", "] ")
             + (nameValid ? "" : "  ⚠ name does not match naming policy"));
-        CaptureEvents.captured(CaptureEvents.CLASSIFIER, "Object classifier saved: " + name, rec, history.standalone());
+        CaptureEvents.captured(CaptureEvents.CLASSIFIER, ObjectClassifierFiles.eventText(rec), rec, history.standalone());
 
         if (!nameValid) {
             ActivityLog.add("  Expected : YYYYMMDD-SGI-ClassType-[...]");

@@ -61,7 +61,7 @@ public final class VersionTimeline {
     public enum Kind { STEP, STAMP, UNSTAMPED }
 
     /** Where a step row comes from: the QuPath workflow, or a record qTrace captured on the side. */
-    public enum Source { WORKFLOW, PIXEL_TRAINING, ALIGNMENT }
+    public enum Source { WORKFLOW, PIXEL_TRAINING, OBJECT_CLASSIFIER, ALIGNMENT }
 
     /**
      * One timeline row. {@code sessionIndex} links it to the commit graph node; step-only
@@ -150,7 +150,50 @@ public final class VersionTimeline {
         return out;
     }
 
-    /** Pixel classifier trainings and applied alignments of a session not already shown earlier. */
+    /** An enum name as a word: CELLS -> Cells, DETECTION_CELLS -> Detection cells. */
+    private static String word(String enumName) {
+        if (enumName == null || enumName.isEmpty()) return enumName;
+        String w = enumName.replace('_', ' ').toLowerCase(Locale.ROOT);
+        return Character.toUpperCase(w.charAt(0)) + w.substring(1);
+    }
+
+    /** What an object classifier does, as the detail pane shows it: the rule behind its name. */
+    private static void objectClassifierDetails(Map<String, String> d, JsonObject content) {
+        switch (str(content, "kind", "")) {
+            case "threshold" -> {
+                putIf(d, "graph.rec.oc.filter", word(str(content, "filter", null)));
+                putIf(d, "graph.rec.oc.measurement", str(content, "measurement", null));
+                putIf(d, "graph.rec.oc.threshold", io.qtrace.ObjectClassifierContent.number(content.get("threshold")));
+                putIf(d, "graph.rec.oc.above", str(content, "above", null));
+                String equal = str(content, "equals", null);
+                if (equal != null && !equal.equals(str(content, "above", null))) putIf(d, "graph.rec.oc.equal", equal);
+                putIf(d, "graph.rec.oc.below", str(content, "below", null));
+            }
+            case "composite" -> {
+                StringBuilder lines = new StringBuilder();   // the list starts under its label, one component per line
+                int n = 0;
+                for (JsonElement el : content.getAsJsonArray("components"))
+                    lines.append("\n").append(++n).append(". ")
+                        .append(io.qtrace.ObjectClassifierContent.describe(el.getAsJsonObject()));
+                putIf(d, "graph.rec.oc.components", lines.toString());
+                putIf(d, "graph.rec.classes", String.join(", ", strings(content, "classes")));
+            }
+            case "trained" -> {
+                putIf(d, "graph.rec.oc.filter", word(str(content, "filter", null)));
+                putIf(d, "graph.rec.oc.model", str(content, "model", null));
+                putIf(d, "graph.rec.oc.measurements", String.join(", ", strings(content, "measurements")));
+                putIf(d, "graph.rec.classes", String.join(", ", strings(content, "classes")));
+                List<String> params = new ArrayList<>();
+                if (content.has("model_params") && content.get("model_params").isJsonObject())
+                    content.getAsJsonObject("model_params").entrySet().forEach(e ->
+                        params.add(e.getKey() + "=" + (e.getValue().isJsonPrimitive() ? e.getValue().getAsString() : e.getValue().toString())));
+                putIf(d, "graph.rec.oc.params", String.join(", ", params));
+            }
+            default -> putIf(d, "graph.rec.type", io.qtrace.ObjectClassifierContent.describe(content));
+        }
+    }
+
+    /** Pixel classifier trainings, object classifiers and applied alignments of a session not already shown earlier. */
     private static List<Entry> capturedRecords(JsonObject s, int index, ZoneId zone, Set<String> seen) {
         List<Entry> out = new ArrayList<>();
         if (s.has("pixel_classifiers") && s.get("pixel_classifiers").isJsonArray()) {
@@ -183,6 +226,26 @@ public final class VersionTimeline {
                 out.add(new Entry(Kind.STEP, Source.PIXEL_TRAINING, index, time(ts, zone), ts,
                     "Train pixel classifier", truncate(String.join(" · ", parts), MAX_SUMMARY), null, d,
                     false, false, false, false, null));
+            }
+        }
+        if (s.has("object_classifiers") && s.get("object_classifiers").isJsonArray()) {
+            for (JsonElement el : s.getAsJsonArray("object_classifiers")) {
+                if (!el.isJsonObject()) continue;
+                JsonObject c = el.getAsJsonObject();
+                String name = str(c, "name", "");
+                String ts   = str(c, "saved_at", "");
+                String sha  = str(c, "sha256", "");
+                if (!seen.add("oc|" + name + "|" + sha + "|" + ts)) continue;
+
+                JsonObject content = c.has("content") && c.get("content").isJsonObject() ? c.getAsJsonObject("content") : null;
+                String headline = io.qtrace.ObjectClassifierContent.headline(content);
+                Map<String, String> d = new LinkedHashMap<>();
+                putIf(d, "graph.rec.name", name);
+                if (content != null) objectClassifierDetails(d, content);
+                putIf(d, "graph.rec.oc.file", sha.length() >= 16 ? sha.substring(0, 16) : null);
+                out.add(new Entry(Kind.STEP, Source.OBJECT_CLASSIFIER, index, time(ts, zone), ts,
+                    "Save object classifier", truncate(name + (headline.isEmpty() ? "" : " · " + headline), MAX_SUMMARY),
+                    null, d, false, false, false, false, null));
             }
         }
         if (s.has("alignment") && s.get("alignment").isJsonObject()) {

@@ -421,6 +421,9 @@ public class QTraceReplayEngine {
             }
         }
 
+        // ── Object classifier restoration: the exact recorded file, or a plain warning ──
+        sb.append(ObjectClassifierReplay.restoreBlocks(root.toString(), sessionIndex, classifierDir));
+
         return sb.toString();
     }
 

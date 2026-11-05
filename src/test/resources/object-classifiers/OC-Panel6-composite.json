@@ -1,0 +1,317 @@
+{
+  "object_classifier_type": "CompositeClassifier",
+  "classifiers": [
+    {
+      "object_classifier_type": "SimpleClassifier",
+      "function": {
+        "classifier_fun": "ClassifyByMeasurementFunction",
+        "measurement": "Cell: CK19 mean",
+        "pathClassBelow": {
+          "name": "CK19-",
+          "color": [
+            164,
+            174,
+            97
+          ]
+        },
+        "pathClassEquals": {
+          "name": "CK19+",
+          "color": [
+            164,
+            17,
+            93
+          ]
+        },
+        "pathClassAbove": {
+          "name": "CK19+",
+          "color": [
+            164,
+            17,
+            93
+          ]
+        },
+        "threshold": 120.0
+      },
+      "pathClasses": [
+        {
+          "name": "CK19-",
+          "color": [
+            164,
+            174,
+            97
+          ]
+        },
+        {
+          "name": "CK19+",
+          "color": [
+            164,
+            17,
+            93
+          ]
+        }
+      ],
+      "filter": "CELLS",
+      "timestamp": 1793848828212
+    },
+    {
+      "object_classifier_type": "SimpleClassifier",
+      "function": {
+        "classifier_fun": "ClassifyByMeasurementFunction",
+        "measurement": "Cell: CD3 mean",
+        "pathClassBelow": {
+          "name": "CD3-",
+          "color": [
+            31,
+            183,
+            2
+          ]
+        },
+        "pathClassEquals": {
+          "name": "CD3+",
+          "color": [
+            31,
+            64,
+            89
+          ]
+        },
+        "pathClassAbove": {
+          "name": "CD3+",
+          "color": [
+            31,
+            64,
+            89
+          ]
+        },
+        "threshold": 80.5
+      },
+      "pathClasses": [
+        {
+          "name": "CD3-",
+          "color": [
+            31,
+            183,
+            2
+          ]
+        },
+        {
+          "name": "CD3+",
+          "color": [
+            31,
+            64,
+            89
+          ]
+        }
+      ],
+      "filter": "CELLS",
+      "timestamp": 1793848829738
+    },
+    {
+      "object_classifier_type": "SimpleClassifier",
+      "function": {
+        "classifier_fun": "ClassifyByMeasurementFunction",
+        "measurement": "Cell: CD8 mean",
+        "pathClassBelow": {
+          "name": "CD8-",
+          "color": [
+            39,
+            171,
+            123
+          ]
+        },
+        "pathClassEquals": {
+          "name": "CD8+",
+          "color": [
+            39,
+            53,
+            210
+          ]
+        },
+        "pathClassAbove": {
+          "name": "CD8+",
+          "color": [
+            39,
+            53,
+            210
+          ]
+        },
+        "threshold": 64.0
+      },
+      "pathClasses": [
+        {
+          "name": "CD8-",
+          "color": [
+            39,
+            171,
+            123
+          ]
+        },
+        {
+          "name": "CD8+",
+          "color": [
+            39,
+            53,
+            210
+          ]
+        }
+      ],
+      "filter": "CELLS",
+      "timestamp": 1793848831244
+    },
+    {
+      "object_classifier_type": "SimpleClassifier",
+      "function": {
+        "classifier_fun": "ClassifyByMeasurementFunction",
+        "measurement": "Cell: CD20 mean",
+        "pathClassBelow": {
+          "name": "CD20-",
+          "color": [
+            196,
+            87,
+            199
+          ]
+        },
+        "pathClassEquals": {
+          "name": "CD20+",
+          "color": [
+            196,
+            224,
+            30
+          ]
+        },
+        "pathClassAbove": {
+          "name": "CD20+",
+          "color": [
+            196,
+            224,
+            30
+          ]
+        },
+        "threshold": 200.25
+      },
+      "pathClasses": [
+        {
+          "name": "CD20-",
+          "color": [
+            196,
+            87,
+            199
+          ]
+        },
+        {
+          "name": "CD20+",
+          "color": [
+            196,
+            224,
+            30
+          ]
+        }
+      ],
+      "filter": "CELLS",
+      "timestamp": 1793848832756
+    },
+    {
+      "object_classifier_type": "SimpleClassifier",
+      "function": {
+        "classifier_fun": "ClassifyByMeasurementFunction",
+        "measurement": "Cell: Ki67 mean",
+        "pathClassBelow": {
+          "name": "Ki67-",
+          "color": [
+            246,
+            62,
+            108
+          ]
+        },
+        "pathClassEquals": {
+          "name": "Ki67+",
+          "color": [
+            246,
+            199,
+            195
+          ]
+        },
+        "pathClassAbove": {
+          "name": "Ki67+",
+          "color": [
+            246,
+            199,
+            195
+          ]
+        },
+        "threshold": 45.0
+      },
+      "pathClasses": [
+        {
+          "name": "Ki67-",
+          "color": [
+            246,
+            62,
+            108
+          ]
+        },
+        {
+          "name": "Ki67+",
+          "color": [
+            246,
+            199,
+            195
+          ]
+        }
+      ],
+      "filter": "CELLS",
+      "timestamp": 1793848834276
+    },
+    {
+      "object_classifier_type": "SimpleClassifier",
+      "function": {
+        "classifier_fun": "ClassifyByMeasurementFunction",
+        "measurement": "Cell: PanCK mean",
+        "pathClassBelow": {
+          "name": "PanCK-",
+          "color": [
+            87,
+            50,
+            112
+          ]
+        },
+        "pathClassEquals": {
+          "name": "PanCK+",
+          "color": [
+            87,
+            149,
+            108
+          ]
+        },
+        "pathClassAbove": {
+          "name": "PanCK+",
+          "color": [
+            87,
+            149,
+            108
+          ]
+        },
+        "threshold": 150.0
+      },
+      "pathClasses": [
+        {
+          "name": "PanCK-",
+          "color": [
+            87,
+            50,
+            112
+          ]
+        },
+        {
+          "name": "PanCK+",
+          "color": [
+            87,
+            149,
+            108
+          ]
+        }
+      ],
+      "filter": "CELLS",
+      "timestamp": 1793848835780
+    }
+  ]
+}

@@ -355,4 +355,100 @@ class VersionTimelineTest {
             .add("alignment", JsonParser.parseString("{\"applied\":false}"));
         assertEquals(6, VersionTimeline.build(r, ZoneOffset.UTC).size());
     }
+
+    // ── build(): object classifiers (threshold, composite, trained) ──────────
+
+    private static String thresholdFile(String measurement, double threshold, String marker) {
+        return "{\"object_classifier_type\":\"SimpleClassifier\",\"function\":{\"classifier_fun\":\"ClassifyByMeasurementFunction\","
+            + "\"measurement\":\"" + measurement + "\",\"threshold\":" + threshold
+            + ",\"pathClassBelow\":{\"name\":\"" + marker + "-\"},\"pathClassEquals\":{\"name\":\"" + marker + "+\"},"
+            + "\"pathClassAbove\":{\"name\":\"" + marker + "+\"}},\"pathClasses\":[],\"filter\":\"CELLS\"}";
+    }
+
+    private static JsonObject objectClassifier(String name, String savedAt, String file) {
+        JsonObject r = io.qtrace.ObjectClassifierFiles.record(name, file.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            java.time.Instant.parse(savedAt), "oscar", true);
+        return r;
+    }
+
+    private static VersionTimeline.Entry objectRow(JsonObject root) {
+        return VersionTimeline.build(root, ZoneOffset.UTC).stream()
+            .filter(e -> e.source() == VersionTimeline.Source.OBJECT_CLASSIFIER).findFirst().orElseThrow();
+    }
+
+    @Test
+    void aThresholdClassifierShowsItsMeasurementThresholdAndClassesInTheSessionThatSavedIt() {
+        JsonObject r = root();
+        JsonArray ocs = new JsonArray();
+        ocs.add(objectClassifier("OC-CK19", "2026-09-27T09:15:00Z", thresholdFile("Cell: CK19 mean", 120.0, "CK19")));
+        r.getAsJsonArray("sessions").get(0).getAsJsonObject().add("object_classifiers", ocs);
+
+        VersionTimeline.Entry e = objectRow(r);
+        assertEquals(VersionTimeline.Kind.STEP, e.kind());
+        assertEquals("Save object classifier", e.command());
+        assertEquals("09:15:00", e.time());
+        assertEquals("OC-CK19 · Cell: CK19 mean >= 120", e.summary());
+        assertEquals("Cell: CK19 mean", e.details().get("graph.rec.oc.measurement"));
+        assertEquals("120", e.details().get("graph.rec.oc.threshold"));
+        assertEquals("CK19+", e.details().get("graph.rec.oc.above"));
+        assertEquals("CK19-", e.details().get("graph.rec.oc.below"));
+        assertEquals("Cells", e.details().get("graph.rec.oc.filter"), "an enum name is written as a word");
+        assertEquals(16, e.details().get("graph.rec.oc.file").length(), "a short fingerprint, not 64 characters");
+        assertFalse(e.replayable(), "saving a classifier is not a replay instruction");
+    }
+
+    @Test
+    void aCompositeListsItsComponentsNumberedInTheOrderTheyApply() {
+        JsonObject composite = JsonParser.parseString("{\"object_classifier_type\":\"CompositeClassifier\",\"classifiers\":["
+            + thresholdFile("Cell: CK19 mean", 120.0, "CK19") + "," + thresholdFile("Cell: CD3 mean", 80.5, "CD3") + "]}").getAsJsonObject();
+        JsonObject r = root();
+        JsonArray ocs = new JsonArray();
+        ocs.add(objectClassifier("OC-Panel", "2026-09-27T09:15:00Z", composite.toString()));
+        r.getAsJsonArray("sessions").get(0).getAsJsonObject().add("object_classifiers", ocs);
+
+        VersionTimeline.Entry e = objectRow(r);
+        assertEquals("OC-Panel · composite of 2", e.summary());
+        assertEquals("\n1. Cell: CK19 mean >= 120 -> CK19+, else CK19-\n2. Cell: CD3 mean >= 80.5 -> CD3+, else CD3-",
+            e.details().get("graph.rec.oc.components"));
+        assertEquals("CK19-, CK19+, CD3-, CD3+", e.details().get("graph.rec.classes"));
+    }
+
+    @Test
+    void aRecordFromBeforeTheCaptureShowsJustItsName() {
+        JsonObject old = new JsonObject();
+        old.addProperty("name", "OldOne");
+        old.addProperty("saved_at", "2026-09-27T09:15:00Z");
+        JsonObject r = root();
+        JsonArray ocs = new JsonArray();
+        ocs.add(old);
+        r.getAsJsonArray("sessions").get(0).getAsJsonObject().add("object_classifiers", ocs);
+
+        VersionTimeline.Entry e = objectRow(r);
+        assertEquals("OldOne", e.summary());
+        assertEquals(java.util.Map.of("graph.rec.name", "OldOne"), e.details());
+    }
+
+    @Test
+    void theSameClassifierCarriedIntoALaterSessionIsShownOnce() {
+        JsonObject r = root();
+        for (int i = 0; i < 2; i++) {
+            JsonArray ocs = new JsonArray();
+            ocs.add(objectClassifier("OC-CK19", "2026-09-27T09:15:00Z", thresholdFile("Cell: CK19 mean", 120.0, "CK19")));
+            r.getAsJsonArray("sessions").get(i).getAsJsonObject().add("object_classifiers", ocs);
+        }
+        assertEquals(1, VersionTimeline.build(r, ZoneOffset.UTC).stream()
+            .filter(e -> e.source() == VersionTimeline.Source.OBJECT_CLASSIFIER).count());
+    }
+
+    @Test
+    void twoVersionsOfOneNameAreTwoRows() {
+        JsonObject r = root();
+        JsonArray ocs = new JsonArray();
+        ocs.add(objectClassifier("OC-CK19", "2026-09-27T09:15:00Z", thresholdFile("Cell: CK19 mean", 120.0, "CK19")));
+        ocs.add(objectClassifier("OC-CK19", "2026-09-27T09:18:00Z", thresholdFile("Cell: CK19 mean", 135.5, "CK19")));
+        r.getAsJsonArray("sessions").get(0).getAsJsonObject().add("object_classifiers", ocs);
+        List<String> summaries = VersionTimeline.build(r, ZoneOffset.UTC).stream()
+            .filter(e -> e.source() == VersionTimeline.Source.OBJECT_CLASSIFIER).map(VersionTimeline.Entry::summary).toList();
+        assertEquals(List.of("OC-CK19 · Cell: CK19 mean >= 120", "OC-CK19 · Cell: CK19 mean >= 135.5"), summaries);
+    }
 }

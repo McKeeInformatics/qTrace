@@ -1,0 +1,52 @@
+{
+  "object_classifier_type": "SimpleClassifier",
+  "function": {
+    "classifier_fun": "ClassifyByMeasurementFunction",
+    "measurement": "Cell: PanCK mean",
+    "pathClassBelow": {
+      "name": "PanCK-",
+      "color": [
+        87,
+        50,
+        112
+      ]
+    },
+    "pathClassEquals": {
+      "name": "PanCK+",
+      "color": [
+        87,
+        149,
+        108
+      ]
+    },
+    "pathClassAbove": {
+      "name": "PanCK+",
+      "color": [
+        87,
+        149,
+        108
+      ]
+    },
+    "threshold": 150.0
+  },
+  "pathClasses": [
+    {
+      "name": "PanCK-",
+      "color": [
+        87,
+        50,
+        112
+      ]
+    },
+    {
+      "name": "PanCK+",
+      "color": [
+        87,
+        149,
+        108
+      ]
+    }
+  ],
+  "filter": "CELLS",
+  "timestamp": 1793848835780
+}

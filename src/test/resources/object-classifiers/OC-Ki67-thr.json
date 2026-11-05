@@ -1,0 +1,52 @@
+{
+  "object_classifier_type": "SimpleClassifier",
+  "function": {
+    "classifier_fun": "ClassifyByMeasurementFunction",
+    "measurement": "Cell: Ki67 mean",
+    "pathClassBelow": {
+      "name": "Ki67-",
+      "color": [
+        246,
+        62,
+        108
+      ]
+    },
+    "pathClassEquals": {
+      "name": "Ki67+",
+      "color": [
+        246,
+        199,
+        195
+      ]
+    },
+    "pathClassAbove": {
+      "name": "Ki67+",
+      "color": [
+        246,
+        199,
+        195
+      ]
+    },
+    "threshold": 45.0
+  },
+  "pathClasses": [
+    {
+      "name": "Ki67-",
+      "color": [
+        246,
+        62,
+        108
+      ]
+    },
+    {
+      "name": "Ki67+",
+      "color": [
+        246,
+        199,
+        195
+      ]
+    }
+  ],
+  "filter": "CELLS",
+  "timestamp": 1793848834276
+}
