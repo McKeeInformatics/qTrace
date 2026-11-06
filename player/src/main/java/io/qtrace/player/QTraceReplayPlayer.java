@@ -1977,6 +1977,7 @@ class QTraceReplayPlayer {
     private String typeColor(String type) {
         return switch (type) {
             case "Pixel Classifier" -> BLUE;
+            case "Object Classifier" -> PEACH; // the Logbook's colour for a classifier event
             case "Segmentation"     -> PEACH;
             case "Cell detection"   -> GREEN;
             case "Measurement Map"  -> PEACH; // display-only / not scriptable — same warning tone as Segmentation

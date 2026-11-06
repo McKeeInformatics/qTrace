@@ -92,6 +92,14 @@ class ReplayStepTest {
     }
 
     @Test
+    void classify_aRunOfAnObjectClassifierIsNotJustAScript() {
+        assertThat(ReplayStep.classify("runObjectClassifier(\"20261105-SGI-CD14-v\")")).isEqualTo("Object Classifier");
+        assertThat(ReplayStep.classify("runObjectClassifier('A', 'B')")).isEqualTo("Object Classifier");
+        // a pixel classifier keeps its own type
+        assertThat(ReplayStep.classify("createAnnotationsFromPixelClassifier('tissue', 1, 1)")).isEqualTo("Pixel Classifier");
+    }
+
+    @Test
     void aRunOfAnObjectClassifierIsListedUnderItsName() {
         String qtrace = """
             { "image": { "name": "t.tiff", "sha256": "abc" },
