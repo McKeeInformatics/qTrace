@@ -519,6 +519,7 @@ public class QTraceReplayEngine {
             // Listed under the name of its step, as on the portal's "Scripts executed"; a step
             // recorded without a name falls back on the first line of its script.
             String label = names.getOrDefault(frag, "").strip();
+            label = io.qtrace.ObjectClassifierContent.stepTitle(label, frag);
             if (label.isEmpty()) label = emitted.lines().map(String::strip).filter(l -> !l.isBlank()).findFirst().orElse("?");
             if (label.length() > 60) label = label.substring(0, 60) + "…";
             result.add(new ReplayStep(stepNum, ReplayStep.classify(emitted), label, emitted,

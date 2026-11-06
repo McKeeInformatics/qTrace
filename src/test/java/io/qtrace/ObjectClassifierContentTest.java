@@ -174,4 +174,21 @@ class ObjectClassifierContentTest {
     void theFittedNormalizerAndProjectionAreNotCopiedIntoTheSummary() throws Exception {
         assertTrue(ObjectClassifierContent.summarize(fixture("OC-Trained-minmax-pca")).toString().length() < 1500);
     }
+
+    @Test
+    void aStepThatRunsAClassifierIsTitledWithItsName() {
+        assertEquals("Run object classifier: 20261105-SGI-CD14-v",
+            ObjectClassifierContent.stepTitle("Run object classifier", "runObjectClassifier(\"20261105-SGI-CD14-v\")"));
+        assertEquals("Run object classifier: A-v1",
+            ObjectClassifierContent.stepTitle("Run object classifier", "runObjectClassifier('A-v1')"));
+    }
+
+    @Test
+    void anyOtherStepKeepsItsTitle() {
+        assertEquals("Cell detection", ObjectClassifierContent.stepTitle("Cell detection", "runPlugin('x')"));
+        assertEquals("Run object classifier", ObjectClassifierContent.stepTitle("Run object classifier", ""));
+        assertEquals("Run object classifier", ObjectClassifierContent.stepTitle("Run object classifier", null));
+        assertEquals("", ObjectClassifierContent.stepTitle("", "runObjectClassifier(\"A\")"));
+        assertEquals(null, ObjectClassifierContent.stepTitle(null, "runObjectClassifier(\"A\")"));
+    }
 }

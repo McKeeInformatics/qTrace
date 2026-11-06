@@ -28,6 +28,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Reads what QuPath wrote for an object classifier (the JSON of
@@ -153,6 +155,18 @@ public final class ObjectClassifierContent {
             }
         }
         return params;
+    }
+
+    private static final Pattern RUN_BY_NAME = Pattern.compile("runObjectClassifier\\(\\s*[\"']([^\"']+)[\"']\\s*\\)");
+
+    /**
+     * What a list calls a recorded step: QuPath's own command name says that a classifier ran, not which one, so a
+     * step that runs one by its name is titled with it ("Run object classifier: 20261105-SGI-CD14-v").
+     */
+    public static String stepTitle(String command, String script) {
+        if (command == null || !command.equals("Run object classifier") || script == null) return command;
+        Matcher m = RUN_BY_NAME.matcher(script);
+        return m.find() ? command + ": " + m.group(1) : command;
     }
 
     /** The rule in few words, for a row or a log line; empty when there is no content (a record from before the capture). */

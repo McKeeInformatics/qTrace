@@ -135,6 +135,8 @@ public class ActionLogger implements WorkflowListener {
     private final Map<String, Future<?>> objClassifierPending = new ConcurrentHashMap<>();
     private ExecutorService objClassifierReader;
     private final List<JsonObject>     knownObjectClassifiers = new ArrayList<>();
+    /** The last file read for each object classifier name, to tell a new rule from the same rule saved again. */
+    private final Map<String, byte[]> lastObjectClassifierRaw = new HashMap<>();
 
     private static final java.util.regex.Pattern CLASSIFIER_NAME_PATTERN =
         java.util.regex.Pattern.compile("^\\d{8}-[A-Z0-9]+-\\w+-.*$");
@@ -659,6 +661,7 @@ public class ActionLogger implements WorkflowListener {
         stopObjectClassifierWatcher();
         knownClassifiers.clear();
         knownObjectClassifiers.clear();
+        lastObjectClassifierRaw.clear();
         cellIntensityRecords.clear();
         knownImportedFiles.clear();
         importCounter = 0;
@@ -1595,6 +1598,7 @@ public class ActionLogger implements WorkflowListener {
         knownClassifiers.clear();
         knownClassifiers.putAll(s.knownClassifiers);
         knownObjectClassifiers.clear();
+        lastObjectClassifierRaw.clear();
         knownObjectClassifiers.addAll(s.knownObjectClassifiers);
         knownImportedFiles.clear();
         knownImportedFiles.putAll(s.knownImportedFiles);
@@ -2726,9 +2730,13 @@ public class ActionLogger implements WorkflowListener {
         // replay's own trace stays replayable), without a "saved" event or a naming alert.
         boolean restored = ObjectClassifierRestores.consume(name, rec.get("sha256").getAsString());
         if (restored) rec.addProperty("restored_by_replay", true);
+        byte[] previous = lastObjectClassifierRaw.put(name, raw);
         knownObjectClassifiers.removeIf(o -> name.equals(o.get("name").getAsString()));
         knownObjectClassifiers.add(rec);
         notifyChanged();
+        // Save then Apply writes the file twice: QuPath changes only its save time. The record follows the file on
+        // disk (so the Player's fingerprint check holds) but the rule was already announced.
+        if (!restored && previous != null && ObjectClassifierFiles.sameRule(previous, raw)) return;
         if (restored) {
             ActivityLog.add("[Object classifier restored by the replay] " + name);
             return;

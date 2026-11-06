@@ -22,6 +22,7 @@ package io.qtrace;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.qtrace.chain.Hashing;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -69,6 +70,37 @@ public final class ObjectClassifierFiles {
         r.addProperty("classifier_file", fileName(name, sha));
         r.add("content", ObjectClassifierContent.summarize(new String(raw, StandardCharsets.UTF_8)));
         return r;
+    }
+
+    /**
+     * Whether two saves of a classifier are the same rule. QuPath stamps every write with its save time
+     * ({@code timestamp}, composites' components too), so Save then Apply give two fingerprints for one rule.
+     * A file that is not JSON is the same only when its bytes are.
+     */
+    public static boolean sameRule(byte[] a, byte[] b) {
+        try {
+            JsonElement x = JsonParser.parseString(new String(a, StandardCharsets.UTF_8));
+            JsonElement y = JsonParser.parseString(new String(b, StandardCharsets.UTF_8));
+            return withoutSaveTime(x).equals(withoutSaveTime(y));
+        } catch (RuntimeException notJson) {
+            return java.util.Arrays.equals(a, b);
+        }
+    }
+
+    private static JsonElement withoutSaveTime(JsonElement e) {
+        if (e.isJsonObject()) {
+            JsonObject out = new JsonObject();
+            e.getAsJsonObject().entrySet().forEach(en -> {
+                if (!en.getKey().equals("timestamp")) out.add(en.getKey(), withoutSaveTime(en.getValue()));
+            });
+            return out;
+        }
+        if (e.isJsonArray()) {
+            JsonArray out = new JsonArray();
+            e.getAsJsonArray().forEach(i -> out.add(withoutSaveTime(i)));
+            return out;
+        }
+        return e;
     }
 
     /** {@code <name>@<first 12 of the fingerprint>.json}; a name is a file name, never a path out of the folder. */

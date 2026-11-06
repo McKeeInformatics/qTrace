@@ -90,4 +90,17 @@ class ReplayStepTest {
             .isEqualTo("Cell detection");
         assertThat(ReplayStep.classify("print('nothing special')")).isEqualTo("Script");
     }
+
+    @Test
+    void aRunOfAnObjectClassifierIsListedUnderItsName() {
+        String qtrace = """
+            { "image": { "name": "t.tiff", "sha256": "abc" },
+              "sessions": [ { "steps": [
+                { "command": "Run object classifier", "script_fragment": "runObjectClassifier(\\"20261105-SGI-CD14-v\\")", "is_scriptable": true }
+              ] } ] }
+            """;
+        List<ReplayStep> steps = QTraceReplayEngine.extractSteps(qtrace, -1);
+        assertThat(steps).hasSize(1);
+        assertThat(steps.get(0).title()).isEqualTo("Run object classifier: 20261105-SGI-CD14-v");
+    }
 }

@@ -150,4 +150,33 @@ class ObjectClassifierFilesTest {
         JsonObject old = new JsonObject(); old.addProperty("name", "OldOne");
         assertEquals("Object classifier saved: OldOne", ObjectClassifierFiles.eventText(old));
     }
+
+    private static byte[] json(String s) { return s.getBytes(StandardCharsets.UTF_8); }
+
+    @Test
+    void savingTheSameRuleAgainOnlyChangesTheSaveTime() {
+        byte[] first = json("{\"function\":{\"measurement\":\"m\",\"threshold\":0.5},\"timestamp\":1793928122000}");
+        byte[] again = json("{\"function\":{\"measurement\":\"m\",\"threshold\":0.5},\"timestamp\":1793928126000}");
+        assertTrue(ObjectClassifierFiles.sameRule(first, again));
+    }
+
+    @Test
+    void theSaveTimeOfACompositesComponentsIsIgnoredToo() {
+        byte[] a = json("{\"classifiers\":[{\"threshold\":1,\"timestamp\":1},{\"threshold\":2,\"timestamp\":2}],\"timestamp\":3}");
+        byte[] b = json("{\"timestamp\":9,\"classifiers\":[{\"timestamp\":7,\"threshold\":1},{\"timestamp\":8,\"threshold\":2}]}");
+        assertTrue(ObjectClassifierFiles.sameRule(a, b));
+    }
+
+    @Test
+    void aMovedThresholdIsAnotherRuleWhateverTheSaveTime() {
+        byte[] a = json("{\"function\":{\"threshold\":0.5},\"timestamp\":1}");
+        byte[] b = json("{\"function\":{\"threshold\":0.6},\"timestamp\":1}");
+        assertFalse(ObjectClassifierFiles.sameRule(a, b));
+    }
+
+    @Test
+    void aFileWeCannotReadIsTheSameOnlyWhenItsBytesAre() {
+        assertTrue(ObjectClassifierFiles.sameRule(json("garbage"), json("garbage")));
+        assertFalse(ObjectClassifierFiles.sameRule(json("garbage"), json("garbage2")));
+    }
 }
