@@ -713,21 +713,64 @@ public class QTraceReplayEngine {
     /**
      * Replaces each fully-qualified extension class name by its simple name — the variable the
      * preamble loads it into, so that a missing extension is a warning and not a compile error.
-     * An {@code import} line is left as written: {@code import qupath.imagej.tools.IJTools}
-     * turned into {@code import IJTools} no longer compiles, and with its import in place the
-     * simple name used in the rest of the script resolves to the class itself.
+     * Only code is rewritten. A name inside a string is data: QuPath loads a plugin by the full name
+     * given to {@code runPlugin('qupath.imagej.detect.cells.WatershedCellDetection', ...)}, and the
+     * simple name is not a class it can find. Comments are left too, and so is an {@code import} line:
+     * {@code import qupath.imagej.tools.IJTools} turned into {@code import IJTools} no longer compiles,
+     * and with its import in place the simple name used in the rest of the script resolves to the class itself.
      */
     static String simplifyQualifiedNames(String fragment, Map<String, String> fqnToSimple) {
         if (fqnToSimple.isEmpty()) return fragment;
         StringBuilder out = new StringBuilder(fragment.length());
-        for (String line : fragment.split("\n", -1)) {
-            if (out.length() > 0) out.append('\n');
-            if (!IMPORT_LINE.matcher(line).lookingAt())
-                for (Map.Entry<String, String> e : fqnToSimple.entrySet())
-                    line = line.replace(e.getKey(), e.getValue());
-            out.append(line);
+        int n = fragment.length();
+        int code = 0;                       // start of the code run not yet written
+        int i = 0;
+        while (i < n) {
+            char c = fragment.charAt(i);
+            boolean lineStart = i == 0 || fragment.charAt(i - 1) == '\n';
+            int skipTo = -1;                // end (exclusive) of a stretch to copy as written
+            if (lineStart && IMPORT_LINE.matcher(fragment).region(i, n).lookingAt()) {
+                skipTo = lineEnd(fragment, i);
+            } else if (c == '/' && i + 1 < n && fragment.charAt(i + 1) == '/') {
+                skipTo = lineEnd(fragment, i);
+            } else if (c == '/' && i + 1 < n && fragment.charAt(i + 1) == '*') {
+                int close = fragment.indexOf("*/", i + 2);
+                skipTo = close < 0 ? n : close + 2;
+            } else if (c == '\'' || c == '"') {
+                skipTo = stringEnd(fragment, i, c);
+            }
+            if (skipTo < 0) { i++; continue; }
+            out.append(rewriteCode(fragment.substring(code, i), fqnToSimple));
+            out.append(fragment, i, skipTo);
+            i = code = skipTo;
         }
+        out.append(rewriteCode(fragment.substring(code), fqnToSimple));
         return out.toString();
+    }
+
+    private static String rewriteCode(String code, Map<String, String> fqnToSimple) {
+        for (Map.Entry<String, String> e : fqnToSimple.entrySet()) code = code.replace(e.getKey(), e.getValue());
+        return code;
+    }
+
+    private static int lineEnd(String s, int from) {
+        int nl = s.indexOf('\n', from);
+        return nl < 0 ? s.length() : nl;
+    }
+
+    /** End (exclusive) of the string literal opening at {@code open}: single, double or triple quoted, escapes honoured. */
+    private static int stringEnd(String s, int open, char quote) {
+        int n = s.length();
+        boolean triple = s.startsWith("" + quote + quote + quote, open);
+        int i = open + (triple ? 3 : 1);
+        while (i < n) {
+            char c = s.charAt(i);
+            if (c == '\\') { i += 2; continue; }
+            if (triple ? s.startsWith("" + quote + quote + quote, i) : c == quote) return Math.min(n, i + (triple ? 3 : 1));
+            if (!triple && c == '\n') return i;     // an unclosed one-line string ends with its line
+            i++;
+        }
+        return n;
     }
 
     private static final Pattern IMPORT_LINE = Pattern.compile("\\s*import\\s");

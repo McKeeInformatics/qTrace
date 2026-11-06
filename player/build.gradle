@@ -34,6 +34,10 @@ configurations {
     cliOnly
 }
 
+// QuPath brings Groovy and Logback at runtime, and the executor's own tests run a script and read the log. They go
+// first on the test classpath: Core's jar bundles an older slf4j, which would find no binding for Logback.
+configurations { loggingFirst }
+
 dependencies {
     // qtrace-core is required at runtime — loaded by the qTrace loader next to this module.
     // Pin to the current version: build/libs accumulates every past version (gradle never
@@ -54,15 +58,19 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
     testImplementation 'org.assertj:assertj-core:3.25.1'
+    loggingFirst 'org.slf4j:slf4j-api:2.0.9'
+    loggingFirst 'ch.qos.logback:logback-classic:1.4.14'
     testImplementation fileTree("../build/libs") { include "qtrace-core-${coreVersion}.jar" }
     testImplementation 'com.google.code.gson:gson:2.10.1'
     testCompileOnly "io.github.qupath:qupath-gui-fx:${qupathVersion}"
     testRuntimeOnly "io.github.qupath:qupath-gui-fx:${qupathVersion}"
     testRuntimeOnly "io.github.qupath:qupath-core:${qupathVersion}"
+    testRuntimeOnly 'org.apache.groovy:groovy:4.0.15'
 }
 
 test {
     useJUnitPlatform()
+    classpath = configurations.loggingFirst + classpath
 }
 
 // The screenshot harness (player.png) lives in tools/screenshots/, outside the public Core tree.

@@ -72,6 +72,7 @@ public class ReplayExecutor {
     private final GroovyShell shell;
     private final ExecutorService worker;
     private final ProgressAppender progressAppender;
+    private final ScriptErrorAppender scriptErrors = new ScriptErrorAppender();
     private final Logger rootLogger;
 
     /**
@@ -112,6 +113,9 @@ public class ReplayExecutor {
         progressAppender.setContext(rootLogger.getLoggerContext());
         progressAppender.start();
         rootLogger.addAppender(progressAppender);
+        scriptErrors.setContext(rootLogger.getLoggerContext());
+        scriptErrors.start();
+        rootLogger.addAppender(scriptErrors);
     }
 
     /**
@@ -141,6 +145,8 @@ public class ReplayExecutor {
     public void close() {
         rootLogger.detachAppender(progressAppender);
         progressAppender.stop();
+        rootLogger.detachAppender(scriptErrors);
+        scriptErrors.stop();
         worker.shutdownNow();
     }
 
@@ -149,8 +155,16 @@ public class ReplayExecutor {
         worker.execute(() -> {
             long start = System.currentTimeMillis();
             try {
+                scriptErrors.clear();
                 shell.evaluate(groovy);
-                future.complete(StepResult.ok(System.currentTimeMillis() - start));
+                // QuPath's script functions (runPlugin...) catch what a plugin throws and only log it: the step
+                // ends normally though nothing was done. An error they logged is a failed step.
+                ScriptErrorAppender.Error logged = scriptErrors.first();
+                if (logged != null) {
+                    future.complete(StepResult.failed(logged.message(), System.currentTimeMillis() - start, logged.stackTrace()));
+                } else {
+                    future.complete(StepResult.ok(System.currentTimeMillis() - start));
+                }
             } catch (Exception e) {
                 java.io.StringWriter sw = new java.io.StringWriter();
                 e.printStackTrace(new java.io.PrintWriter(sw));
@@ -158,6 +172,26 @@ public class ReplayExecutor {
             }
         });
         return future;
+    }
+
+    /** The errors QuPath's script functions log ({@code QPEx}) while a step runs. */
+    private static class ScriptErrorAppender extends AppenderBase<ILoggingEvent> {
+        record Error(String message, String stackTrace) {}
+
+        private final java.util.List<Error> errors = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        protected void append(ILoggingEvent event) {
+            if (!event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.ERROR)) return;
+            if (!"qupath.lib.gui.scripting.QPEx".equals(event.getLoggerName())) return;
+            var thrown = event.getThrowableProxy();
+            errors.add(new Error(event.getFormattedMessage(),
+                thrown == null ? null : ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(thrown)));
+        }
+
+        void clear() { errors.clear(); }
+
+        Error first() { return errors.isEmpty() ? null : errors.get(0); }
     }
 
     private static class ProgressAppender extends AppenderBase<ILoggingEvent> {
