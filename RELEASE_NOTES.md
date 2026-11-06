@@ -1,3 +1,11 @@
+## What's new in v1.2.16
+
+### New - An object classifier travels with its record
+Upload now sends the object classifier files (thresholds, composite and trained classifiers) next to the .qtrace, and the Player downloads them when it opens a qtc_ record, checking each one against its recorded fingerprint (sha256) before the replay. A record opened from qtrace.ca replays with exactly the classifier it was made with. A free account that goes over its storage is told to upgrade to a paid account.
+
+### Fixed - A replayed cell detection creates its cells
+The Player no longer rewrites a plugin's full class name inside quotes, so a recorded cell detection runs again instead of failing silently with 0 cells. A step for which QuPath logged an error is now shown as failed, with QuPath's message.
+
 ## What's new in v1.2.15
 
 ### Fixed - A command run on your selection replays on the same objects
