@@ -751,8 +751,11 @@ public class ActionLogger implements WorkflowListener {
             history.hold(action, json);
             capturedSteps.add(json);
             changes.bump();
-            ActivityLog.add("Step " + (i + 1) + " captured: " + step.getName());
-            CaptureEvents.captured(kind, step.getName(), json, action); // whole: a view may make a workflow of it
+            // A step that runs an object classifier is listed under its name; the recorded command stays QuPath's.
+            String title = ObjectClassifierContent.stepTitle(step.getName(),
+                step instanceof ScriptableWorkflowStep ss ? ss.getScript() : null);
+            ActivityLog.add("Step " + (i + 1) + " captured: " + title);
+            CaptureEvents.captured(kind, title, json, action); // whole: a view may make a workflow of it
             if (step instanceof ScriptableWorkflowStep s) {
                 detectClassifierFromScript(s.getScript());
                 detectCellIntensityFromScript(s.getScript());
