@@ -212,6 +212,9 @@ public class ActionLogger implements WorkflowListener {
     // — see the comment there for why annotationStepIndex alone isn't reliable during a fast
     // drag (many CHANGE_OTHER events per second, e.g. moving a rectangle/ellipse).
     private final Map<String, Integer> manualAnnotationLatestIndex = new HashMap<>();
+    // Annotations edited after a later step used them: suffix -> the earlier steps kept in force (the creation, and any edit
+    // a step used), so the replay creates the object before what runs on it. Cleared with the capture.
+    private final Map<String, List<Integer>> keptAnnotationSteps = new HashMap<>();
     private static final java.util.regex.Pattern OBJ_VAR_SUFFIX =
         java.util.regex.Pattern.compile("_obj_([0-9a-f]{8})");
     // Debounce for manual annotation geometry edits: a click-drag move/resize fires one
@@ -687,6 +690,7 @@ public class ActionLogger implements WorkflowListener {
         annotationAdded.clear();
         annotationStepIndex.clear();
         manualAnnotationLatestIndex.clear();
+        keptAnnotationSteps.clear();
         annotationMoveDebouncePending.clear();
         annotationMoveLastEventTime.clear();
         snapshotAnnotationIds.clear();
@@ -931,6 +935,42 @@ public class ActionLogger implements WorkflowListener {
                "if (_obj_" + varSuffix + " != null) addObject(_obj_" + varSuffix + ")";
     }
 
+    /**
+     * The fragment for an annotation edited after a step used it: the object already exists at that point of the
+     * replay (its creation step stays in force), so this replaces it by ID with the settled geometry instead of
+     * adding a second object with the same ID. Children (the detections inside) are kept and re-attached.
+     */
+    private String buildAnnotationEditFragment(UUID uuid, PathObject obj) {
+        String varSuffix = uuid.toString().replace("-", "").substring(0, 8);
+        String roiName   = (obj.getROI() != null) ? obj.getROI().getRoiName() : "Object";
+        String b64       = Base64.getEncoder().encodeToString(
+                               GsonTools.getInstance(false).toJson(obj).getBytes(StandardCharsets.UTF_8));
+        return "// Replay manual annotation edit: " + roiName + "\n" +
+               "def _b_"   + varSuffix + " = java.util.Base64.getDecoder().decode(\"" + b64 + "\")\n" +
+               "def _obj_" + varSuffix + " = qupath.lib.io.GsonTools.getInstance(false)" +
+                   ".fromJson(new String(_b_" + varSuffix + ", \"UTF-8\"), qupath.lib.objects.PathObject)\n" +
+               "if (_obj_" + varSuffix + " != null) {\n" +
+               "  def _old_" + varSuffix + " = getAnnotationObjects().find { it.getID() == _obj_" + varSuffix + ".getID() }\n" +
+               "  if (_old_" + varSuffix + " != null) removeObject(_old_" + varSuffix + ", true)\n" +
+               "  addObject(_obj_" + varSuffix + ")\n" +
+               "}";
+    }
+
+    /**
+     * Whether a step in force, captured after the step at {@code idx}, names the object ({@code suffix}: the 8 hex
+     * characters of its ID, which a selection carries in full). The steps of the object itself do not count.
+     */
+    private boolean usedSince(int idx, String suffix) {
+        for (int i = idx + 1; i < capturedSteps.size(); i++) {
+            JsonObject st = capturedSteps.get(i);
+            if (!QTraceExporter.inForce(st) || !st.has("script_fragment") || st.get("script_fragment").isJsonNull()) continue;
+            String frag = st.get("script_fragment").getAsString();
+            if (frag.contains("_obj_" + suffix)) continue;
+            if (frag.contains(suffix)) return true;
+        }
+        return false;
+    }
+
     // ── Debounced entry point for all manual annotation capture ────────────────
 
     /**
@@ -1049,7 +1089,13 @@ public class ActionLogger implements WorkflowListener {
                 ? existing.get("script_fragment").getAsString() : null;
             if (newFrag.equals(oldFrag)) return; // nothing changed
 
-            retireStep(idx);
+            // A step captured since used this annotation: its creation stays in force, so the replay has the
+            // object when that step runs, and this edit becomes a later step that replaces it by ID.
+            String suffix = uuid.toString().replace("-", "").substring(0, 8);
+            List<Integer> kept = keptAnnotationSteps.computeIfAbsent(suffix, k -> new ArrayList<>());
+            if (usedSince(idx, suffix)) kept.add(idx); else retireStep(idx);
+            if (!kept.isEmpty()) newFrag = buildAnnotationEditFragment(uuid, obj);
+            else keptAnnotationSteps.remove(suffix);
             String roiName = (obj.getROI() != null) ? obj.getROI().getRoiName() : "Object";
             var step = new DefaultScriptableWorkflowStep("Manual annotation: " + roiName, newFrag);
             currentImageData.getHistoryWorkflow().addStep(step);
@@ -1069,10 +1115,13 @@ public class ActionLogger implements WorkflowListener {
         Integer idx = annotationStepIndex.remove(uuid);
         if (idx == null) return;
         retireStep(idx);
+        // The steps kept in force for a step that used it go with it
+        List<Integer> kept = List.copyOf(keptAnnotationSteps.getOrDefault(uuid.toString().replace("-", "").substring(0, 8), List.of()));
+        kept.forEach(this::retireStep);
         long action = history.beyondDrawing(); // a deletion is not part of a drawing still debouncing
         history.supersede(action,
-            () -> { unretireStep(idx); annotationStepIndex.put(uuid, idx); refreshManualAnnotationCount(); },
-            () -> { retireStep(idx); annotationStepIndex.remove(uuid); refreshManualAnnotationCount(); });
+            () -> { unretireStep(idx); kept.forEach(this::unretireStep); annotationStepIndex.put(uuid, idx); refreshManualAnnotationCount(); },
+            () -> { retireStep(idx); kept.forEach(this::retireStep); annotationStepIndex.remove(uuid); refreshManualAnnotationCount(); });
         ActivityLog.add("Annotation deleted: " + roiName + " (removed from meta-script)");
         CaptureEvents.captured(CaptureEvents.ANNOTATION, "Annotation deleted: " + roiName, null, action);
         refreshManualAnnotationCount();
@@ -1129,6 +1178,8 @@ public class ActionLogger implements WorkflowListener {
         String suffix = m.group(1);
         Integer prevIdx = manualAnnotationLatestIndex.put(suffix, newIdx);
         if (prevIdx == null) return;
+        List<Integer> kept = keptAnnotationSteps.get(suffix);
+        if (kept != null && kept.contains(prevIdx)) return; // a later step used it: it stays in force
         // Same object, new fragment: it stays out of the replay if its author took it out.
         ReplaySkip.copy(capturedSteps.get(prevIdx), json);
         retireStep(prevIdx);
@@ -1510,6 +1561,7 @@ public class ActionLogger implements WorkflowListener {
         annotationAdded.clear();
         annotationStepIndex.clear();
         manualAnnotationLatestIndex.clear();
+        keptAnnotationSteps.clear();
         annotationMoveDebouncePending.clear();
         annotationMoveLastEventTime.clear();
         deletedFragments.clear();
@@ -1583,6 +1635,7 @@ public class ActionLogger implements WorkflowListener {
         annotationStepIndex.clear();
         annotationStepIndex.putAll(s.annotationStepIndex);
         manualAnnotationLatestIndex.clear();
+        keptAnnotationSteps.clear();
         manualAnnotationLatestIndex.putAll(s.manualAnnotationLatestIndex);
         snapshotAnnotationIds.clear();
         snapshotAnnotationIds.addAll(s.snapshotAnnotationIds);
