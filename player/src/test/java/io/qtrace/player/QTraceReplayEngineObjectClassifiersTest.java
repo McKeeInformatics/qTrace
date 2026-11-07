@@ -104,14 +104,50 @@ class QTraceReplayEngineObjectClassifiersTest {
     }
 
     @Test
-    void aPixelClassifierOnlyLoadedFromTheImageHistoryIsNotRequired() {
+    void aPixelClassifierOnlyLoadedFromTheImageHistoryIsFlaggedLoaded() {
         String json = recordWith("trained", "saved", "history", "loaded");
         assertEquals(java.util.Set.of("history"), QTraceReplayEngine.extractLoadedClassifierNames(json));
+    }
+
+    private static final String USES_HISTORY = "addPixelClassifierMeasurements(\"history\", \"history\")";
+
+    private static QTraceReplayEngine.PixelClassifierVerdict verdict(java.util.List<String> replayed, java.util.Set<String> inProject) {
         java.util.Map<String, String> failed = new java.util.LinkedHashMap<>();
         failed.put("trained", "404");
         failed.put("history", "404");
-        assertEquals(java.util.Set.of("trained"),
-            QTraceReplayEngine.requiredFailures(failed, java.util.Set.of("history")).keySet());
+        return QTraceReplayEngine.pixelClassifierVerdict(failed, java.util.Set.of("history"), replayed, inProject::contains);
+    }
+
+    @Test
+    void aClassifierOnlyLoadedThatNoReplayedInstructionUsesIsNotRequired() {
+        var v = verdict(java.util.List.of("setImageType('FLUORESCENCE');"), java.util.Set.of());
+        assertEquals(java.util.Set.of("trained"), v.missing().keySet());
+        assertEquals(java.util.List.of("history"), v.notReplayed());
+        assertTrue(v.inProject().isEmpty());
+    }
+
+    @Test
+    void aClassifierOnlyLoadedThatAReplayedInstructionUsesIsMissingWhenThisProjectHasNotGotIt() {
+        // The image's history step is replayed with the record: it needs the classifier, or it fails
+        var v = verdict(java.util.List.of(USES_HISTORY), java.util.Set.of());
+        assertEquals(java.util.Set.of("trained", "history"), v.missing().keySet());
+        assertTrue(v.notReplayed().isEmpty());
+    }
+
+    @Test
+    void aClassifierOnlyLoadedThatAReplayedInstructionUsesIsPresentWhenThisProjectHasTheRecordedOne() {
+        var v = verdict(java.util.List.of(USES_HISTORY), java.util.Set.of("history", "trained"));
+        // A trained classifier still needs the record's own file: the project's may be another version
+        assertEquals(java.util.Set.of("trained"), v.missing().keySet());
+        assertEquals(java.util.List.of("history"), v.inProject());
+    }
+
+    @Test
+    void aNameIsUsedOnlyAsAWholeQuotedName() {
+        var v = verdict(java.util.List.of("addPixelClassifierMeasurements(\"history-2\", \"history-2\")"), java.util.Set.of());
+        assertEquals(java.util.List.of("history"), v.notReplayed());
+        var single = verdict(java.util.List.of("classifyDetectionsByCentroid('history')"), java.util.Set.of());
+        assertEquals(java.util.Set.of("trained", "history"), single.missing().keySet());
     }
 
     @Test

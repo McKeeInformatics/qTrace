@@ -914,6 +914,10 @@ public class QTraceController {
             JsonArray classifiers = new JsonArray();
             for (JsonObject oc : logger.getKnownObjectClassifiers()) classifiers.add(oc.deepCopy());
             if (classifiers.size() > 0) s.add("object_classifiers", classifiers);
+            // The pixel classifiers too (trained here, or loaded from the image's history), as the export records them.
+            JsonArray pixel = new JsonArray();
+            for (ClassifierRecord c : logger.getKnownClassifiers().values()) pixel.add(QTraceExporter.classifierJson(c));
+            if (pixel.size() > 0) s.add("pixel_classifiers", pixel);
             return s;
         }
 

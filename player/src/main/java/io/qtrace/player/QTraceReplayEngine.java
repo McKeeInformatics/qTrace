@@ -210,9 +210,10 @@ public class QTraceReplayEngine {
     }
 
     /**
-     * The pixel classifiers the record only loaded (from the image's history, say) and never trained or saved:
-     * the replay does not need them, so the pre-check does not count them as missing. A record without the
-     * {@code loaded} flag (older ones) has none, and requires every classifier as before.
+     * The pixel classifiers the record only loaded (from the image's history, say) and never trained or saved.
+     * The record keeps no file of them: the replay needs one only when an instruction it runs uses it
+     * ({@link #pixelClassifierVerdict}). A record without the {@code loaded} flag (older ones) has none, and
+     * requires every classifier as before.
      */
     public static Set<String> extractLoadedClassifierNames(String qtraceJson) {
         JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
@@ -234,11 +235,63 @@ public class QTraceReplayEngine {
         return loaded;
     }
 
-    /** The failed downloads that matter: those of classifiers the replay needs. */
-    public static Map<String, String> requiredFailures(Map<String, String> failed, Set<String> loadedOnly) {
-        Map<String, String> required = new LinkedHashMap<>(failed);
-        required.keySet().removeAll(loadedOnly);
-        return required;
+    /**
+     * What the pre-check says of the pixel classifiers whose file the Player could not get.
+     *
+     * @param missing     the replay needs them and has none: its instructions that use them will fail
+     * @param inProject   only loaded by the record, used by a replayed instruction, and the open project already
+     *                    has the very file the record fingerprinted
+     * @param notReplayed only loaded by the record, and no replayed instruction uses them
+     */
+    public record PixelClassifierVerdict(Map<String, String> missing, List<String> inProject, List<String> notReplayed) {}
+
+    /**
+     * Sorts the classifiers whose file could not be obtained. A trained or saved one is always missing: the replay
+     * needs the record's own file. One the record only loaded (the image's history used it) is needed only when an
+     * instruction of the playlist names it, and then the open project's copy does when it is the recorded file.
+     *
+     * @param failed     classifier name -> why its file could not be obtained
+     * @param loadedOnly {@link #extractLoadedClassifierNames}
+     * @param replayed   the scripts of the instructions the playlist holds
+     * @param inProject  whether the open project has that classifier with the fingerprint the record holds
+     */
+    public static PixelClassifierVerdict pixelClassifierVerdict(Map<String, String> failed, Set<String> loadedOnly,
+            List<String> replayed, java.util.function.Predicate<String> inProject) {
+        Map<String, String> missing = new LinkedHashMap<>();
+        List<String> present = new ArrayList<>();
+        List<String> notReplayed = new ArrayList<>();
+        for (Map.Entry<String, String> f : failed.entrySet()) {
+            String name = f.getKey();
+            if (!loadedOnly.contains(name)) missing.put(name, f.getValue());
+            else if (!usedBy(replayed, name)) notReplayed.add(name);
+            else if (inProject.test(name)) present.add(name);
+            else missing.put(name, f.getValue());
+        }
+        return new PixelClassifierVerdict(missing, present, notReplayed);
+    }
+
+    /** Whether one of the scripts names the classifier, as a whole quoted string ("name" or 'name'). */
+    private static boolean usedBy(List<String> scripts, String name) {
+        for (String s : scripts)
+            if (s != null && (s.contains("\"" + name + "\"") || s.contains("'" + name + "'"))) return true;
+        return false;
+    }
+
+    /** The fingerprint the record holds for each pixel classifier (the last session's when several have one). */
+    public static Map<String, String> pixelClassifierFingerprints(String qtraceJson) {
+        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        JsonArray sessions = root.has("sessions") ? root.getAsJsonArray("sessions") : new JsonArray();
+        Map<String, String> out = new LinkedHashMap<>();
+        for (JsonElement el : sessions) {
+            JsonObject session = el.getAsJsonObject();
+            if (!session.has("pixel_classifiers")) continue;
+            for (JsonElement clfEl : session.getAsJsonArray("pixel_classifiers")) {
+                JsonObject c = clfEl.getAsJsonObject();
+                String name = getString(c, "name"), sha = getString(c, "sha256");
+                if (!name.isBlank() && !sha.isBlank()) out.put(name, sha);
+            }
+        }
+        return out;
     }
 
     /**

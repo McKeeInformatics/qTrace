@@ -173,7 +173,8 @@ class QTraceReplayPlayer {
     // download (classifierNames empty); a download attempt that fails outright still
     // produces a DownloadResult with every name in failed(), never a null result.
     private List<String> currentClassifierNames = List.of();
-    private java.util.Set<String> currentLoadedClassifierNames = java.util.Set.of(); // loaded from history, not required
+    private java.util.Set<String> currentLoadedClassifierNames = java.util.Set.of(); // only loaded (image history): no file in the record
+    private Map<String, String> currentClassifierFingerprints = Map.of(); // name -> sha256 the record holds
     private QTraceReplayEngine.DownloadResult currentClassifierResult;
     // Object classifiers: verified against the sha256 the .qtrace recorded; null when it records none.
     private ObjectClassifierReplay.Result currentObjectClassifierResult;
@@ -724,6 +725,7 @@ class QTraceReplayPlayer {
                 // what actually landed on disk rather than being silently skipped.
                 List<String> classifierNames = QTraceReplayEngine.extractClassifierNames(qtraceJson);
                 java.util.Set<String> loadedClassifierNames = QTraceReplayEngine.extractLoadedClassifierNames(qtraceJson);
+                Map<String, String> classifierFingerprints = QTraceReplayEngine.pixelClassifierFingerprints(qtraceJson);
                 java.nio.file.Path newClassifierDir = null;
                 QTraceReplayEngine.DownloadResult classifierResult = null;
                 if (!classifierNames.isEmpty()) {
@@ -795,6 +797,7 @@ class QTraceReplayPlayer {
                     classifierTempDir = finalClassifierDir;
                     currentClassifierNames = classifierNames;
                     currentLoadedClassifierNames = loadedClassifierNames;
+                    currentClassifierFingerprints = classifierFingerprints;
                     currentClassifierResult = finalClassifierResult;
                     currentObjectClassifierResult = finalObjectClassifierResult;
                     loadingSpinner.setVisible(false);
@@ -937,8 +940,10 @@ class QTraceReplayPlayer {
             : QTraceReplayEngine.extractMeasurementMapSteps(loadedQtraceJson, scope);
         preambleRunPreambleText = QTraceReplayEngine.buildPreambleScript(loadedQtraceJson, classifierTempDir, scope);
         populateRows(steps, mmSteps, currentCompat);
-        if (currentPreflightInfo != null)
+        if (currentPreflightInfo != null) {
             infoLabel.setText(infoText(currentPreflightInfo, steps.size(), currentCompat, scope));
+            renderPrecheck(currentPreflightInfo, currentCompat);   // the classifiers it needs follow the instructions listed
+        }
         setTransportEnabled(!steps.isEmpty());
         cursor = 0;
         refreshPacketStrip();
@@ -1514,6 +1519,20 @@ class QTraceReplayPlayer {
         }, "qtrace-precheck-rerun").start();
     }
 
+    /** Whether the open project has this pixel classifier, byte for byte the file the record fingerprinted. */
+    private boolean projectHasRecordedClassifier(String name) {
+        String recorded = currentClassifierFingerprints.get(name);
+        var project = qupath.getProject();
+        if (recorded == null || project == null || project.getPath() == null) return false;
+        try {
+            java.nio.file.Path f = project.getPath().getParent().resolve("classifiers").resolve("pixel_classifiers").resolve(name + ".json");
+            return java.nio.file.Files.isRegularFile(f)
+                && recorded.equals(io.qtrace.chain.Hashing.sha256Hex(java.nio.file.Files.readAllBytes(f)));
+        } catch (java.io.IOException | java.nio.file.InvalidPathException e) {
+            return false;
+        }
+    }
+
     private void renderPrecheck(QTraceReplayEngine.PreflightInfo info, QTracePreflightDialog.CompatResult compat) {
         precheckDetailBox.getChildren().clear();
 
@@ -1597,23 +1616,33 @@ class QTraceReplayPlayer {
             classifiersDot = "🟡";
             classifiersColor = PEACH;
             classifiersText = "Not checked yet";
-        } else if (QTraceReplayEngine.requiredFailures(currentClassifierResult.failed(), currentLoadedClassifierNames).isEmpty()) {
-            // Classifiers the record only loaded from the image's history are not needed: told, never red.
-            var notNeeded = currentClassifierResult.failed().keySet().stream()
-                .filter(currentLoadedClassifierNames::contains).toList();
-            classifiersOk = true;
-            classifiersDot = "🟢";
-            classifiersColor = GREEN;
-            classifiersText = notNeeded.isEmpty()
-                ? "All present locally (" + currentClassifierResult.succeeded().size() + ")"
-                : "None required (" + notNeeded.size() + " only loaded from the image history: "
-                    + String.join(", ", notNeeded) + ")";
         } else {
-            var required = QTraceReplayEngine.requiredFailures(currentClassifierResult.failed(), currentLoadedClassifierNames);
-            classifiersOk = false;
-            classifiersDot = "🔴";
-            classifiersColor = RED;
-            classifiersText = required.size() + " missing — " + String.join(", ", required.keySet());
+            // A classifier the record only loaded (the image's history used it) has no file in the record: it is
+            // needed only when a listed instruction uses it, and then this project's copy does if it is the same file.
+            var verdict = QTraceReplayEngine.pixelClassifierVerdict(currentClassifierResult.failed(),
+                currentLoadedClassifierNames, rows.stream().map(r -> r.step.groovyFragment()).toList(),
+                this::projectHasRecordedClassifier);
+            classifiersOk = verdict.missing().isEmpty();
+            classifiersDot = classifiersOk ? "🟢" : "🔴";
+            classifiersColor = classifiersOk ? GREEN : RED;
+            if (!classifiersOk) {
+                classifiersText = verdict.missing().size() + " missing — " + String.join(", ", verdict.missing().keySet());
+            } else if (verdict.inProject().isEmpty() && verdict.notReplayed().isEmpty()) {
+                classifiersText = "All present locally (" + currentClassifierResult.succeeded().size() + ")";
+            } else if (verdict.inProject().isEmpty() && currentClassifierResult.succeeded().isEmpty()) {
+                classifiersText = "None required (" + verdict.notReplayed().size() + " only loaded from the image history: "
+                    + String.join(", ", verdict.notReplayed()) + ")";
+            } else {
+                List<String> parts = new ArrayList<>();
+                if (!currentClassifierResult.succeeded().isEmpty())
+                    parts.add(currentClassifierResult.succeeded().size() + " present locally");
+                if (!verdict.inProject().isEmpty())
+                    parts.add(verdict.inProject().size() + " already in this project: " + String.join(", ", verdict.inProject()));
+                if (!verdict.notReplayed().isEmpty())
+                    parts.add(verdict.notReplayed().size() + " only loaded from the image history, not replayed: "
+                        + String.join(", ", verdict.notReplayed()));
+                classifiersText = String.join("; ", parts);
+            }
         }
         precheckDetailBox.getChildren().add(precheckRow(classifiersDot, "Pixel Classifiers",
             classifiersText, classifiersColor));
