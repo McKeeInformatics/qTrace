@@ -1,3 +1,20 @@
+## What's new in v1.2.17
+
+### Fixed - The replay creates an annotation before the command that uses it
+Draw an ellipse, run a cell detection on it, then move the ellipse: the record used to list the ellipse after the detection, so a replay ran the detection with nothing to select. The record now keeps the ellipse where you drew it, and the move replaces it by its ID, so the replay has the object when the detection runs.
+
+### Fixed - Stamp no longer cancels itself after a cell detection
+QuPath locks an annotation once a plugin ran on it. qTrace took that lock for an edit and added a step while the Stamp window opened, so the stamp was refused with "The work on this image changed". The lock alone is no longer a change.
+
+### Fixed - Version(s) shows an object classifier save at its time, while the session is live
+"Save object classifier" appears in the running session without an export first, and a classifier saved then applied (Save, then Apply) keeps the time of its save, before the step that ran it.
+
+### Fixed - A pixel classifier only loaded from the image history is a load
+A classifier QuPath reloaded from the image's history, that you never trained or saved, is recorded as loaded (`loaded: true`) and shown as "Load pixel classifier". The Player's pre-check asks for its file only when a replayed instruction uses it: green if your project already has the same file, red if not.
+
+### Fixed - Small things in the Player and Version(s)
+The current step's row is aligned with the other rows in the Player's list, and the Version(s) footer says "1 step · 1 session".
+
 ## What's new in v1.2.16
 
 ### New - An object classifier travels with its record
