@@ -1083,19 +1083,21 @@ public class ActionLogger implements WorkflowListener {
         Integer idx = annotationStepIndex.get(uuid);
         if (idx == null) return;
         try {
-            String newFrag  = buildAnnotationFragment(uuid, obj);
+            // A step captured since used this annotation: its creation stays in force, so the replay has the
+            // object when that step runs, and this edit becomes a later step that replaces it by ID.
+            String suffix = uuid.toString().replace("-", "").substring(0, 8);
+            boolean used = usedSince(idx, suffix);
+            boolean editForm = used || !keptAnnotationSteps.getOrDefault(suffix, List.of()).isEmpty();
+            // Built in the form it would be recorded in, so that "nothing changed" compares like with like: an edit
+            // step compared with a plain creation fragment is never equal, and every event would add a step.
+            String newFrag  = editForm ? buildAnnotationEditFragment(uuid, obj) : buildAnnotationFragment(uuid, obj);
             JsonObject existing = capturedSteps.get(idx);
             String oldFrag  = existing.has("script_fragment")
                 ? existing.get("script_fragment").getAsString() : null;
             if (newFrag.equals(oldFrag)) return; // nothing changed
 
-            // A step captured since used this annotation: its creation stays in force, so the replay has the
-            // object when that step runs, and this edit becomes a later step that replaces it by ID.
-            String suffix = uuid.toString().replace("-", "").substring(0, 8);
-            List<Integer> kept = keptAnnotationSteps.computeIfAbsent(suffix, k -> new ArrayList<>());
-            if (usedSince(idx, suffix)) kept.add(idx); else retireStep(idx);
-            if (!kept.isEmpty()) newFrag = buildAnnotationEditFragment(uuid, obj);
-            else keptAnnotationSteps.remove(suffix);
+            if (used) keptAnnotationSteps.computeIfAbsent(suffix, k -> new ArrayList<>()).add(idx);
+            else retireStep(idx);
             String roiName = (obj.getROI() != null) ? obj.getROI().getRoiName() : "Object";
             var step = new DefaultScriptableWorkflowStep("Manual annotation: " + roiName, newFrag);
             currentImageData.getHistoryWorkflow().addStep(step);
