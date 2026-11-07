@@ -2774,7 +2774,38 @@ public class ActionLogger implements WorkflowListener {
         }
     }
 
+    /**
+     * A replay found in the project the very classifier file its record holds, and wrote nothing (the Player's creation
+     * step). The new trace must hold it all the same, or a replay of that trace would lack it: recorded as restored
+     * by the replay, {@code found_in_project}. Called from the replay's script, on its own thread.
+     */
+    public void objectClassifierFoundByReplay(Path classifierFile) throws java.io.IOException {
+        fromReplay(classifierFile, null, true);
+    }
+
+    /**
+     * A replay wrote the classifier file its record holds ({@code replaced}: the name it kept the project's different
+     * file under, or null). Recorded now, not when the folder watcher gets to it: the replay's trace is written as soon
+     * as its last instruction ends, and must hold the file. Called from the replay's script, on its own thread; the
+     * watcher's later read finds it known and adds nothing.
+     */
+    public void objectClassifierRestoredByReplay(Path classifierFile, String replaced) throws java.io.IOException {
+        fromReplay(classifierFile, replaced, false);
+    }
+
+    private void fromReplay(Path classifierFile, String replaced, boolean foundInProject) throws java.io.IOException {
+        byte[] raw = Files.readAllBytes(classifierFile);
+        String name = classifierFile.getFileName().toString().replaceAll("\\.json$", "");
+        ObjectClassifierRestores.expect(name, io.qtrace.chain.Hashing.sha256Hex(raw), replaced);
+        // Queued before the replay's own "step done": recorded before the run's trace is written
+        Platform.runLater(() -> onObjectClassifierSaved(classifierFile, raw, foundInProject));
+    }
+
     private void onObjectClassifierSaved(Path classifierFile, byte[] raw) {
+        onObjectClassifierSaved(classifierFile, raw, false);
+    }
+
+    private void onObjectClassifierSaved(Path classifierFile, byte[] raw, boolean foundInProject) {
         String name = classifierFile.getFileName().toString().replaceAll("\\.json$", "");
         if (pauses.isPaused()) { pauses.missedChange("object classifier", 1); return; }
 
@@ -2791,8 +2822,11 @@ public class ActionLogger implements WorkflowListener {
         ObjectClassifierFiles.keepCopy(ObjectClassifierFiles.copiesDir(), rec, raw);
         // A replay putting its recorded file back is not the user saving a classifier: kept in the record (so the
         // replay's own trace stays replayable), without a "saved" event or a naming alert.
-        boolean restored = ObjectClassifierRestores.consume(name, rec.get("sha256").getAsString());
+        ObjectClassifierRestores.Restore restore = ObjectClassifierRestores.claim(name, rec.get("sha256").getAsString());
+        boolean restored = restore != null;
         if (restored) rec.addProperty("restored_by_replay", true);
+        if (restored && foundInProject) rec.addProperty("found_in_project", true);
+        if (restored && restore.replaced() != null) rec.addProperty("replaced_project_file", restore.replaced());
         byte[] previous = lastObjectClassifierRaw.put(name, raw);
         if (!restored && previous != null && ObjectClassifierFiles.sameRule(previous, raw))
             for (JsonObject known : knownObjectClassifiers)
@@ -2804,7 +2838,10 @@ public class ActionLogger implements WorkflowListener {
         // disk (so the Player's fingerprint check holds) but the rule was already announced.
         if (!restored && previous != null && ObjectClassifierFiles.sameRule(previous, raw)) return;
         if (restored) {
-            ActivityLog.add("[Object classifier restored by the replay] " + name);
+            // Not a save of the user's: no naming alert. Told all the same - the Logbook shows what goes into the record,
+            // and a project file the replay replaced is never replaced silently.
+            ActivityLog.add("[" + ObjectClassifierFiles.eventText(rec).replaceFirst(": ", "] "));
+            CaptureEvents.captured(CaptureEvents.CLASSIFIER, ObjectClassifierFiles.eventText(rec), rec, history.standalone());
             return;
         }
         ActivityLog.add("[" + ObjectClassifierFiles.eventText(rec).replaceFirst(": ", "] ")

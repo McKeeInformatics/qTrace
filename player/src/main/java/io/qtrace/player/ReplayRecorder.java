@@ -86,6 +86,13 @@ class ReplayRecorder {
     void afterStep(ReplayStep step, ReplayExecutor.Status status) {
         Workflow wf = workflow.get();
         List<WorkflowStep> pushed = pushedSince(sizeBefore);
+        if (step.createsObjectClassifier()) {
+            // Putting a recorded classifier file in the project is not an instruction of the new trace: Core records
+            // the file itself, as restored by the replay (ObjectClassifierRestores), never as a user's save.
+            wf.removeSteps(pushed);
+            logger.endReplayStep();
+            return;
+        }
         boolean keepNative = pushed.size() == 1 && pushed.get(0) instanceof ScriptableWorkflowStep;
         if (status != ReplayExecutor.Status.OK || !keepNative) wf.removeSteps(pushed);
         if (status == ReplayExecutor.Status.OK && !keepNative)

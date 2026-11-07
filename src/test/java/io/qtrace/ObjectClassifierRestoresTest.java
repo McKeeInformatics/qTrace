@@ -44,4 +44,19 @@ class ObjectClassifierRestoresTest {
         assertTrue(ObjectClassifierRestores.consume("B", "2", 1_100));
         assertTrue(ObjectClassifierRestores.consume("A", "1", 1_200));
     }
+
+    @Test
+    void aReplayThatKeptTheProjectsOtherFileAsideSaysUnderWhichName() {
+        ObjectClassifierRestores.expect("OC-CK19", "abc", "OC-CK19.json.replaced-123", 1_000);
+        ObjectClassifierRestores.Restore r = ObjectClassifierRestores.claim("OC-CK19", "abc", 1_100);
+        assertTrue(r != null && "OC-CK19.json.replaced-123".equals(r.replaced()));
+        assertTrue(ObjectClassifierRestores.claim("OC-CK19", "abc", 1_200) == null, "once");
+    }
+
+    @Test
+    void aFileWrittenWhereTheProjectHadNoneReplacedNothing() {
+        ObjectClassifierRestores.expect("OC-CK19", "abc");
+        ObjectClassifierRestores.Restore r = ObjectClassifierRestores.claim("OC-CK19", "abc");
+        assertTrue(r != null && r.replaced() == null);
+    }
 }

@@ -68,8 +68,8 @@ class WorkflowSourceTest {
     }
 
     @Test
-    void theClassifiersAPacketRecordsAreNotPlayedAsInstructions() {
-        // The Workflow Editor lists them beside the instructions, read only: the playlist keeps instructions only.
+    void anObjectClassifierAPacketRecordsIsCreatedBeforeTheInstructionThatRunsIt() {
+        // The Workflow Editor lists it beside the instructions, read only; the player creates it, when needed, as a step.
         String json = """
             { "kind": "workflow", "title": "Cells", "sessions": [
               { "session_id": "packet-1", "title": "Classify", "validation": null, "validation_state": "workflow",
@@ -78,7 +78,7 @@ class WorkflowSourceTest {
                              "script_fragment": "runObjectClassifier('cells')" } ],
                 "object_classifiers": [ { "name": "cells", "saved_at": "2026-11-06T10:02:00Z", "sha256": "aaaa" } ],
                 "pixel_classifiers": [ { "name": "tissue", "saved_at": "2026-11-06T09:58:00Z", "loaded": true } ] } ] }""";
-        assertEquals(List.of("Cell detection", "Run object classifier"),
+        assertEquals(List.of("Cell detection", "Create object classifier: cells", "Run object classifier"),
             WorkflowSource.playlist(json, List.of(0)).stream().map(ps -> ps.step().title()).toList());
     }
 

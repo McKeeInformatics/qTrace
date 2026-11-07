@@ -162,7 +162,7 @@ public class ReplayLogWriter implements AutoCloseable {
         writeLine(String.format("[Step %d] %-16s %-30s %-20s (%dms)%s",
             step.index(), step.type(), truncate(step.title(), 30), result.status(),
             result.durationMs(),
-            result.errorMessage() != null ? " — " + result.errorMessage() : ""));
+            result.errorMessage() != null ? " — " + result.errorMessage() : result.note() != null ? " - " + result.note() : ""));
         flush();
     }
 

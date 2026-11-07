@@ -246,7 +246,8 @@ public final class VersionTimeline {
                 if (content != null) objectClassifierDetails(d, content);
                 putIf(d, "graph.rec.oc.file", sha.length() >= 16 ? sha.substring(0, 16) : null);
                 out.add(new Entry(Kind.STEP, Source.OBJECT_CLASSIFIER, index, time(ts, zone), ts,
-                    bool(c, "restored_by_replay") ? "Restore object classifier (replay)" : "Save object classifier", truncate(name + (headline.isEmpty() ? "" : " · " + headline), MAX_SUMMARY),
+                    bool(c, "found_in_project") ? "Object classifier in the project (replay)"
+                        : bool(c, "restored_by_replay") ? "Restore object classifier (replay)" : "Save object classifier", truncate(name + (headline.isEmpty() ? "" : " · " + headline), MAX_SUMMARY),
                     null, d, false, false, false, false, null));
             }
         }

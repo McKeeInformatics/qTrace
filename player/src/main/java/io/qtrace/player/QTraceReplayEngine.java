@@ -329,7 +329,7 @@ public class QTraceReplayEngine {
         sb.append(buildPreamble(root, sessions, sessionIndex, classifierDir, recordedExtensions, fqnToSimple, activeHandlers));
 
         // ── Steps — global dedup across all sessions (last occurrence wins) ──────
-        List<ReplayStep> replaySteps = withoutSkipped(extractSteps(sessions, sessionIndex, fqnToSimple, activeHandlers));
+        List<ReplayStep> replaySteps = withoutSkipped(extractSteps(root, sessions, sessionIndex, fqnToSimple, activeHandlers));
         int kept = 0;
         for (ReplayStep step : replaySteps) {
             if (validatedOnly && !step.validated()) continue;
@@ -371,6 +371,12 @@ public class QTraceReplayEngine {
 
     private static void appendStepBlock(StringBuilder sb, ReplayStep step) {
         String label = step.title();
+        if (step.createsObjectClassifier() && !step.isExecutable()) {
+            // Listed for the record, nothing to run: no instruction after it runs this version
+            sb.append("// ── Step ").append(step.index()).append(": ").append(label)
+              .append(" - not needed: no instruction runs this version\n");
+            return;
+        }
         if (!step.validated()) {
             String sid = step.sessionId() != null ? step.sessionId() : "?";
             sb.append("// [unstamped] session ").append(sid, 0, Math.min(8, sid.length()))
@@ -558,7 +564,9 @@ public class QTraceReplayEngine {
         }
 
         // ── Object classifier restoration: the exact recorded file, or a plain warning ──
-        sb.append(ObjectClassifierReplay.restoreBlocks(root.toString(), sessionIndex, classifierDir));
+        // The verified copies the creation steps may write (data only: the steps decide, at their place in time)
+        sb.append(ObjectClassifierReplay.copiesBlock(root.toString(), sessionIndex, classifierDir,
+            objectClassifierCreations(root, sessions, sessionIndex, fqnToSimple, activeHandlers)));
 
         return sb.toString();
     }
@@ -592,10 +600,27 @@ public class QTraceReplayEngine {
         Map<String, String> fqnToSimple = collectFqnToSimple(sessions);
         List<QTraceExtensionHandler> activeHandlers =
             ExtensionHandlerRegistry.get().activePreambleHandlers(recordedExtensions.keySet());
-        return extractSteps(sessions, sessionIndex, fqnToSimple, activeHandlers);
+        return extractSteps(root, sessions, sessionIndex, fqnToSimple, activeHandlers);
     }
 
-    private static List<ReplayStep> extractSteps(JsonArray sessions, int sessionIndex,
+    /**
+     * The creation steps whose copies the preamble must carry: the scope's, and for a workflow each packet's
+     * played on its own (the Player plays chosen packets one after the other, each with its own steps).
+     */
+    private static List<ReplayStep> objectClassifierCreations(JsonObject root, JsonArray sessions, int sessionIndex,
+            Map<String, String> fqnToSimple, List<QTraceExtensionHandler> activeHandlers) {
+        List<ReplayStep> out = new ArrayList<>(extractSteps(root, sessions, sessionIndex, fqnToSimple, activeHandlers));
+        if (sessionIndex < 0 && isWorkflow(root))
+            for (int p = 0; p < sessions.size(); p++) out.addAll(extractSteps(root, sessions, p, fqnToSimple, activeHandlers));
+        out.removeIf(st -> !st.createsObjectClassifier());
+        return out;
+    }
+
+    private static boolean isWorkflow(JsonObject root) {
+        return root.has("kind") && root.get("kind").isJsonPrimitive() && "workflow".equals(root.get("kind").getAsString());
+    }
+
+    private static List<ReplayStep> extractSteps(JsonObject root, JsonArray sessions, int sessionIndex,
             Map<String, String> fqnToSimple, List<QTraceExtensionHandler> activeHandlers) {
         int start = sessionIndex < 0 ? 0 : sessionIndex;
         int end   = sessionIndex < 0 ? sessions.size() : Math.min(sessionIndex + 1, sessions.size());
@@ -614,11 +639,15 @@ public class QTraceReplayEngine {
         java.util.Set<String> skippedFrags = new java.util.HashSet<>();
         // The name its step was recorded under ("Set image type", "Script: x.groovy"): the last occurrence's.
         Map<String, String> names = new LinkedHashMap<>();
+        // When it was done (its last occurrence): where an object classifier's creation stands among the instructions
+        Map<String, Instant> times = new LinkedHashMap<>();
         for (int i = start; i < end; i++) {
             JsonObject session = sessions.get(i).getAsJsonObject();
             String sid = session.has("session_id") && !session.get("session_id").isJsonNull()
                 ? session.get("session_id").getAsString() : null;
             names.putAll(fragmentNames(session));
+            times.keySet().removeAll(scriptableFragments(session).keySet());
+            times.putAll(fragmentTimes(session));
             for (Map.Entry<String, Boolean> frag : scriptableFragments(session).entrySet()) {
                 seen.remove(frag.getKey());
                 seen.put(frag.getKey(), sid);
@@ -646,6 +675,8 @@ public class QTraceReplayEngine {
             }
         }
 
+        List<ReplayStep> instructions = new ArrayList<>();
+        List<Instant> instructionTimes = new ArrayList<>();
         for (Map.Entry<String, String> entry : seen.entrySet()) {
             String frag = entry.getKey();
             stepNum++;
@@ -658,9 +689,11 @@ public class QTraceReplayEngine {
             label = io.qtrace.ObjectClassifierContent.stepTitle(label, frag);
             if (label.isEmpty()) label = emitted.lines().map(String::strip).filter(l -> !l.isBlank()).findFirst().orElse("?");
             if (label.length() > 60) label = label.substring(0, 60) + "…";
-            result.add(new ReplayStep(stepNum, ReplayStep.classify(emitted), label, emitted,
+            instructions.add(new ReplayStep(stepNum, ReplayStep.classify(emitted), label, emitted,
                                       validatedFrags.contains(frag), entry.getValue(), skippedFrags.contains(frag)));
+            instructionTimes.add(times.get(frag));
         }
+        result.addAll(ObjectClassifierReplay.withCreations(sessions, sessionIndex, isWorkflow(root), instructions, instructionTimes));
 
         for (int i = start; i < end; i++) {
             JsonObject session = sessions.get(i).getAsJsonObject();
@@ -676,7 +709,34 @@ public class QTraceReplayEngine {
                 result.add(new ReplayStep(st.index(), st.type(), st.title(), st.groovyFragment(), stamped, sid));
             }
         }
-        return result;
+        // Numbered through the whole list, creations of object classifiers included
+        List<ReplayStep> numbered = new ArrayList<>(result.size());
+        for (ReplayStep st : result) numbered.add(st.withIndex(numbered.size() + 1));
+        return numbered;
+    }
+
+    /** When each active scriptable fragment of one session was done, at its last occurrence (absent when not said). */
+    private static Map<String, Instant> fragmentTimes(JsonObject session) {
+        Map<String, Instant> out = new LinkedHashMap<>();
+        JsonArray steps = session.has("steps") && session.get("steps").isJsonArray()
+            ? session.getAsJsonArray("steps") : new JsonArray();
+        for (JsonElement stepEl : steps) {
+            JsonObject step = stepEl.getAsJsonObject();
+            if (!step.has("script_fragment") || step.get("script_fragment").isJsonNull()) continue;
+            if (step.has("deleted") && step.get("deleted").getAsBoolean()) continue;
+            if (!step.has("is_scriptable") || !step.get("is_scriptable").getAsBoolean()) continue;
+            String frag = step.get("script_fragment").getAsString().strip();
+            if (frag.isBlank()) continue;
+            Instant at = null;
+            try {
+                if (step.has("timestamp") && step.get("timestamp").isJsonPrimitive()) at = Instant.parse(step.get("timestamp").getAsString());
+            } catch (RuntimeException ignored) {
+                // a time that cannot be read is no time
+            }
+            out.remove(frag);
+            if (at != null) out.put(frag, at);
+        }
+        return out;
     }
 
     /** {@code replay_skip}: the author took this step out of the replay (see Core's ReplaySkip). */

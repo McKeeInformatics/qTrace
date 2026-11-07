@@ -65,6 +65,8 @@ dependencies {
     testCompileOnly "io.github.qupath:qupath-gui-fx:${qupathVersion}"
     testRuntimeOnly "io.github.qupath:qupath-gui-fx:${qupathVersion}"
     testRuntimeOnly "io.github.qupath:qupath-core:${qupathVersion}"
+    // The tests run the generated Groovy (an object classifier's creation step) in a plain shell
+    testCompileOnly 'org.apache.groovy:groovy:4.0.15'
     testRuntimeOnly 'org.apache.groovy:groovy:4.0.15'
 }
 

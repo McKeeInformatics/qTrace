@@ -33,27 +33,53 @@ public final class ObjectClassifierRestores {
     /** An announcement that no write answers is forgotten after this long. */
     private static final long TTL_MS = 5 * 60_000;
 
-    private static final Map<String, Long> EXPECTED = new ConcurrentHashMap<>();
+    /**
+     * A file the replay announced. {@code replaced}: the name under which the replay kept the project's different file
+     * of that name aside ({@code <name>.json.replaced-<time>}), null when the project had none.
+     */
+    public record Restore(String replaced) {}
+
+    private record Expected(long at, String replaced) {}
+
+    private static final Map<String, Expected> EXPECTED = new ConcurrentHashMap<>();
 
     private ObjectClassifierRestores() {}
 
     /** Called by the replay script (Groovy) before it writes a classifier file. */
     public static void expect(String name, String sha256) {
-        expect(name, sha256, System.currentTimeMillis());
+        expect(name, sha256, null);
+    }
+
+    /** The same, when the write replaces the project's different file, kept aside as {@code replaced}. */
+    public static void expect(String name, String sha256, String replaced) {
+        expect(name, sha256, replaced, System.currentTimeMillis());
     }
 
     /** True once for a file the replay announced: it is a restore, not a save. */
     public static boolean consume(String name, String sha256) {
-        return consume(name, sha256, System.currentTimeMillis());
+        return claim(name, sha256) != null;
+    }
+
+    /** Once for a file the replay announced: what the replay said of it; null for a file it did not announce (a save). */
+    public static Restore claim(String name, String sha256) {
+        return claim(name, sha256, System.currentTimeMillis());
     }
 
     static void expect(String name, String sha256, long now) {
-        EXPECTED.put(key(name, sha256), now);
+        expect(name, sha256, null, now);
+    }
+
+    static void expect(String name, String sha256, String replaced, long now) {
+        EXPECTED.put(key(name, sha256), new Expected(now, replaced));
     }
 
     static boolean consume(String name, String sha256, long now) {
-        Long at = EXPECTED.remove(key(name, sha256));
-        return at != null && now - at <= TTL_MS;
+        return claim(name, sha256, now) != null;
+    }
+
+    static Restore claim(String name, String sha256, long now) {
+        Expected e = EXPECTED.remove(key(name, sha256));
+        return e != null && now - e.at() <= TTL_MS ? new Restore(e.replaced()) : null;
     }
 
     static void clear() {

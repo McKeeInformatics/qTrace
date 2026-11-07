@@ -151,6 +151,25 @@ class ObjectClassifierFilesTest {
         assertEquals("Object classifier saved: OldOne", ObjectClassifierFiles.eventText(old));
     }
 
+    @Test
+    void theLogbookLineOfAReplaysFileSaysItWasRestoredNotSaved() throws Exception {
+        JsonObject rec = recordOf(ck19());
+        rec.addProperty("restored_by_replay", true);
+        assertEquals("Object classifier restored by the replay: OC-CK19-thr (Cell: CK19 mean >= 120)", ObjectClassifierFiles.eventText(rec));
+        rec.addProperty("replaced_project_file", "OC-CK19-thr.json.replaced-17");
+        assertEquals("Object classifier restored by the replay: OC-CK19-thr (Cell: CK19 mean >= 120)"
+            + " - the project's different file is kept as OC-CK19-thr.json.replaced-17", ObjectClassifierFiles.eventText(rec));
+    }
+
+    @Test
+    void theLogbookLineOfAFileTheReplayFoundInPlaceSaysNothingWasWritten() throws Exception {
+        JsonObject rec = recordOf(ck19());
+        rec.addProperty("restored_by_replay", true);
+        rec.addProperty("found_in_project", true);
+        assertEquals("Object classifier already in the project, used by the replay: OC-CK19-thr (Cell: CK19 mean >= 120)",
+            ObjectClassifierFiles.eventText(rec));
+    }
+
     private static byte[] json(String s) { return s.getBytes(StandardCharsets.UTF_8); }
 
     @Test

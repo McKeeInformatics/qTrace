@@ -490,4 +490,16 @@ class VersionTimelineTest {
         assertEquals("Restore object classifier (replay)", e.command());
         assertEquals("OC-CK19 · Cell: CK19 mean >= 120", e.summary());
     }
+
+    @Test
+    void aClassifierAReplayFoundAlreadyInTheProjectIsNotShownAsWritten() {
+        JsonObject rec = objectClassifier("OC-CK19", "2026-09-27T09:15:00Z", thresholdFile("Cell: CK19 mean", 120.0, "CK19"));
+        rec.addProperty("restored_by_replay", true);
+        rec.addProperty("found_in_project", true);
+        JsonObject r = root();
+        JsonArray ocs = new JsonArray();
+        ocs.add(rec);
+        r.getAsJsonArray("sessions").get(0).getAsJsonObject().add("object_classifiers", ocs);
+        assertEquals("Object classifier in the project (replay)", objectRow(r).command());
+    }
 }

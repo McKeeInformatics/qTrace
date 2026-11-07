@@ -86,6 +86,7 @@ final class WorkflowSource {
     static List<PacketStep> playlist(String json, List<Integer> packets) {
         List<PacketStep> out = new ArrayList<>();
         JsonArray all = packets(parse(json));
+        Map<String, String> created = new LinkedHashMap<>();   // object classifier name -> sha256 of the version created
         for (int packet : new java.util.TreeSet<>(packets)) {
             if (packet < 0 || packet >= all.size() || !all.get(packet).isJsonObject()) continue;
             List<String> titles = instructionTitles(all.get(packet).getAsJsonObject());
@@ -95,17 +96,26 @@ final class WorkflowSource {
             long scripted = steps.stream().filter(WorkflowSource::isInstruction).count();
             int next = 0;
             for (ReplayStep st : steps) {
+                // A classifier an earlier packet of this playlist already creates, in this very version, is there
+                if (st.createsObjectClassifier() && st.objectClassifierFile().sha256().equals(created.get(st.objectClassifierFile().name()))
+                        && st.sessionId() != null && !st.sessionId().equals(sessionId(all.get(packet).getAsJsonObject()))) continue;
                 String title = isInstruction(st) && scripted == titles.size() && !titles.get(next).isBlank() ? titles.get(next) : st.title();
                 if (isInstruction(st)) next++;
+                if (st.createsObjectClassifier() && st.isExecutable())
+                    created.put(st.objectClassifierFile().name(), st.objectClassifierFile().sha256());
                 out.add(new PacketStep(packet, new ReplayStep(out.size() + 1, st.type(), title, st.groovyFragment(),
-                    st.validated(), st.sessionId(), st.skipped())));
+                    st.validated(), st.sessionId(), st.skipped(), st.objectClassifierFile())));
             }
         }
         return out;
     }
 
     private static boolean isInstruction(ReplayStep st) {
-        return !"Class list".equals(st.type()) && !"Display settings".equals(st.type());
+        return !"Class list".equals(st.type()) && !"Display settings".equals(st.type()) && !st.createsObjectClassifier();
+    }
+
+    private static String sessionId(JsonObject packet) {
+        return str(packet, "session_id");
     }
 
     /** The titles of a packet's instructions as the engine orders them: one per script, at its last occurrence. */

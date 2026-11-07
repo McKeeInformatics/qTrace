@@ -62,7 +62,14 @@ public class ReplayExecutor {
 
     public enum Status { OK, FAILED, SKIPPED_EXCLUDED, SKIPPED_INCOMPATIBLE }
 
-    public record StepResult(Status status, String errorMessage, long durationMs, String stackTrace) {
+    /**
+     * @param note what a step that creates an object classifier did ("created...", "already in the project...",
+     *             "replaced..."): the value its script ends on. Null for an instruction, whose value means nothing.
+     */
+    public record StepResult(Status status, String errorMessage, long durationMs, String stackTrace, String note) {
+        public StepResult(Status status, String errorMessage, long durationMs, String stackTrace) {
+            this(status, errorMessage, durationMs, stackTrace, null);
+        }
         static StepResult ok(long durationMs) { return new StepResult(Status.OK, null, durationMs, null); }
         static StepResult failed(String message, long durationMs, String stackTrace) {
             return new StepResult(Status.FAILED, message, durationMs, stackTrace);
@@ -123,7 +130,7 @@ public class ReplayExecutor {
      * once, before any step is executed. Must be called before the first {@link #executeStep}.
      */
     public CompletableFuture<StepResult> executePreamble(String preambleGroovy) {
-        return evaluateAsync(preambleGroovy);
+        return evaluateAsync(preambleGroovy, false);
     }
 
     /**
@@ -138,7 +145,7 @@ public class ReplayExecutor {
 
     /** Evaluates one step's already-rewritten Groovy fragment against the shared shell/binding. */
     public CompletableFuture<StepResult> executeStep(ReplayStep step) {
-        return evaluateAsync(step.groovyFragment());
+        return evaluateAsync(step.groovyFragment(), step.createsObjectClassifier());
     }
 
     /** Detaches the log appender and shuts down the background executor — call once per run, when a new run starts or the Player closes. */
@@ -150,20 +157,21 @@ public class ReplayExecutor {
         worker.shutdownNow();
     }
 
-    private CompletableFuture<StepResult> evaluateAsync(String groovy) {
+    private CompletableFuture<StepResult> evaluateAsync(String groovy, boolean keepNote) {
         CompletableFuture<StepResult> future = new CompletableFuture<>();
         worker.execute(() -> {
             long start = System.currentTimeMillis();
             try {
                 scriptErrors.clear();
-                shell.evaluate(groovy);
+                Object value = shell.evaluate(groovy);
                 // QuPath's script functions (runPlugin...) catch what a plugin throws and only log it: the step
                 // ends normally though nothing was done. An error they logged is a failed step.
                 ScriptErrorAppender.Error logged = scriptErrors.first();
                 if (logged != null) {
                     future.complete(StepResult.failed(logged.message(), System.currentTimeMillis() - start, logged.stackTrace()));
                 } else {
-                    future.complete(StepResult.ok(System.currentTimeMillis() - start));
+                    String note = keepNote && value instanceof CharSequence cs ? cs.toString() : null;
+                    future.complete(new StepResult(Status.OK, null, System.currentTimeMillis() - start, null, note));
                 }
             } catch (Exception e) {
                 java.io.StringWriter sw = new java.io.StringWriter();

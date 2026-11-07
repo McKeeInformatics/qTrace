@@ -34,7 +34,7 @@ import java.util.Base64;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** The replay script restores the recorded object classifiers before its first step. */
+/** The replay script carries the recorded object classifiers; a creation step puts each in the project at its time. */
 class QTraceReplayEngineObjectClassifiersTest {
 
     private static final byte[] RAW = ("{\"object_classifier_type\":\"SimpleClassifier\",\"function\":{\"classifier_fun\":"
@@ -55,27 +55,41 @@ class QTraceReplayEngineObjectClassifiersTest {
     }
 
     @Test
-    void thePreambleRestoresTheVerifiedObjectClassifierBeforeAnyStep(@TempDir Path dir) throws Exception {
+    void thePreambleCarriesTheVerifiedObjectClassifierForTheStepThatCreatesIt(@TempDir Path dir) throws Exception {
         JsonObject rec = ObjectClassifierFiles.record("OC-CK19", RAW, Instant.now(), "oscar", true);
         Path q = dir.resolve("slide.png.qtrace");
         Files.createDirectories(ObjectClassifierFiles.companionDir(q));
         Files.write(ObjectClassifierFiles.companionDir(q).resolve(rec.get("classifier_file").getAsString()), RAW);
-        String json = qtrace(rec);
+        String json = qtraceRunning(rec);
         Path temp = dir.resolve("temp");
         ObjectClassifierReplay.prepare(q.toString(), json, temp);
 
         String preamble = QTraceReplayEngine.buildPreambleScript(json, temp, -1);
         assertTrue(preamble.contains(Base64.getEncoder().encodeToString(RAW)));
-        assertTrue(preamble.contains("Restore object classifier: OC-CK19"));
         assertFalse(preamble.contains("WARNING: object classifier"));
+        assertEquals("Create object classifier: OC-CK19", QTraceReplayEngine.extractSteps(json, -1).get(0).title());
     }
 
     @Test
-    void withoutItsFileThePreambleSaysThisReplayWillNotUseTheRecordedClassifier() {
+    void withoutItsFileThePreambleSaysWhyAndTheStepWillFail() {
         JsonObject rec = ObjectClassifierFiles.record("OC-CK19", RAW, Instant.now(), "oscar", true);
-        String preamble = QTraceReplayEngine.buildPreambleScript(qtrace(rec), null, -1);
-        assertTrue(preamble.contains("WARNING: object classifier \"OC-CK19\" cannot be restored"), preamble);
-        assertTrue(preamble.contains("will NOT use the recorded classifier"));
+        String preamble = QTraceReplayEngine.buildPreambleScript(qtraceRunning(rec), null, -1);
+        assertTrue(preamble.contains("_qtraceObjectClassifierProblems['OC-CK19@"), preamble);
+        assertFalse(preamble.contains(Base64.getEncoder().encodeToString(RAW)));
+    }
+
+    /** The record, with a step that runs the classifier after it was saved. */
+    private static String qtraceRunning(JsonObject rec) {
+        JsonObject root = com.google.gson.JsonParser.parseString(qtrace(rec)).getAsJsonObject();
+        JsonObject step = new JsonObject();
+        step.addProperty("command", "Run object classifier");
+        step.addProperty("script_fragment", "runObjectClassifier(\"OC-CK19\")");
+        step.addProperty("is_scriptable", true);
+        step.addProperty("timestamp", Instant.now().plusSeconds(60).toString());
+        JsonArray steps = new JsonArray();
+        steps.add(step);
+        root.getAsJsonArray("sessions").get(0).getAsJsonObject().add("steps", steps);
+        return root.toString();
     }
 
     @Test

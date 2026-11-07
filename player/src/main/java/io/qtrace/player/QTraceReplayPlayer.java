@@ -905,7 +905,8 @@ class QTraceReplayPlayer {
             .collect(Collectors.toList());
 
         List<PlaylistRow> built = steps.stream().map(step -> {
-            boolean incompatible = missingNames.stream().anyMatch(name ->
+            // Creating an object classifier file needs no extension: its own script is never "incompatible"
+            boolean incompatible = !step.createsObjectClassifier() && missingNames.stream().anyMatch(name ->
                 step.groovyFragment().toLowerCase().contains(name)
                 || step.title().toLowerCase().contains(name));
             return new PlaylistRow(step, incompatible);
@@ -1908,7 +1909,8 @@ class QTraceReplayPlayer {
             // A workflow's instructions carry no stamp by nature: they are not marked as unvalidated work.
             boolean plain = row.step.validated() || workflowLoaded;
             Label titleLbl = new Label((plain ? "" : "◌ ") + row.step.title());
-            Theme.text(titleLbl, skipped ? MUTED : plain ? TEXT : PEACH);
+            // Greyed like a row taken out: a classifier's creation that no instruction needs runs nothing
+            Theme.text(titleLbl, skipped || (!row.step.isExecutable() && row.step.createsObjectClassifier()) ? MUTED : plain ? TEXT : PEACH);
             titleLbl.setFont(Font.font("System", 11));
             titleLbl.setTextOverrun(OverrunStyle.ELLIPSIS);
             titleLbl.setMinWidth(0);
@@ -1946,11 +1948,23 @@ class QTraceReplayPlayer {
                     + (row.step.sessionId() != null ? " (session " + row.step.sessionId().substring(0,
                         Math.min(8, row.step.sessionId().length())) + ")" : "")));
             Label stepLbl = rowLabel(row.step.index() + " / " + total, TEXT_SUB, stepColWidth);
+            // A classifier's creation with nothing to run is not a gap in the replay: no instruction uses that version
+            boolean notNeeded = !executable && row.step.createsObjectClassifier();
             Label statusLbl = rowLabel(
                 skipped ? "Excluded by the author"
+                    : notNeeded ? "Not needed"
                     : !executable ? "⚠ Not replayable — execute manually"
                     : row.flaggedIncompatible ? "Skipped (incompatible)" : "—",
-                skipped ? MUTED : !executable || row.flaggedIncompatible ? PEACH : MUTED, statusColWidth);
+                skipped || notNeeded ? MUTED : !executable || row.flaggedIncompatible ? PEACH : MUTED, statusColWidth);
+            if (notNeeded)
+                Tooltip.install(statusLbl, new Tooltip("No instruction of this replay runs this version of the classifier:"
+                    + " nothing is written to the project"));
+            if (row.step.createsObjectClassifier() && !executable)
+                Tooltip.install(titleLbl, new Tooltip(row.step.title() + "\nNo instruction of this replay runs this version: nothing is written"));
+            else if (row.step.createsObjectClassifier())
+                Tooltip.install(titleLbl, new Tooltip(row.step.title() + "\nPuts the recorded file (sha256 " + row.step.objectClassifierFile().sha256().substring(0, 12)
+                    + ") in the project, only if the project does not already hold this exact file."
+                    + " A different file of that name is kept aside, never overwritten."));
             Label timerLbl = rowLabel("—", MUTED, timerColWidth);
 
             HBox node = new HBox(10, cb, typeLbl, titleCell, stepLbl, statusLbl, timerLbl);
@@ -2023,6 +2037,16 @@ class QTraceReplayPlayer {
             case "Display settings" -> BLUE;  // scriptable — same tone as Pixel Classifier, not a warning
             default                 -> MUTED; // "Script"
         };
+    }
+
+    /** The status of a row that ran: what a classifier's creation did ("Created", "Already in project"...), else done. */
+    static String doneText(ReplayStep step, ReplayExecutor.StepResult result) {
+        String note = step.createsObjectClassifier() ? result.note() : null;
+        if (note == null) return "Execution completed";
+        if (note.startsWith("already")) return "Already in project";
+        if (note.startsWith("replaced")) return "Replaced, old kept";
+        if (note.startsWith("created")) return "Created";
+        return "Execution completed";
     }
 
     /**
@@ -2425,11 +2449,22 @@ class QTraceReplayPlayer {
             // run, so it never reaches the executor at all: no startNewRun(), no StepResult, no
             // log entry. Its status label (see rebuildPlaylistNodes()) is a fixed "Not replayable"
             // message, not execution-driven, so it must be left alone here.
+            // The play loop calls this from the executor's thread after the previous step: the row is drawn on
+            // the FX thread, or the scene graph throws and the loop stops silently there (a row with nothing to
+            // run in the middle of the list - an object classifier no instruction runs - stalled the replay).
             cursor++;
-            highlightRow(row);
-            scrollToRow(row);
-            bumpMilestoneProgress();
-            return java.util.concurrent.CompletableFuture.completedFuture(null);
+            java.util.concurrent.CompletableFuture<Void> shown = new java.util.concurrent.CompletableFuture<>();
+            Runnable show = () -> {
+                try {
+                    highlightRow(row);
+                    scrollToRow(row);
+                    bumpMilestoneProgress();
+                } finally {
+                    shown.complete(null);
+                }
+            };
+            if (Platform.isFxApplicationThread()) show.run(); else Platform.runLater(show);
+            return shown;
         }
         // A fresh run starts at row 0 normally, but a click can also reposition the cursor
         // mid-list — guard against acting with no executor/log yet in that case too. Jumping
@@ -2532,8 +2567,10 @@ class QTraceReplayPlayer {
         if (rv != null) {
             switch (result.status()) {
                 case OK -> {
-                    rv.statusLabel.setText("✅ Execution completed");
+                    rv.statusLabel.setText("✅ " + doneText(row.step, result));
                     Theme.text(rv.statusLabel, GREEN);
+                    if (row.step.createsObjectClassifier() && result.note() != null)
+                        Tooltip.install(rv.statusLabel, new Tooltip("Object classifier " + row.step.objectClassifierFile().name() + ": " + result.note()));
                     rv.timerLabel.setText(formatDuration(result.durationMs()));
                     Theme.text(rv.timerLabel, TEXT_SUB);
                 }
@@ -2552,8 +2589,9 @@ class QTraceReplayPlayer {
         highlightRow(row);
         scrollToRow(row);
 
-        String line = String.format("[Step %d] %-16s %-30s %s (%dms)",
-            row.step.index(), row.step.type(), row.step.title(), result.status(), result.durationMs());
+        String line = String.format("[Step %d] %-16s %-30s %s (%dms)%s",
+            row.step.index(), row.step.type(), row.step.title(), result.status(), result.durationMs(),
+            result.note() != null ? " - " + result.note() : "");
         logArea.appendText(line + "\n");
 
         try {

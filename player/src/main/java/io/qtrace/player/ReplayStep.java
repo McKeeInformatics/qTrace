@@ -30,7 +30,21 @@ import java.util.regex.Pattern;
  * with the full-script replay path.
  */
 public record ReplayStep(int index, String type, String title, String groovyFragment,
-                         boolean validated, String sessionId, boolean skipped) {
+                         boolean validated, String sessionId, boolean skipped,
+                         ObjectClassifierFile objectClassifierFile) {
+
+    /**
+     * What a creation step stands for: one recorded version of an object classifier, put in the project when the
+     * project does not hold that exact file ({@link ObjectClassifierReplay}). {@code needed}: an instruction listed
+     * after it runs this version; when none does, the step is listed but has nothing to run.
+     */
+    public record ObjectClassifierFile(String name, String sha256, boolean needed) {}
+
+    /** An instruction (not an object classifier's creation). */
+    public ReplayStep(int index, String type, String title, String groovyFragment,
+                      boolean validated, String sessionId, boolean skipped) {
+        this(index, type, title, groovyFragment, validated, sessionId, skipped, null);
+    }
 
     /** A step the author left in the replay. */
     public ReplayStep(int index, String type, String title, String groovyFragment,
@@ -52,7 +66,12 @@ public record ReplayStep(int index, String type, String title, String groovyFrag
 
     /** Same step renumbered (e.g. after unvalidated steps were left out). */
     public ReplayStep withIndex(int newIndex) {
-        return new ReplayStep(newIndex, type, title, groovyFragment, validated, sessionId, skipped);
+        return new ReplayStep(newIndex, type, title, groovyFragment, validated, sessionId, skipped, objectClassifierFile);
+    }
+
+    /** Whether this step creates an object classifier in the project rather than running an instruction. */
+    public boolean createsObjectClassifier() {
+        return objectClassifierFile != null;
     }
 
     private static final Pattern PIXEL_CLASSIFIER = Pattern.compile(

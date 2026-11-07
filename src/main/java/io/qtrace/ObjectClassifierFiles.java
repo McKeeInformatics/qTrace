@@ -163,7 +163,13 @@ public final class ObjectClassifierFiles {
     public static String eventText(JsonObject record) {
         String rule = record.has("content") && record.get("content").isJsonObject()
             ? ObjectClassifierContent.headline(record.getAsJsonObject("content")) : "";
-        return "Object classifier saved: " + record.get("name").getAsString() + (rule.isEmpty() ? "" : " (" + rule + ")");
+        boolean replay = record.has("restored_by_replay") && record.get("restored_by_replay").getAsBoolean();
+        boolean inPlace = replay && record.has("found_in_project") && record.get("found_in_project").getAsBoolean();
+        String what = inPlace ? "Object classifier already in the project, used by the replay: "
+            : replay ? "Object classifier restored by the replay: " : "Object classifier saved: ";
+        String kept = replay && record.has("replaced_project_file")
+            ? " - the project's different file is kept as " + record.get("replaced_project_file").getAsString() : "";
+        return what + record.get("name").getAsString() + (rule.isEmpty() ? "" : " (" + rule + ")") + kept;
     }
 
     /** One object classifier file an upload sends: its classifier's name, the file's name in the record, its sha256, and where it is. */

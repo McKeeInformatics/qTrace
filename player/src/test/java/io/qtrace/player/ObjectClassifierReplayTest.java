@@ -170,46 +170,11 @@ class ObjectClassifierReplayTest {
         assertTrue(res.allVerified(), res.toString());
     }
 
-    // ── the restore step the script runs first ───────────────────────────────
+    // ── the preamble only carries copies; the creation steps write ───────────
 
     @Test
-    void theScriptWritesTheRecordedFileIntoTheProjectsObjectClassifiers(@TempDir Path dir) throws Exception {
-        JsonObject r = rec("OC-CK19", CK19_V1);
-        Path q = local(dir, r, CK19_V1);
-        String json = qtrace(List.of(r));
-        Path temp = dir.resolve("temp");
-        ObjectClassifierReplay.prepare(q.toString(), json, temp);
-
-        String groovy = ObjectClassifierReplay.restoreBlocks(json, -1, temp);
-        assertTrue(groovy.contains(Base64.getEncoder().encodeToString(CK19_V1)), "the exact bytes travel in the script");
-        assertTrue(groovy.contains("classifiers/object_classifiers"));
-        assertTrue(groovy.contains("OC-CK19.json"));
-        assertFalse(groovy.contains("WARNING"));
-    }
-
-    @Test
-    void aClassifierWhoseFileIsNotAvailableIsWarnedAboutInTheScript(@TempDir Path dir) {
-        JsonObject r = rec("OC-CK19", CK19_V1);
-        String groovy = ObjectClassifierReplay.restoreBlocks(qtrace(List.of(r)), -1, dir.resolve("empty"));
-        assertTrue(groovy.contains("WARNING"), groovy);
-        assertTrue(groovy.contains("OC-CK19"));
-        assertTrue(groovy.contains("NOT"), "it says the replay will not use the same classifier");
-    }
-
-    @Test
-    void withoutAnyObjectClassifierTheScriptHasNothingToAdd() {
-        assertEquals("", ObjectClassifierReplay.restoreBlocks("{\"sessions\":[{\"steps\":[]}]}", -1, null));
-    }
-
-    @Test
-    void aProjectFileOfThatNameWithOtherContentIsKeptAsABackupNotLost(@TempDir Path dir) throws Exception {
-        JsonObject r = rec("OC-CK19", CK19_V1);
-        Path q = local(dir, r, CK19_V1);
-        String json = qtrace(List.of(r));
-        ObjectClassifierReplay.prepare(q.toString(), json, dir.resolve("temp"));
-        String groovy = ObjectClassifierReplay.restoreBlocks(json, -1, dir.resolve("temp"));
-        assertTrue(groovy.contains("replaced-"), "the user's own file is renamed, never overwritten silently");
-        assertTrue(groovy.contains("identical"), "an identical file is left alone");
+    void withoutAnyObjectClassifierThePreambleHasNothingToAdd() {
+        assertEquals("", ObjectClassifierReplay.copiesBlock("{\"sessions\":[{\"steps\":[]}]}", -1, null, List.of()));
     }
 
     // ── the pre-flight row ───────────────────────────────────────────────────
@@ -261,25 +226,23 @@ class ObjectClassifierReplayTest {
     void noGeneratedLineCanBeReadAsAClosureHandedToThePreviousCall(@TempDir Path dir) throws Exception {
         JsonObject ok = rec("OC-CK19", CK19_V1), gone = rec("OC-CD3", CD3);
         Path q = local(dir, ok, CK19_V1);
-        String json = qtrace(List.of(ok, gone));
+        String json = qtraceRunning("runObjectClassifier(\"OC-CK19\", \"OC-CD3\")", List.of(ok, gone));
         Path temp = dir.resolve("temp");
         ObjectClassifierReplay.prepare(q.toString(), json, temp);
-        for (String line : ObjectClassifierReplay.restoreBlocks(json, -1, temp).split("\n")) {
+        String preamble = QTraceReplayEngine.buildPreambleScript(json, temp, -1);
+        String steps = String.join("\n", QTraceReplayEngine.extractSteps(json, -1).stream().map(ReplayStep::groovyFragment).toList());
+        for (String line : (preamble + "\n" + steps).split("\n")) {
             String t = line.strip();
             assertFalse(t.startsWith("{") || t.startsWith("("), "a line must not open a block or a call: " + t);
-            if (t.startsWith("println(")) assertTrue(t.endsWith(");"), "an unterminated call: " + t);
+            if (t.startsWith("println(")) assertTrue(t.endsWith(")") || t.endsWith(");"), "an unterminated call: " + t);
         }
     }
 
     @Test
-    void theScriptTellsCoreTheFileComesFromAReplayBeforeWritingIt(@TempDir Path dir) throws Exception {
-        JsonObject r = rec("OC-CK19", CK19_V1);
-        Path q = local(dir, r, CK19_V1);
-        String json = qtrace(List.of(r));
-        ObjectClassifierReplay.prepare(q.toString(), json, dir.resolve("temp"));
-        String groovy = ObjectClassifierReplay.restoreBlocks(json, -1, dir.resolve("temp"));
-        int announce = groovy.indexOf("ObjectClassifierRestores.expect('OC-CK19', '" + r.get("sha256").getAsString() + "')");
-        int write = groovy.indexOf("_f.bytes = _bytes");
+    void theStepTellsCoreTheFileComesFromAReplayBeforeWritingIt() {
+        String groovy = ObjectClassifierReplay.creationFragment("OC-CK19", "abc");
+        int announce = groovy.indexOf("ObjectClassifierRestores.expect(_ocName, _ocSha, _ocReplaced)");
+        int write = groovy.indexOf("_ocFile.bytes = _ocBytes");
         assertTrue(announce > 0, groovy);
         assertTrue(announce < write, "announced before the file is written, or the watcher wins the race");
     }
@@ -348,15 +311,18 @@ class ObjectClassifierReplayTest {
     }
 
     @Test
-    void theScriptSaysANonRestoredComponentIsCarriedByTheCompositeInsteadOfWarning(@TempDir Path dir) throws Exception {
+    void aComponentTheCompositeCarriesIsNotCreatedOnItsOwnAndNotWarnedAbout(@TempDir Path dir) throws Exception {
         byte[] comp = compositeOf(CK19_V1, CD3);
         JsonObject ck = rec("OC-CK19", CK19_V1), panel = rec("OC-Panel", comp);
         Path q = local(dir, panel, comp);
         String json = qtraceRunning("runObjectClassifier(\"OC-Panel\")", List.of(ck, panel));
         ObjectClassifierReplay.prepare(q.toString(), json, dir.resolve("temp"));
-        String groovy = ObjectClassifierReplay.restoreBlocks(json, -1, dir.resolve("temp"));
-        assertFalse(groovy.contains("WARNING"), groovy);
-        assertTrue(groovy.contains("OC-CK19") && groovy.contains("embedded in OC-Panel"), groovy);
+        List<ReplayStep> steps = QTraceReplayEngine.extractSteps(json, -1);
+        ReplayStep component = steps.stream().filter(s -> s.title().endsWith("OC-CK19")).findFirst().orElseThrow();
+        ReplayStep composite = steps.stream().filter(s -> s.title().endsWith("OC-Panel")).findFirst().orElseThrow();
+        assertFalse(component.isExecutable(), "no instruction runs it by its name");
+        assertTrue(composite.isExecutable());
+        assertFalse(QTraceReplayEngine.buildPreambleScript(json, dir.resolve("temp"), -1).contains("WARNING"));
     }
 
     // ── a record opened by its ID: the files come from the workspace, into a folder ──
