@@ -73,6 +73,14 @@ public final class ObjectClassifierFiles {
     }
 
     /**
+     * A rewrite of the same rule (Save then Apply) is still the save that made it: the record follows the file on
+     * disk but keeps the time of that save, so it stays before the step that applied it.
+     */
+    public static void keepSaveTime(JsonObject rewritten, JsonObject earlier) {
+        if (earlier != null && earlier.has("saved_at")) rewritten.add("saved_at", earlier.get("saved_at"));
+    }
+
+    /**
      * Whether two saves of a classifier are the same rule. QuPath stamps every write with its save time
      * ({@code timestamp}, composites' components too), so Save then Apply give two fingerprints for one rule.
      * A file that is not JSON is the same only when its bytes are.

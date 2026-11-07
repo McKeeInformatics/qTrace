@@ -2789,6 +2789,9 @@ public class ActionLogger implements WorkflowListener {
         boolean restored = ObjectClassifierRestores.consume(name, rec.get("sha256").getAsString());
         if (restored) rec.addProperty("restored_by_replay", true);
         byte[] previous = lastObjectClassifierRaw.put(name, raw);
+        if (!restored && previous != null && ObjectClassifierFiles.sameRule(previous, raw))
+            for (JsonObject known : knownObjectClassifiers)
+                if (name.equals(known.get("name").getAsString())) ObjectClassifierFiles.keepSaveTime(rec, known);
         knownObjectClassifiers.removeIf(o -> name.equals(o.get("name").getAsString()));
         knownObjectClassifiers.add(rec);
         notifyChanged();

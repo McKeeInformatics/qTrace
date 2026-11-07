@@ -179,4 +179,17 @@ class ObjectClassifierFilesTest {
         assertTrue(ObjectClassifierFiles.sameRule(json("garbage"), json("garbage")));
         assertFalse(ObjectClassifierFiles.sameRule(json("garbage"), json("garbage2")));
     }
+
+    @Test
+    void aRewriteOfTheSameRuleKeepsTheTimeOfTheSave() {
+        byte[] first = "{\"timestamp\":1,\"rule\":\"a\"}".getBytes(StandardCharsets.UTF_8);
+        byte[] applied = "{\"timestamp\":2,\"rule\":\"a\"}".getBytes(StandardCharsets.UTF_8);
+        JsonObject saved = ObjectClassifierFiles.record("OC", first, Instant.parse("2026-11-07T02:58:21Z"), "u", true);
+        JsonObject rewritten = ObjectClassifierFiles.record("OC", applied, Instant.parse("2026-11-07T02:58:31Z"), "u", true);
+
+        ObjectClassifierFiles.keepSaveTime(rewritten, saved);
+
+        assertEquals("2026-11-07T02:58:21Z", rewritten.get("saved_at").getAsString());
+        assertEquals(Hashing.sha256Hex(applied), rewritten.get("sha256").getAsString(), "the record still follows the file on disk");
+    }
 }
