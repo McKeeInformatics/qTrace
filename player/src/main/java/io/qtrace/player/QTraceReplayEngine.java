@@ -160,7 +160,16 @@ public class QTraceReplayEngine {
 
     static DownloadResult downloadObjectClassifiers(String base, String certId, String token, Path dir) throws IOException, InterruptedException {
         Files.createDirectories(dir);
-        JsonArray entries = JsonParser.parseString(fetchUrl(RecordSource.contentUrl(base, certId, "object-classifiers", token))).getAsJsonArray();
+        String listing;
+        try {
+            listing = fetchUrl(RecordSource.contentUrl(base, certId, "object-classifiers", token));
+        } catch (StatusException e) {
+            // The workflow itself was served: a 404 here is a qtrace.ca from before its files travelled with it.
+            if (e.status == 404 && certId != null && certId.startsWith(WorkflowSource.ID_PREFIX))
+                throw new IOException("qtrace.ca does not serve the object classifier files of a published workflow yet");
+            throw e;
+        }
+        JsonArray entries = JsonParser.parseString(listing).getAsJsonArray();
         HttpClient client = newClient();
         List<String> succeeded = new ArrayList<>();
         Map<String, String> failed = new LinkedHashMap<>();
@@ -989,9 +998,19 @@ public class QTraceReplayEngine {
         }
         if (status >= 300) {
             String refusal = RecordSource.refusal(status);
-            throw new IOException(refusal != null ? refusal : "HTTP " + status + " from " + url + ": " + resp.body());
+            throw new StatusException(status, refusal != null ? refusal : "HTTP " + status + " from " + url + ": " + resp.body());
         }
         return resp.body();
+    }
+
+    /** qtrace.ca answered with this status: what it means depends on what was asked. */
+    static final class StatusException extends IOException {
+        final int status;
+
+        StatusException(int status, String message) {
+            super(message);
+            this.status = status;
+        }
     }
 
     private static HttpClient newClient() {
