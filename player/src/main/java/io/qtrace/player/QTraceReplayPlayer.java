@@ -1918,7 +1918,7 @@ class QTraceReplayPlayer {
             HBox node = new HBox(10, cb, typeLbl, titleCell, stepLbl, statusLbl, timerLbl);
             node.setAlignment(Pos.CENTER_LEFT);
             node.setPadding(new Insets(2, 10, 2, 10));
-            node.setStyle(baseStyle);
+            node.setStyle(rowStyle(baseStyle, false));
             if (skipped) node.setOpacity(0.5);
 
             // Rows don't move the cursor: the replay runs strictly in playlist order (the
@@ -1987,15 +1987,23 @@ class QTraceReplayPlayer {
         };
     }
 
+    /**
+     * A row's style. Every row has the 3 px left border, transparent unless it is the current step: a bar that only
+     * the current row had would push its checkbox, eye, title and timer 3 px to the right of the others.
+     */
+    static String rowStyle(String base, boolean current) {
+        return base + "-fx-border-color: " + (current ? BLUE : "transparent") + "; -fx-border-width: 0 0 0 3;";
+    }
+
     private void highlightRow(PlaylistRow row) {
         if (highlighted != null) {
             RowView prev = rowViews.get(highlighted);
-            if (prev != null) prev.node.setStyle(prev.baseStyle);
+            if (prev != null) prev.node.setStyle(rowStyle(prev.baseStyle, false));
         }
         highlighted = row;
         RowView rv = rowViews.get(row);
         if (rv != null) {
-            rv.node.setStyle(rv.baseStyle + "-fx-border-color: " + BLUE + "; -fx-border-width: 0 0 0 3;");
+            rv.node.setStyle(rowStyle(rv.baseStyle, true));
         }
         refreshPacketStrip();
     }
