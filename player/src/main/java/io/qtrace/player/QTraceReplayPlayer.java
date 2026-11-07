@@ -173,6 +173,7 @@ class QTraceReplayPlayer {
     // download (classifierNames empty); a download attempt that fails outright still
     // produces a DownloadResult with every name in failed(), never a null result.
     private List<String> currentClassifierNames = List.of();
+    private java.util.Set<String> currentLoadedClassifierNames = java.util.Set.of(); // loaded from history, not required
     private QTraceReplayEngine.DownloadResult currentClassifierResult;
     // Object classifiers: verified against the sha256 the .qtrace recorded; null when it records none.
     private ObjectClassifierReplay.Result currentObjectClassifierResult;
@@ -722,6 +723,7 @@ class QTraceReplayPlayer {
                 // so restoration blocks — and the "Pixel Classifiers" pre-check row — reflect
                 // what actually landed on disk rather than being silently skipped.
                 List<String> classifierNames = QTraceReplayEngine.extractClassifierNames(qtraceJson);
+                java.util.Set<String> loadedClassifierNames = QTraceReplayEngine.extractLoadedClassifierNames(qtraceJson);
                 java.nio.file.Path newClassifierDir = null;
                 QTraceReplayEngine.DownloadResult classifierResult = null;
                 if (!classifierNames.isEmpty()) {
@@ -792,6 +794,7 @@ class QTraceReplayPlayer {
                     deleteClassifierTempDir(); // drop the previous load's temp dir before adopting this one
                     classifierTempDir = finalClassifierDir;
                     currentClassifierNames = classifierNames;
+                    currentLoadedClassifierNames = loadedClassifierNames;
                     currentClassifierResult = finalClassifierResult;
                     currentObjectClassifierResult = finalObjectClassifierResult;
                     loadingSpinner.setVisible(false);
@@ -1594,17 +1597,23 @@ class QTraceReplayPlayer {
             classifiersDot = "🟡";
             classifiersColor = PEACH;
             classifiersText = "Not checked yet";
-        } else if (currentClassifierResult.failed().isEmpty()) {
+        } else if (QTraceReplayEngine.requiredFailures(currentClassifierResult.failed(), currentLoadedClassifierNames).isEmpty()) {
+            // Classifiers the record only loaded from the image's history are not needed: told, never red.
+            var notNeeded = currentClassifierResult.failed().keySet().stream()
+                .filter(currentLoadedClassifierNames::contains).toList();
             classifiersOk = true;
             classifiersDot = "🟢";
             classifiersColor = GREEN;
-            classifiersText = "All present locally (" + currentClassifierResult.succeeded().size() + ")";
+            classifiersText = notNeeded.isEmpty()
+                ? "All present locally (" + currentClassifierResult.succeeded().size() + ")"
+                : "None required (" + notNeeded.size() + " only loaded from the image history: "
+                    + String.join(", ", notNeeded) + ")";
         } else {
+            var required = QTraceReplayEngine.requiredFailures(currentClassifierResult.failed(), currentLoadedClassifierNames);
             classifiersOk = false;
             classifiersDot = "🔴";
             classifiersColor = RED;
-            classifiersText = currentClassifierResult.failed().size() + " missing — "
-                + String.join(", ", currentClassifierResult.failed().keySet());
+            classifiersText = required.size() + " missing — " + String.join(", ", required.keySet());
         }
         precheckDetailBox.getChildren().add(precheckRow(classifiersDot, "Pixel Classifiers",
             classifiersText, classifiersColor));

@@ -306,6 +306,20 @@ class VersionTimelineTest {
     }
 
     @Test
+    void aPixelClassifierLoadedFromTheImageHistoryIsALoadNotATraining() {
+        JsonObject r = root();
+        JsonObject loaded = classifier("ANN-FR", "2026-09-27T09:15:00Z");
+        loaded.addProperty("loaded", true);
+        JsonArray pcs = new JsonArray();
+        pcs.add(loaded);
+        r.getAsJsonArray("sessions").get(0).getAsJsonObject().add("pixel_classifiers", pcs);
+
+        VersionTimeline.Entry e = VersionTimeline.build(r, ZoneOffset.UTC).stream()
+            .filter(x -> x.source() == VersionTimeline.Source.PIXEL_TRAINING).findFirst().orElseThrow();
+        assertEquals("Load pixel classifier", e.command());
+    }
+
+    @Test
     void pixelTrainingAppearsOnceAtItsTimeInTheSessionThatFirstHasIt() {
         JsonObject r = root();
         JsonArray pcs1 = new JsonArray();

@@ -225,7 +225,8 @@ public final class VersionTimeline {
                 putIf(d, "graph.rec.regions", number(c, "n_training_regions"));
                 putIf(d, "graph.rec.fidelity", str(c, "fidelity", null));
                 out.add(new Entry(Kind.STEP, Source.PIXEL_TRAINING, index, time(ts, zone), ts,
-                    "Train pixel classifier", truncate(String.join(" · ", parts), MAX_SUMMARY), null, d,
+                    bool(c, "loaded") ? "Load pixel classifier" : "Train pixel classifier",
+                    truncate(String.join(" · ", parts), MAX_SUMMARY), null, d,
                     false, false, false, false, null));
             }
         }

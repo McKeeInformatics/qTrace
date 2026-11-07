@@ -627,40 +627,43 @@ public class QTraceExporter {
 
     private JsonArray buildClassifiersArray() {
         JsonArray arr = new JsonArray();
-        for (ClassifierRecord clf : logger.getKnownClassifiers().values()) {
-            JsonObject co = new JsonObject();
-            co.addProperty("name",                    clf.name);
-            co.addProperty("saved_at",                clf.savedAt.toString());
-            co.addProperty("saved_by_user",           clf.savedByUser);
-            String imgShort = (clf.imageHashAtSave != null && clf.imageHashAtSave.length() >= 16)
-                ? clf.imageHashAtSave.substring(0, 16) + "..." : clf.imageHashAtSave;
-            co.addProperty("image_sha256_at_save",    imgShort);
-            co.addProperty("sha256",                  clf.sha256);
-            co.addProperty("git_hash",                clf.gitHash);
-            co.addProperty("classifier_type",         clf.classifierType);
-            co.addProperty("output_type",             clf.outputType);
-            co.addProperty("resolution_um",           clf.resolutionUm);
-            co.add("features",                        clf.features);
-            co.addProperty("n_channels",              clf.channels.size());
-            co.add("channels",                        clf.channels);
-            co.add("scales",                          clf.scales);
-            co.addProperty("local_normalization",       clf.localNormType  != null ? clf.localNormType  : "");
-            co.addProperty("local_normalization_scale", clf.localNormScale);
-            co.add("advanced_params",                   clf.advancedParams);
-            co.add("classes",                           clf.classes);
-            co.addProperty("n_training_regions",      clf.trainingAnnotationIds.size());
-            JsonArray trainingImagesArr = new JsonArray();
-            clf.trainingImages.forEach(trainingImagesArr::add);
-            co.add("training_images",                 trainingImagesArr);
-            co.addProperty("training_geojson",        clf.trainingGeojsonFile);
-            co.addProperty("tpc_file",                clf.tpcFilePath);
-            co.addProperty("fidelity",                clf.fidelity().name());
-            co.addProperty("modified_after_training", clf.modifiedAfterTraining);
-            if (clf.appliedAtStepOrder >= 0) co.addProperty("applied_at_step", clf.appliedAtStepOrder);
-            if (clf.objectsCreated     >= 0) co.addProperty("objects_created",  clf.objectsCreated);
-            arr.add(co);
-        }
+        for (ClassifierRecord clf : logger.getKnownClassifiers().values()) arr.add(classifierJson(clf));
         return arr;
+    }
+
+    static JsonObject classifierJson(ClassifierRecord clf) {
+        JsonObject co = new JsonObject();
+        co.addProperty("name",                    clf.name);
+        co.addProperty("saved_at",                clf.savedAt.toString());
+        co.addProperty("saved_by_user",           clf.savedByUser);
+        String imgShort = (clf.imageHashAtSave != null && clf.imageHashAtSave.length() >= 16)
+            ? clf.imageHashAtSave.substring(0, 16) + "..." : clf.imageHashAtSave;
+        co.addProperty("image_sha256_at_save",    imgShort);
+        co.addProperty("sha256",                  clf.sha256);
+        co.addProperty("git_hash",                clf.gitHash);
+        co.addProperty("classifier_type",         clf.classifierType);
+        co.addProperty("output_type",             clf.outputType);
+        co.addProperty("resolution_um",           clf.resolutionUm);
+        co.add("features",                        clf.features);
+        co.addProperty("n_channels",              clf.channels.size());
+        co.add("channels",                        clf.channels);
+        co.add("scales",                          clf.scales);
+        co.addProperty("local_normalization",       clf.localNormType  != null ? clf.localNormType  : "");
+        co.addProperty("local_normalization_scale", clf.localNormScale);
+        co.add("advanced_params",                   clf.advancedParams);
+        co.add("classes",                           clf.classes);
+        co.addProperty("n_training_regions",      clf.trainingAnnotationIds.size());
+        JsonArray trainingImagesArr = new JsonArray();
+        clf.trainingImages.forEach(trainingImagesArr::add);
+        co.add("training_images",                 trainingImagesArr);
+        co.addProperty("training_geojson",        clf.trainingGeojsonFile);
+        co.addProperty("tpc_file",                clf.tpcFilePath);
+        co.addProperty("fidelity",                clf.fidelity().name());
+        co.addProperty("modified_after_training", clf.modifiedAfterTraining);
+        if (clf.appliedAtStepOrder >= 0) co.addProperty("applied_at_step", clf.appliedAtStepOrder);
+        if (clf.objectsCreated     >= 0) co.addProperty("objects_created",  clf.objectsCreated);
+        if (clf.loadedOnly) co.addProperty("loaded", true);   // absent = trained or saved here
+        return co;
     }
 
     /**

@@ -210,6 +210,38 @@ public class QTraceReplayEngine {
     }
 
     /**
+     * The pixel classifiers the record only loaded (from the image's history, say) and never trained or saved:
+     * the replay does not need them, so the pre-check does not count them as missing. A record without the
+     * {@code loaded} flag (older ones) has none, and requires every classifier as before.
+     */
+    public static Set<String> extractLoadedClassifierNames(String qtraceJson) {
+        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        JsonArray sessions = root.has("sessions") ? root.getAsJsonArray("sessions") : new JsonArray();
+        Set<String> loaded = new LinkedHashSet<>();
+        Set<String> trained = new LinkedHashSet<>();
+        for (JsonElement el : sessions) {
+            JsonObject session = el.getAsJsonObject();
+            if (!session.has("pixel_classifiers")) continue;
+            for (JsonElement clfEl : session.getAsJsonArray("pixel_classifiers")) {
+                JsonObject c = clfEl.getAsJsonObject();
+                String name = getString(c, "name");
+                if (name.isBlank()) continue;
+                boolean isLoaded = c.has("loaded") && c.get("loaded").isJsonPrimitive() && c.get("loaded").getAsBoolean();
+                (isLoaded ? loaded : trained).add(name);
+            }
+        }
+        loaded.removeAll(trained);   // trained or saved in any session: required
+        return loaded;
+    }
+
+    /** The failed downloads that matter: those of classifiers the replay needs. */
+    public static Map<String, String> requiredFailures(Map<String, String> failed, Set<String> loadedOnly) {
+        Map<String, String> required = new LinkedHashMap<>(failed);
+        required.keySet().removeAll(loadedOnly);
+        return required;
+    }
+
+    /**
      * Generates a self-contained Groovy replay script from a .qtrace JSON string.
      *
      * @param qtraceJson   raw JSON content of the .qtrace file

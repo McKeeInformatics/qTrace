@@ -70,6 +70,9 @@ public class ClassifierRecord {
     // ── Fidelity (mutable — updated by integrity checker) ────────────────────
     public volatile boolean modifiedAfterTraining = false;
 
+    /** True when the classifier was only loaded (from the image's history or a file), not trained or saved here. */
+    public volatile boolean loadedOnly = false;
+
     public ClassifierRecord(String name, String jsonContent, String sha256,
                             Instant savedAt, String savedByUser, String imageHashAtSave,
                             String classifierType, String outputType, double resolutionUm,

@@ -91,4 +91,31 @@ class QTraceReplayEngineObjectClassifiersTest {
         assertFalse(preamble.contains("object classifier"));
         assertEquals(-1, preamble.indexOf("Restore object classifier"));
     }
+
+    private static String recordWith(String... namesAndLoaded) {
+        StringBuilder sb = new StringBuilder("{\"sessions\":[{\"pixel_classifiers\":[");
+        for (int i = 0; i < namesAndLoaded.length; i += 2) {
+            if (i > 0) sb.append(',');
+            sb.append("{\"name\":\"").append(namesAndLoaded[i]).append('"');
+            if (namesAndLoaded[i + 1].equals("loaded")) sb.append(",\"loaded\":true");
+            sb.append('}');
+        }
+        return sb.append("]}]}").toString();
+    }
+
+    @Test
+    void aPixelClassifierOnlyLoadedFromTheImageHistoryIsNotRequired() {
+        String json = recordWith("trained", "saved", "history", "loaded");
+        assertEquals(java.util.Set.of("history"), QTraceReplayEngine.extractLoadedClassifierNames(json));
+        java.util.Map<String, String> failed = new java.util.LinkedHashMap<>();
+        failed.put("trained", "404");
+        failed.put("history", "404");
+        assertEquals(java.util.Set.of("trained"),
+            QTraceReplayEngine.requiredFailures(failed, java.util.Set.of("history")).keySet());
+    }
+
+    @Test
+    void aRecordWithoutTheFlagRequiresEveryClassifier() {
+        assertTrue(QTraceReplayEngine.extractLoadedClassifierNames(recordWith("a", "saved")).isEmpty());
+    }
 }

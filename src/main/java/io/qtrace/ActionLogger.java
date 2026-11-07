@@ -2602,6 +2602,7 @@ public class ActionLogger implements WorkflowListener {
                 meta.advancedParams(),
                 List.of(), ""
             );
+            record.loadedOnly = true;
             knownClassifiers.put(name, record);
             notifyChanged();
 
