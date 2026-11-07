@@ -68,6 +68,21 @@ class WorkflowSourceTest {
     }
 
     @Test
+    void theClassifiersAPacketRecordsAreNotPlayedAsInstructions() {
+        // The Workflow Editor lists them beside the instructions, read only: the playlist keeps instructions only.
+        String json = """
+            { "kind": "workflow", "title": "Cells", "sessions": [
+              { "session_id": "packet-1", "title": "Classify", "validation": null, "validation_state": "workflow",
+                "steps": [ { "command": "Cell detection", "is_scriptable": true, "script_fragment": "cells()" },
+                           { "command": "Run object classifier", "is_scriptable": true,
+                             "script_fragment": "runObjectClassifier('cells')" } ],
+                "object_classifiers": [ { "name": "cells", "saved_at": "2026-11-06T10:02:00Z", "sha256": "aaaa" } ],
+                "pixel_classifiers": [ { "name": "tissue", "saved_at": "2026-11-06T09:58:00Z", "loaded": true } ] } ] }""";
+        assertEquals(List.of("Cell detection", "Run object classifier"),
+            WorkflowSource.playlist(json, List.of(0)).stream().map(ps -> ps.step().title()).toList());
+    }
+
+    @Test
     void aReplayNamesTheWorkflowAndThePacketsItPlayed() {
         var one = new com.google.gson.JsonObject();
         WorkflowSource.describe(one, WORKFLOW, List.of(1));
