@@ -1088,13 +1088,17 @@ public class ActionLogger implements WorkflowListener {
             String suffix = uuid.toString().replace("-", "").substring(0, 8);
             boolean used = usedSince(idx, suffix);
             boolean editForm = used || !keptAnnotationSteps.getOrDefault(suffix, List.of()).isEmpty();
-            // Built in the form it would be recorded in, so that "nothing changed" compares like with like: an edit
-            // step compared with a plain creation fragment is never equal, and every event would add a step.
-            String newFrag  = editForm ? buildAnnotationEditFragment(uuid, obj) : buildAnnotationFragment(uuid, obj);
+            // The step on record is either the plain creation or an edit that replaces it by ID, and an annotation a
+            // step used but never touched is still on its plain creation: "nothing changed" is the annotation matching
+            // whichever of the two forms is on record, or every event (and the Stamp's refresh) would add a step.
+            String plainFrag = buildAnnotationFragment(uuid, obj);
+            String editFrag  = buildAnnotationEditFragment(uuid, obj);
             JsonObject existing = capturedSteps.get(idx);
             String oldFrag  = existing.has("script_fragment")
                 ? existing.get("script_fragment").getAsString() : null;
-            if (newFrag.equals(oldFrag)) return; // nothing changed
+            String recorded = AnnotationFragments.withoutLock(oldFrag);
+            if (AnnotationFragments.withoutLock(plainFrag).equals(recorded) || AnnotationFragments.withoutLock(editFrag).equals(recorded)) return; // nothing changed
+            String newFrag = editForm ? editFrag : plainFrag;
 
             if (used) keptAnnotationSteps.computeIfAbsent(suffix, k -> new ArrayList<>()).add(idx);
             else retireStep(idx);
