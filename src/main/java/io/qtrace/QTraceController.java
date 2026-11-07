@@ -909,6 +909,11 @@ public class QTraceController {
             for (JsonObject st : QTraceExporter.selectSessionSteps(logger.getCapturedSteps())) steps.add(st.deepCopy());
             s.addProperty("steps_captured", steps.size());
             s.add("steps", steps);
+            // The object classifiers saved so far, as the export will record them, so the Version window shows a save
+            // while the session is live and not only once it has been exported.
+            JsonArray classifiers = new JsonArray();
+            for (JsonObject oc : logger.getKnownObjectClassifiers()) classifiers.add(oc.deepCopy());
+            if (classifiers.size() > 0) s.add("object_classifiers", classifiers);
             return s;
         }
 
