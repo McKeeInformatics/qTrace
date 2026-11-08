@@ -19,6 +19,13 @@ Outputs:
 - **Git versioning** — each script committed automatically (no external Git required)
 - **`master_validation_log.csv`** — cohort-level export summary
 
+## See it capture
+
+Each line is an action recorded the moment it happens in QuPath: opening an image, an annotation,
+a script, a classifier, a long detection, a correction, then the validator's stamp that seals the record.
+
+![qTrace capturing a QuPath session live: each action lands as a line, the counters climb, the stamp seals the record](docs/screenshots/demo-qtrace.gif)
+
 ## Installation
 
 With QuPath 0.6 or later:
