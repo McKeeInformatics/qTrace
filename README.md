@@ -4,6 +4,8 @@
 
 Open-source QuPath extension for real-time workflow provenance capture.
 
+![qTrace capturing a QuPath session live: each action lands as a line, the counters climb, the stamp seals the record](docs/screenshots/demo-qtrace.gif)
+
 ## What it does
 
 qTrace Core automatically records every analysis action performed in QuPath:
@@ -18,13 +20,6 @@ Outputs:
 - **Groovy Meta-Script** — fully replayable script from raw image to final state
 - **Git versioning** — each script committed automatically (no external Git required)
 - **`master_validation_log.csv`** — cohort-level export summary
-
-## See it capture
-
-Each line is an action recorded the moment it happens in QuPath: opening an image, an annotation,
-a script, a classifier, a long detection, a correction, then the validator's stamp that seals the record.
-
-![qTrace capturing a QuPath session live: each action lands as a line, the counters climb, the stamp seals the record](docs/screenshots/demo-qtrace.gif)
 
 ## Installation
 
