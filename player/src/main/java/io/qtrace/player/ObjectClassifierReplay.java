@@ -31,9 +31,11 @@ import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Replaying with exactly the object classifier that was recorded.
@@ -309,7 +311,16 @@ final class ObjectClassifierReplay {
         List<List<Version>> before = new ArrayList<>();
         for (int k = 0; k <= n; k++) before.add(new ArrayList<>());
         before.get(0).addAll(carried.values());
-        for (Version v : own) before.get(place(v, instructions, times)).add(v);
+        Set<String> placed = new HashSet<>();
+        for (Version v : own) {
+            int k = place(v, instructions, times);
+            // Save + Apply records the run, then writes the file: the first version of a name never stands after the
+            // first instruction that runs it, whatever the clock says (the run could not have used anything else).
+            if (placed.add(v.name()) && !carried.containsKey(v.name()))
+                for (int j = 0; j < k; j++)
+                    if (runs(instructions.get(j), v.name())) { k = j; break; }
+            before.get(k).add(v);
+        }
 
         List<Object> merged = new ArrayList<>();
         for (int k = 0; k <= n; k++) {

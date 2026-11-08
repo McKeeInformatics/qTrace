@@ -128,6 +128,19 @@ class ObjectClassifierCreationStepTest {
     }
 
     @Test
+    void aSaveAndApplyWritesTheFileAfterTheRunIsRecordedAndTheCreationStillComesFirst() {
+        // QuPath's Save + Apply records the run, then writes the file a fraction of a second later
+        JsonObject runStep = step("Run object classifier", run("OC"), 3);
+        JsonObject rec = ObjectClassifierFiles.record("OC", V1, t(3).plusMillis(282), "oscar", true);
+        String json = qtrace(session(List.of(step("Cell detection", DETECT, 1), runStep), rec));
+        List<ReplayStep> steps = QTraceReplayEngine.extractSteps(json, -1);
+
+        assertEquals(List.of("Cell detection", "Create object classifier: OC", "Run object classifier: OC"), titles(steps));
+        assertTrue(steps.get(1).objectClassifierFile().needed());
+        assertTrue(steps.get(1).isExecutable());
+    }
+
+    @Test
     void aClassifierNoInstructionRunsIsListedButNotRun() {
         String json = qtrace(session(List.of(step("Cell detection", DETECT, 1)), saved("OC", V1, 2)));
         ReplayStep create = QTraceReplayEngine.extractSteps(json, -1).get(1);
