@@ -48,6 +48,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
+import qupath.lib.io.PathIO;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -102,6 +103,8 @@ class QTraceReplayPlayer {
     private CheckBox selectAllCheckBox;
     // Unchecks the instructions recorded only in unstamped sessions (never validated by a stamp).
     private CheckBox validatedOnlyCheckBox;
+    private CheckBox saveEachImageCheckBox;
+    private final PlayerSettings settings = new PlayerSettings(PlayerSettings.defaultFile());
     // Shown only for a certificate (qtc_… ID / share link) whose .qtrace holds several sessions:
     // unchecked = replay the certified session only, checked = the image's whole history.
     // A workflow (.qtflow) is played whole or one packet at a time — see WorkflowSource.
@@ -1256,6 +1259,20 @@ class QTraceReplayPlayer {
         filterRow.setAlignment(Pos.CENTER_LEFT);
         filterRow.setPadding(new Insets(8, 10, 6, 10));
 
+        saveEachImageCheckBox = new CheckBox("Save each image before moving to the next");
+        saveEachImageCheckBox.setId("save-each-image");
+        Theme.text(saveEachImageCheckBox, TEXT_SUB);
+        saveEachImageCheckBox.setFont(Font.font("System", 11));
+        Tooltip.install(saveEachImageCheckBox, new Tooltip(
+            "When a batch moves to the next Target (and after the last one), save the work on the image it leaves"
+          + " - the replayed annotations and objects stay in the project. Images outside a project are never saved."));
+        saveEachImageCheckBox.setSelected(settings.saveOnTargetChange());
+        saveEachImageCheckBox.setOnAction(e -> settings.setSaveOnTargetChange(saveEachImageCheckBox.isSelected()));
+        saveEachImageCheckBox.disableProperty().bind(runningProperty);
+        HBox saveRow = new HBox(saveEachImageCheckBox);
+        saveRow.setAlignment(Pos.CENTER_LEFT);
+        saveRow.setPadding(new Insets(0, 10, 6, 10));
+
         targetRowsBox = new VBox(0);
         targetScrollPane = new ScrollPane(targetRowsBox);
         targetScrollPane.setFitToWidth(true);
@@ -1265,7 +1282,7 @@ class QTraceReplayPlayer {
           + "-fx-border-color: " + BORDER + "; -fx-border-radius: 4;");
         VBox.setVgrow(targetScrollPane, Priority.ALWAYS);
 
-        targetDetailBox = new VBox(0, filterRow, targetScrollPane);
+        targetDetailBox = new VBox(0, filterRow, saveRow, targetScrollPane);
         targetDetailBox.setStyle(
             "-fx-background-color: " + SURFACE + "; -fx-border-color: " + BORDER + ";"
           + "-fx-border-radius: 4; -fx-background-radius: 4;");
@@ -2376,6 +2393,7 @@ class QTraceReplayPlayer {
     /** @param resetCursor false only to carry on from steps already run (▶│) on the first target. */
     private void runBatch(List<TargetRow> targets, int index, boolean resetCursor) {
         boolean stoppedEarly = !playing;
+        if (index > 0) saveCurrentTarget(stoppedEarly);
         if (stoppedEarly || index >= targets.size()) {
             boolean fullyDone = !stoppedEarly; // reached here via exhausting targets, not a pause/decline
             if (fullyDone) { activeBatch = null; lastImageCount = targets.size(); }
@@ -2413,6 +2431,52 @@ class QTraceReplayPlayer {
             setPhase(MiniPlayerStatus.Phase.RUNNING, null);
             runPlayLoop(() -> runBatch(targets, index + 1, true));
         }));
+    }
+
+    /**
+     * Saves the image the batch is leaving, before the next one replaces it (or at the end of the
+     * batch, for the last one). Same rule as Core's Stamp: a project image through its entry, a
+     * file-backed one to its file; an image outside any project that was never saved is left
+     * alone. A failed save is reported, never fatal: the batch goes on. FX thread.
+     */
+    private void saveCurrentTarget(boolean interrupted) {
+        ImageData<BufferedImage> data = qupath.getImageData();
+        boolean failed = rows.stream().anyMatch(r -> r.result != null
+            && r.result.status() == ReplayExecutor.Status.FAILED);
+        PlayerAutoSave.Decision decision = PlayerAutoSave.decide(
+            settings.saveOnTargetChange(), data != null, failed, interrupted);
+        if (!decision.save()) {
+            if (decision == PlayerAutoSave.Decision.TARGET_FAILED)
+                batchNote("Not saved - a step failed on this image");
+            return;
+        }
+        Project<BufferedImage> project = qupath.getProject();
+        ProjectImageEntry<BufferedImage> entry = project != null ? project.getEntry(data) : null;
+        String name = entry != null ? entry.getImageName()
+            : (currentTargetLabel != null ? currentTargetLabel : "image");
+        try {
+            if (entry != null) {
+                entry.saveImageData(data);
+                project.syncChanges();
+            } else if (data.getLastSavedPath() != null) {
+                PathIO.writeImageData(java.nio.file.Path.of(data.getLastSavedPath()), data);
+            } else {
+                batchNote("Not saved - " + name + " is not in a project and was never saved (File > Save As first)");
+                return;
+            }
+            if (data.isChanged()) data.setChanged(false);
+            batchNote("Saved " + name);
+        } catch (Exception e) {
+            batchNote("Could not save " + name + ": " + e.getMessage());
+        }
+    }
+
+    /** One line about the save, in the console and at the tail of the log file. */
+    private void batchNote(String note) {
+        logArea.appendText(note + "\n");
+        if (logWriter != null) {
+            try { logWriter.appendNote(note); } catch (Exception ignored) {}
+        }
     }
 
     /**

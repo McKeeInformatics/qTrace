@@ -144,6 +144,16 @@ public class ReplayLogWriter implements AutoCloseable {
         flush();
     }
 
+    /**
+     * Notes, at the tail of the log, what happened to the image's work as the batch moved on
+     * ("Saved X", or why it was not). Like {@link #appendBatchTransition}: after the summary,
+     * which stays what the fingerprint covers.
+     */
+    public void appendNote(String note) throws IOException {
+        writeLine("=== batch: " + note + " ===");
+        flush();
+    }
+
     /** Appends one step's outcome and flushes immediately. */
     /**
      * Steps unchecked in Instructions ({@code SKIPPED_EXCLUDED}) still count toward the summary
