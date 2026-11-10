@@ -113,4 +113,14 @@ class ReplayQuotedClassNamesTest {
         assertThat(replay.get(0).groovyFragment())
             .contains("runPlugin('qupath.imagej.detect.cells.WatershedCellDetection'");
     }
+
+    // A blank line followed by an import line used to stop the scan for ever: the Player showed
+    // "Loading…" with nothing in QuPath's log. Fails by timeout if the scan does not advance.
+    @Test
+    @org.junit.jupiter.api.Timeout(10)
+    void aBlankLineBeforeAnImportLineDoesNotHangTheScan() {
+        String f = "def a = 1\n\nimport qupath.ext.stardist.StarDist2D\nStarDist2D.builder()\n\n   \nimport x.Y\nrun(qupath.ext.stardist.StarDist2D)";
+        assertThat(simplify(f)).isEqualTo(
+            "def a = 1\n\nimport qupath.ext.stardist.StarDist2D\nStarDist2D.builder()\n\n   \nimport x.Y\nrun(StarDist2D)");
+    }
 }

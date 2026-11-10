@@ -22,9 +22,7 @@ package io.qtrace.player;
 import io.qtrace.StampIntegrity;
 
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -138,9 +136,9 @@ final class RecordSessions {
     private static JsonArray sessions(String json) {
         if (json == null) return new JsonArray();
         try {
-            JsonElement el = JsonParser.parseString(json);
-            return el.isJsonObject() && el.getAsJsonObject().has("sessions") && el.getAsJsonObject().get("sessions").isJsonArray()
-                ? el.getAsJsonObject().getAsJsonArray("sessions") : new JsonArray();
+            JsonObject root = QTraceReplayEngine.parseRoot(json);
+            return root.has("sessions") && root.get("sessions").isJsonArray()
+                ? root.getAsJsonArray("sessions") : new JsonArray();
         } catch (RuntimeException e) {
             return new JsonArray();
         }

@@ -204,7 +204,7 @@ public class QTraceReplayEngine {
      * from {@link #downloadClassifiers} before rendering its pre-check row.
      */
     public static List<String> extractClassifierNames(String qtraceJson) {
-        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        JsonObject root = parsed(qtraceJson).root;
         JsonArray sessions = root.has("sessions") ? root.getAsJsonArray("sessions") : new JsonArray();
         LinkedHashSet<String> names = new LinkedHashSet<>();
         for (JsonElement el : sessions) {
@@ -318,10 +318,11 @@ public class QTraceReplayEngine {
     /** @param validatedOnly leave out instructions recorded only in unstamped sessions. */
     public static String generateGroovyScript(String qtraceJson, Path classifierDir, int sessionIndex,
                                               boolean validatedOnly) {
-        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        Parsed parsed = parsed(qtraceJson);
+        JsonObject root = parsed.root;
         JsonArray sessions = root.getAsJsonArray("sessions");
-        Map<String, String> recordedExtensions = collectRecordedExtensions(sessions);
-        Map<String, String> fqnToSimple = collectFqnToSimple(sessions);
+        Map<String, String> recordedExtensions = parsed.recordedExtensions();
+        Map<String, String> fqnToSimple = parsed.fqnToSimple();
         List<QTraceExtensionHandler> activeHandlers =
             ExtensionHandlerRegistry.get().activePreambleHandlers(recordedExtensions.keySet());
 
@@ -401,10 +402,11 @@ public class QTraceReplayEngine {
      * for the full-script (Script Editor / CLI) path.
      */
     public static String buildPreambleScript(String qtraceJson, Path classifierDir, int sessionIndex) {
-        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        Parsed parsed = parsed(qtraceJson);
+        JsonObject root = parsed.root;
         JsonArray sessions = root.getAsJsonArray("sessions");
-        Map<String, String> recordedExtensions = collectRecordedExtensions(sessions);
-        Map<String, String> fqnToSimple = collectFqnToSimple(sessions);
+        Map<String, String> recordedExtensions = parsed.recordedExtensions();
+        Map<String, String> fqnToSimple = parsed.fqnToSimple();
         List<QTraceExtensionHandler> activeHandlers =
             ExtensionHandlerRegistry.get().activePreambleHandlers(recordedExtensions.keySet());
         return buildPreamble(root, sessions, sessionIndex, classifierDir, recordedExtensions, fqnToSimple, activeHandlers);
@@ -594,13 +596,14 @@ public class QTraceReplayEngine {
     }
 
     private static List<ReplayStep> extractStepsAll(String qtraceJson, int sessionIndex) {
-        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        Parsed parsed = parsed(qtraceJson);
+        JsonObject root = parsed.root;
         JsonArray sessions = root.getAsJsonArray("sessions");
-        Map<String, String> recordedExtensions = collectRecordedExtensions(sessions);
-        Map<String, String> fqnToSimple = collectFqnToSimple(sessions);
+        Map<String, String> recordedExtensions = parsed.recordedExtensions();
+        Map<String, String> fqnToSimple = parsed.fqnToSimple();
         List<QTraceExtensionHandler> activeHandlers =
             ExtensionHandlerRegistry.get().activePreambleHandlers(recordedExtensions.keySet());
-        return extractSteps(root, sessions, sessionIndex, fqnToSimple, activeHandlers);
+        return extractSteps(root, sessions, sessionIndex, fqnToSimple, activeHandlers, parsed.emitted);
     }
 
     /**
@@ -622,6 +625,13 @@ public class QTraceReplayEngine {
 
     private static List<ReplayStep> extractSteps(JsonObject root, JsonArray sessions, int sessionIndex,
             Map<String, String> fqnToSimple, List<QTraceExtensionHandler> activeHandlers) {
+        return extractSteps(root, sessions, sessionIndex, fqnToSimple, activeHandlers, new java.util.HashMap<>());
+    }
+
+    /** @param emittedCache fragment → its rewritten script, shared by the sessions of one record. */
+    private static List<ReplayStep> extractSteps(JsonObject root, JsonArray sessions, int sessionIndex,
+            Map<String, String> fqnToSimple, List<QTraceExtensionHandler> activeHandlers,
+            Map<String, String> emittedCache) {
         int start = sessionIndex < 0 ? 0 : sessionIndex;
         int end   = sessionIndex < 0 ? sessions.size() : Math.min(sessionIndex + 1, sessions.size());
 
@@ -680,9 +690,14 @@ public class QTraceReplayEngine {
         for (Map.Entry<String, String> entry : seen.entrySet()) {
             String frag = entry.getKey();
             stepNum++;
-            String emitted = simplifyQualifiedNames(frag, fqnToSimple);
-            for (QTraceExtensionHandler h : activeHandlers)
-                emitted = h.rewriteStepGroovy(emitted);
+            String emitted;
+            synchronized (emittedCache) { emitted = emittedCache.get(frag); }
+            if (emitted == null) {
+                emitted = simplifyQualifiedNames(frag, fqnToSimple);
+                for (QTraceExtensionHandler h : activeHandlers)
+                    emitted = h.rewriteStepGroovy(emitted);
+                synchronized (emittedCache) { emittedCache.put(frag, emitted); }
+            }
             // Listed under the name of its step, as on the portal's "Scripts executed"; a step
             // recorded without a name falls back on the first line of its script.
             String label = names.getOrDefault(frag, "").strip();
@@ -866,7 +881,7 @@ public class QTraceReplayEngine {
      * their own recorded order.
      */
     public static List<ReplayStep> extractMeasurementMapSteps(String qtraceJson, int sessionIndex) {
-        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        JsonObject root = parsed(qtraceJson).root;
         JsonArray sessions = root.has("sessions") ? root.getAsJsonArray("sessions") : new JsonArray();
         int start = sessionIndex < 0 ? 0 : sessionIndex;
         int end   = sessionIndex < 0 ? sessions.size() : Math.min(sessionIndex + 1, sessions.size());
@@ -935,7 +950,7 @@ public class QTraceReplayEngine {
             } else if (c == '\'' || c == '"') {
                 skipTo = stringEnd(fragment, i, c);
             }
-            if (skipTo < 0) { i++; continue; }
+            if (skipTo <= i) { i++; continue; }     // always advance
             out.append(rewriteCode(fragment.substring(code, i), fqnToSimple));
             out.append(fragment, i, skipTo);
             i = code = skipTo;
@@ -969,7 +984,7 @@ public class QTraceReplayEngine {
         return n;
     }
 
-    private static final Pattern IMPORT_LINE = Pattern.compile("\\s*import\\s");
+    private static final Pattern IMPORT_LINE = Pattern.compile("[ \\t]*import\\s");
 
     private static Map<String, String> collectFqnToSimple(JsonArray sessions) {
         Map<String, String> fqnToSimple = new LinkedHashMap<>();
@@ -997,7 +1012,7 @@ public class QTraceReplayEngine {
      * what the portal's "Scripts executed" shows, and what the Player replays by default.
      */
     public static int certifiedSessionIndex(String qtraceJson) {
-        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        JsonObject root = parsed(qtraceJson).root;
         JsonArray sessions = root.has("sessions") && root.get("sessions").isJsonArray()
             ? root.getAsJsonArray("sessions") : new JsonArray();
         for (int i = sessions.size() - 1; i >= 0; i--)
@@ -1008,6 +1023,63 @@ public class QTraceReplayEngine {
     /** Whether {@code source} names a record on qtrace.ca (qtc_… or qtb_… ID, or a link) rather than a local .qtrace. */
     public static boolean isCertificateSource(String source) {
         return RecordSource.isRecordId(source) || (source != null && source.startsWith("http"));
+    }
+
+    // ── One parse per loaded record ───────────────────────────────────────────
+
+    /**
+     * A record parsed once. The Player asks the engine a dozen things about the same record
+     * (steps, pre-flight, sessions, preamble…) and a certificate's .qtrace can weigh tens of MB
+     * (every manual annotation carries its geometry): parsing it, and scanning every fragment
+     * for qualified names, at each question kept the load window spinning for half a minute.
+     * Nothing here is ever modified after parsing.
+     */
+    static final class Parsed {
+        final String json;
+        final JsonObject root;
+        private Map<String, String> recordedExtensions;
+        private Map<String, String> fqnToSimple;
+        /** fragment → script as the replay runs it (qualified names simplified, handlers applied). */
+        final Map<String, String> emitted = new java.util.HashMap<>();
+
+        private Parsed(String json) {
+            this.json = json;
+            this.root = JsonParser.parseString(json).getAsJsonObject();
+        }
+
+        private JsonArray sessions() {
+            return root.has("sessions") && root.get("sessions").isJsonArray()
+                ? root.getAsJsonArray("sessions") : new JsonArray();
+        }
+
+        synchronized Map<String, String> recordedExtensions() {
+            if (recordedExtensions == null)
+                recordedExtensions = java.util.Collections.unmodifiableMap(collectRecordedExtensions(sessions()));
+            return recordedExtensions;
+        }
+
+        synchronized Map<String, String> fqnToSimple() {
+            if (fqnToSimple == null)
+                fqnToSimple = java.util.Collections.unmodifiableMap(collectFqnToSimple(sessions()));
+            return fqnToSimple;
+        }
+    }
+
+    private static java.lang.ref.SoftReference<Parsed> lastParsed = new java.lang.ref.SoftReference<>(null);
+
+    /** The record's parse, shared by every call made with this very string (identity, not equality). */
+    static synchronized Parsed parsed(String json) {
+        Parsed p = lastParsed.get();
+        if (p == null || p.json != json) {
+            p = new Parsed(json);
+            lastParsed = new java.lang.ref.SoftReference<>(p);
+        }
+        return p;
+    }
+
+    /** The parsed root of {@code json}; see {@link Parsed}. */
+    static JsonObject parseRoot(String json) {
+        return parsed(json).root;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1091,7 +1163,7 @@ public class QTraceReplayEngine {
     ) {}
 
     public static PreflightInfo extractPreflightInfo(String qtraceJson) {
-        JsonObject root = JsonParser.parseString(qtraceJson).getAsJsonObject();
+        JsonObject root = parsed(qtraceJson).root;
         JsonObject image = root.has("image") ? root.getAsJsonObject("image") : new JsonObject();
         JsonArray sessions = root.has("sessions") ? root.getAsJsonArray("sessions") : new JsonArray();
 

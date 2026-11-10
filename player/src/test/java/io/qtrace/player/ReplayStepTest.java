@@ -111,4 +111,21 @@ class ReplayStepTest {
         assertThat(steps).hasSize(1);
         assertThat(steps.get(0).title()).isEqualTo("Run object classifier: 20261105-SGI-CD14-v");
     }
+
+    @Test
+    void classify_isCaseInsensitiveForModelsAndHandlesHugeFragments() {
+        assertThat(ReplayStep.classify("runstardist(model)")).isEqualTo("Segmentation");
+        assertThat(ReplayStep.classify("createDetectionsFromPixelClassifier('c', 1.0, 1.0)")).isEqualTo("Pixel Classifier");
+        // A manual annotation carries its geometry: fragments of 400 KB are routine.
+        String huge = "def b = decode(\"" + "QUJD".repeat(100_000) + "\")\nrunPlugin('qupath.imagej.detect.cells.WatershedCellDetection', '{}')";
+        assertThat(ReplayStep.classify(huge)).isEqualTo("Cell detection");
+        assertThat(ReplayStep.classify("def b = \"" + "QUJD".repeat(100_000) + "\"")).isEqualTo("Script");
+    }
+
+    @Test
+    void parsedRecord_isSharedByIdentityAndRebuiltForAnotherString() {
+        String json = "{\"sessions\":[]}";
+        assertThat(QTraceReplayEngine.parseRoot(json)).isSameAs(QTraceReplayEngine.parseRoot(json));
+        assertThat(QTraceReplayEngine.parseRoot(new String(json))).isNotSameAs(QTraceReplayEngine.parseRoot(json));
+    }
 }

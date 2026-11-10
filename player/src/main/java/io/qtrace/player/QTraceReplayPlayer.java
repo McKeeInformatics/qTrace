@@ -711,6 +711,7 @@ class QTraceReplayPlayer {
             java.nio.file.Path[] leakGuard = new java.nio.file.Path[1];
             try {
                 String qtraceJson = QTraceReplayEngine.downloadQtrace(source);
+                Platform.runLater(() -> infoLabel.setText("Reading the record…"));
                 sourceQtraceHash = io.qtrace.chain.Hashing.sha256Hex(qtraceJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 qtraceBaseName = baseNameOf(source);
                 replaySource = source;
@@ -855,14 +856,19 @@ class QTraceReplayPlayer {
                     activeTargetRow = null;
                     rebuildTargetNodes();
                 });
-            } catch (Exception ex) {
+            } catch (Throwable ex) {
+                // Throwable, not Exception: an OutOfMemoryError on a very large record used to kill
+                // this thread silently and leave the spinner turning for ever.
                 if (leakGuard[0] != null) deleteTempDir(leakGuard[0]);
+                String reason = ex.getMessage() != null ? ex.getMessage()
+                    : ex instanceof OutOfMemoryError ? "Not enough memory to read this record"
+                    : ex.getClass().getSimpleName();
                 Platform.runLater(() -> {
                     loadingSpinner.setVisible(false);
                     loadingSpinner.setManaged(false);
-                    infoLabel.setText("✗ " + ex.getMessage());
+                    infoLabel.setText("✗ " + reason);
                     setPrecheckVisible(false);
-                    setPhase(MiniPlayerStatus.Phase.LOAD_ERROR, ex.getMessage());
+                    setPhase(MiniPlayerStatus.Phase.LOAD_ERROR, reason);
                 });
             }
         }, "qtrace-player-load").start();
@@ -1174,7 +1180,7 @@ class QTraceReplayPlayer {
     }
 
     private static int countSessions(String qtraceJson) {
-        com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(qtraceJson).getAsJsonObject();
+        com.google.gson.JsonObject root = QTraceReplayEngine.parseRoot(qtraceJson);
         return root.has("sessions") && root.get("sessions").isJsonArray() ? root.getAsJsonArray("sessions").size() : 0;
     }
 

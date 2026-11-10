@@ -74,21 +74,24 @@ public record ReplayStep(int index, String type, String title, String groovyFrag
         return objectClassifierFile != null;
     }
 
-    private static final Pattern PIXEL_CLASSIFIER = Pattern.compile(
-        "createAnnotationsFromPixelClassifier|createDetectionsFromPixelClassifier|addPixelClassifierMeasurements");
     private static final Pattern CELL_DETECTION = Pattern.compile(
         "runPlugin\\(['\"][^'\"]*(CellDetection|WatershedCellDetection)");
     private static final Pattern OBJECT_CLASSIFIER = Pattern.compile("runObjectClassifier\\s*\\(");
-    private static final Pattern SEGMENTATION_MODEL = Pattern.compile(
-        "InstanSeg|StarDist|runInstanSeg", Pattern.CASE_INSENSITIVE);
 
-    /** Lightweight pattern-based classification — Script / Segmentation / Pixel Classifier / Object Classifier / Cell detection. */
+    /**
+     * Lightweight classification — Script / Segmentation / Pixel Classifier / Object Classifier / Cell detection.
+     * Plain substring searches first: a fragment can weigh 400 KB (a manual annotation carries its
+     * geometry) and a regex over it, once per step and per session, took seconds.
+     */
     public static String classify(String fragment) {
         if (fragment == null || fragment.isBlank()) return "Script";
-        if (PIXEL_CLASSIFIER.matcher(fragment).find()) return "Pixel Classifier";
-        if (OBJECT_CLASSIFIER.matcher(fragment).find()) return "Object Classifier";
-        if (SEGMENTATION_MODEL.matcher(fragment).find()) return "Segmentation";
-        if (CELL_DETECTION.matcher(fragment).find()) return "Cell detection";
+        if (fragment.contains("createAnnotationsFromPixelClassifier")
+            || fragment.contains("createDetectionsFromPixelClassifier")
+            || fragment.contains("addPixelClassifierMeasurements")) return "Pixel Classifier";
+        if (fragment.contains("runObjectClassifier") && OBJECT_CLASSIFIER.matcher(fragment).find()) return "Object Classifier";
+        String lower = fragment.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("instanseg") || lower.contains("stardist")) return "Segmentation";
+        if (fragment.contains("runPlugin(") && CELL_DETECTION.matcher(fragment).find()) return "Cell detection";
         return "Script";
     }
 
