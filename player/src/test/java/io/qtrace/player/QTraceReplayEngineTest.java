@@ -259,11 +259,12 @@ class QTraceReplayEngineTest {
     }
 
     @Test
-    void replayingTheCertifiedSessionLeavesTheRestOfTheHistoryOut() {
+    void theCertifiedSessionListsOnlyWhatItRecordedItself() {
         int idx = QTraceReplayEngine.certifiedSessionIndex(HISTORY_JSON);
+        // setImageType() is carried over from s1: it belongs to s1, as on the portal's "Scripts executed"
         assertThat(QTraceReplayEngine.extractSteps(HISTORY_JSON, idx))
             .extracting(ReplayStep::groovyFragment)
-            .containsExactly("setImageType('FLUORESCENCE')", "runTmaDearrayer()");
+            .containsExactly("runTmaDearrayer()");
     }
 
     @Test
@@ -371,5 +372,32 @@ class QTraceReplayEngineTest {
         assertThat(groovy).contains("import qupath.imagej.tools.IJTools\n");
         assertThat(groovy).contains("  import qupath.fx.dialogs.Dialogs\n");
         assertThat(groovy).contains("def ip = IJTools.convertToImagePlus(server, region)");
+    }
+
+    private static String step(String cmd, String code, String at, boolean inherited) {
+        return "{\"command\":\"" + cmd + "\",\"script_fragment\":\"" + code + "\",\"is_scriptable\":true,"
+            + "\"timestamp\":\"" + at + "\"" + (inherited ? ",\"pre_tracking\":true" : "") + "}";
+    }
+
+    @Test
+    void aSessionAloneListsOnlyTheInstructionsItRecorded() {
+        String a = step("Rect", "makeA()", "2026-11-04T10:00:00Z", false);
+        String b = step("Poly", "makeB()", "2026-11-04T11:00:00Z", false);
+        String c = step("Detect", "makeC()", "2026-11-10T14:00:00Z", false);
+        String json = "{\"image\":{\"name\":\"t\"},\"sessions\":["
+            + "{\"steps\":[" + a + "]},"
+            // later sessions carry the earlier history again
+            + "{\"steps\":[" + a + "," + b + "]},"
+            + "{\"steps\":[" + step("Rect", "makeA()", "2026-11-04T10:00:00Z", true) + "," + b + "," + c + "]}]}";
+
+        assertThat(titles(QTraceReplayEngine.extractSteps(json, 0))).containsExactly("Rect");
+        assertThat(titles(QTraceReplayEngine.extractSteps(json, 1))).containsExactly("Poly");
+        assertThat(titles(QTraceReplayEngine.extractSteps(json, 2))).containsExactly("Detect");
+        // several sessions together still replay the whole path
+        assertThat(titles(QTraceReplayEngine.extractSteps(json, -1))).containsExactly("Rect", "Poly", "Detect");
+    }
+
+    private static List<String> titles(List<ReplayStep> steps) {
+        return steps.stream().map(ReplayStep::title).toList();
     }
 }

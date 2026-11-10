@@ -651,10 +651,14 @@ public class QTraceReplayEngine {
         Map<String, String> names = new LinkedHashMap<>();
         // When it was done (its last occurrence): where an object classifier's creation stands among the instructions
         Map<String, Instant> times = new LinkedHashMap<>();
+        // One session alone lists what it recorded itself, as the portal's "Scripts executed" does:
+        // each session carries the image's earlier history, which belongs to the sessions before it.
+        boolean ownOnly = sessionIndex >= 0 && !isWorkflow(root);
         for (int i = start; i < end; i++) {
-            JsonObject session = sessions.get(i).getAsJsonObject();
-            String sid = session.has("session_id") && !session.get("session_id").isJsonNull()
-                ? session.get("session_id").getAsString() : null;
+            JsonObject full = sessions.get(i).getAsJsonObject();
+            String sid = full.has("session_id") && !full.get("session_id").isJsonNull()
+                ? full.get("session_id").getAsString() : null;
+            JsonObject session = ownOnly ? recordedBySession(sessions, i) : full;
             names.putAll(fragmentNames(session));
             times.keySet().removeAll(scriptableFragments(session).keySet());
             times.putAll(fragmentTimes(session));
@@ -752,6 +756,44 @@ public class QTraceReplayEngine {
             if (at != null) out.put(frag, at);
         }
         return out;
+    }
+
+    /**
+     * Session {@code index} reduced to the steps it recorded itself — the portal's rule (parseScripts): a step
+     * inherited from an earlier session ({@code pre_tracking}), deleted, or already listed by an earlier session
+     * (same time, command and script) is left to that one. Other members are shared, not copied.
+     */
+    static JsonObject recordedBySession(JsonArray sessions, int index) {
+        java.util.Set<String> before = new java.util.HashSet<>();
+        for (int i = 0; i < index; i++)
+            for (JsonObject step : recordableSteps(sessions.get(i).getAsJsonObject())) before.add(stepKey(step));
+        JsonObject session = sessions.get(index).getAsJsonObject();
+        JsonArray own = new JsonArray();
+        for (JsonObject step : recordableSteps(session)) if (!before.contains(stepKey(step))) own.add(step);
+        JsonObject view = new JsonObject();
+        for (Map.Entry<String, JsonElement> e : session.entrySet()) view.add(e.getKey(), e.getValue());
+        view.add("steps", own);
+        return view;
+    }
+
+    private static List<JsonObject> recordableSteps(JsonObject session) {
+        List<JsonObject> out = new ArrayList<>();
+        if (!session.has("steps") || !session.get("steps").isJsonArray()) return out;
+        for (JsonElement el : session.getAsJsonArray("steps")) {
+            JsonObject step = el.getAsJsonObject();
+            if (step.has("pre_tracking") && step.get("pre_tracking").getAsBoolean()) continue;
+            if (step.has("deleted") && step.get("deleted").getAsBoolean()) continue;
+            if (!step.has("script_fragment") || step.get("script_fragment").isJsonNull()) continue;
+            if (step.get("script_fragment").getAsString().isBlank()) continue;
+            out.add(step);
+        }
+        return out;
+    }
+
+    /** Time, command and script of a step; the script by its (cached) hash, not copied. */
+    private static String stepKey(JsonObject step) {
+        String frag = step.get("script_fragment").getAsString();
+        return getString(step, "timestamp") + "|" + getString(step, "command") + "|" + frag.length() + ":" + frag.hashCode();
     }
 
     /** {@code replay_skip}: the author took this step out of the replay (see Core's ReplaySkip). */

@@ -58,8 +58,9 @@ class RecordSessionsTest {
     }
 
     @Test
-    void aSessionCountsTheInstructionsItReplaysAlone() {
-        assertEquals(List.of(1, 2, 0), RecordSessions.instructionCounts(RECORD));
+    void aSessionCountsTheInstructionsItRecordedItself() {
+        // s2 carries a() again from s1: it is s1's, as on the portal's "Scripts executed"
+        assertEquals(List.of(1, 1, 0), RecordSessions.instructionCounts(RECORD));
     }
 
     @Test
