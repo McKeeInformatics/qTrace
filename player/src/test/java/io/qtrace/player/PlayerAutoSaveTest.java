@@ -10,31 +10,38 @@ class PlayerAutoSaveTest {
 
     @Test
     void savesAFinishedHealthyTargetWhenTheBoxIsChecked() {
-        assertThat(PlayerAutoSave.decide(true, true, false, false)).isEqualTo(Decision.SAVE);
+        assertThat(PlayerAutoSave.decide(true, true, true, false, false)).isEqualTo(Decision.SAVE);
     }
 
     @Test
     void doesNothingWhenTheBoxIsUnchecked() {
-        assertThat(PlayerAutoSave.decide(false, true, false, false)).isEqualTo(Decision.OFF);
+        assertThat(PlayerAutoSave.decide(false, true, true, false, false)).isEqualTo(Decision.OFF);
     }
 
     @Test
     void doesNothingWithoutAnImage() {
-        assertThat(PlayerAutoSave.decide(true, false, false, false)).isEqualTo(Decision.NO_IMAGE);
+        assertThat(PlayerAutoSave.decide(true, false, false, false, false)).isEqualTo(Decision.NO_IMAGE);
+    }
+
+    @Test
+    void neverSavesAnImageThatIsNotTheTargetJustPlayed() {
+        // The target did not open (missing file, open timed out): the steps ran on whatever image
+        // was on screen - saving it would write the replay into an image nobody asked for.
+        assertThat(PlayerAutoSave.decide(true, true, false, false, false)).isEqualTo(Decision.NOT_TARGET);
     }
 
     @Test
     void doesNotSaveATargetWhoseStepsFailed() {
-        assertThat(PlayerAutoSave.decide(true, true, true, false)).isEqualTo(Decision.TARGET_FAILED);
+        assertThat(PlayerAutoSave.decide(true, true, true, true, false)).isEqualTo(Decision.TARGET_FAILED);
     }
 
     @Test
     void doesNotSaveWhenTheBatchWasInterrupted() {
-        assertThat(PlayerAutoSave.decide(true, true, false, true)).isEqualTo(Decision.INTERRUPTED);
+        assertThat(PlayerAutoSave.decide(true, true, true, false, true)).isEqualTo(Decision.INTERRUPTED);
     }
 
     @Test
     void theBoxComesFirstSoAnUncheckedBoxIsNeverNoisy() {
-        assertThat(PlayerAutoSave.decide(false, false, true, true)).isEqualTo(Decision.OFF);
+        assertThat(PlayerAutoSave.decide(false, false, false, true, true)).isEqualTo(Decision.OFF);
     }
 }

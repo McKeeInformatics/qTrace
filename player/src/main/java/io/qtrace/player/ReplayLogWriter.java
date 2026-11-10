@@ -150,12 +150,13 @@ public class ReplayLogWriter implements AutoCloseable {
      * which stays what the fingerprint covers.
      */
     public void appendNote(String note) throws IOException {
+        writeLine("");
         writeLine("=== batch: " + note + " ===");
         flush();
     }
 
-    /** Appends one step's outcome and flushes immediately. */
     /**
+     * Appends one step's outcome and flushes immediately.
      * Steps unchecked in Instructions ({@code SKIPPED_EXCLUDED}) still count toward the summary
      * and are still listed by number in the header's {@code excluded_steps} line, but don't get
      * their own line in the step-by-step body — with hundreds of steps and only a handful

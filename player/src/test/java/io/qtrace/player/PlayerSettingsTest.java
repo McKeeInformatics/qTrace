@@ -39,6 +39,22 @@ class PlayerSettingsTest {
     }
 
     @Test
+    void aChoiceThatCannotBeWrittenStillHoldsForThisSession() throws Exception {
+        Path blocker = dir.resolve("not-a-dir");
+        Files.writeString(blocker, "a file where the folder should be");
+        PlayerSettings settings = new PlayerSettings(blocker.resolve("player.json"));
+        settings.setSaveOnTargetChange(false);
+        assertThat(settings.saveOnTargetChange()).isFalse();
+    }
+
+    @Test
+    void readingNeverCreatesTheFile() {
+        Path file = dir.resolve("sub/player.json");
+        new PlayerSettings(file).saveOnTargetChange();
+        assertThat(file.getParent()).doesNotExist();
+    }
+
+    @Test
     void writingLeavesNoTemporaryFileBehind() throws Exception {
         Path file = dir.resolve("player.json");
         new PlayerSettings(file).setSaveOnTargetChange(false);

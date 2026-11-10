@@ -93,4 +93,16 @@ class ReplayLogWriterTest {
             assertThat(w.summaryHash()).isEqualTo(fingerprint);                    // …the fingerprint did not
         }
     }
+
+    @Test
+    void aBatchNoteLandsAfterTheSummary_whoseFingerprintItLeavesAlone(@TempDir Path dir) throws Exception {
+        try (ReplayLogWriter w = open(dir)) {
+            ReplayStamp stamp = w.finishUnsigned("someone", "srchash", "0.7.0");
+            w.appendNote("Saved image-1");
+            w.appendBatchTransition("image-2");
+            String text = Files.readString(w.logPath());
+            assertThat(text).endsWith("\n\n=== batch: Saved image-1 ===\n\n=== batch: moving to next target — image-2 ===\n");
+            assertThat(w.summaryHash()).isEqualTo(stamp.logHash());
+        }
+    }
 }

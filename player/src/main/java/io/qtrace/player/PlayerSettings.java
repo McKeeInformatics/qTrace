@@ -32,13 +32,15 @@ import java.nio.file.StandardCopyOption;
 /**
  * The player's own settings, in {@code ~/.qTrace/player.json} (one file per module, Core's
  * config.json is never touched). Reading never fails: a missing or damaged file means the
- * defaults. Writing is atomic. No JavaFX: unit-tested.
+ * defaults, and never creates anything. Writing is atomic; a choice that cannot be written
+ * still holds for this session. No JavaFX: unit-tested.
  */
 final class PlayerSettings {
 
     static final String SAVE_ON_TARGET_CHANGE = "saveOnTargetChange";
 
     private final Path file;
+    private Boolean saveOnTargetChange; // the choice made in this session, written or not
 
     PlayerSettings(Path file) { this.file = file; }
 
@@ -48,12 +50,14 @@ final class PlayerSettings {
 
     /** Save each image before the batch moves to the next target. Checked by default. */
     boolean saveOnTargetChange() {
+        if (saveOnTargetChange != null) return saveOnTargetChange;
         JsonElement v = read().get(SAVE_ON_TARGET_CHANGE);
         if (v != null && v.isJsonPrimitive() && v.getAsJsonPrimitive().isBoolean()) return v.getAsBoolean();
         return true;
     }
 
     void setSaveOnTargetChange(boolean value) {
+        saveOnTargetChange = value;
         JsonObject json = read(); // keeps what other versions of the player wrote
         json.addProperty(SAVE_ON_TARGET_CHANGE, value);
         try {

@@ -22,9 +22,7 @@ package io.qtrace.player;
 final class PlayerAutoSave {
 
     enum Decision {
-        SAVE, OFF, NO_IMAGE, TARGET_FAILED, INTERRUPTED;
-
-        boolean save() { return this == SAVE; }
+        SAVE, OFF, NO_IMAGE, NOT_TARGET, TARGET_FAILED, INTERRUPTED
     }
 
     private PlayerAutoSave() {}
@@ -32,13 +30,16 @@ final class PlayerAutoSave {
     /**
      * @param enabled      the "Save each image" box
      * @param hasImage     an image is open in the viewer
+     * @param onTarget     that image is the target just played (its open did not fail or time out)
      * @param targetFailed a step failed on the target just played: its work is not worth keeping
      * @param interrupted  the batch was paused or stopped, not played to the end
      */
-    static Decision decide(boolean enabled, boolean hasImage, boolean targetFailed, boolean interrupted) {
+    static Decision decide(boolean enabled, boolean hasImage, boolean onTarget,
+                           boolean targetFailed, boolean interrupted) {
         if (!enabled) return Decision.OFF;
         if (interrupted) return Decision.INTERRUPTED;
         if (!hasImage) return Decision.NO_IMAGE;
+        if (!onTarget) return Decision.NOT_TARGET;
         if (targetFailed) return Decision.TARGET_FAILED;
         return Decision.SAVE;
     }
