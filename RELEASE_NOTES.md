@@ -1,3 +1,21 @@
+## What's new in v1.2.18
+
+### New - A replay on several images stamps each one, as Import does
+In the Player, check two or more images under **Target image(s)** and the new **Stamp each image (2 or more Targets)** box.
+At ▶, one window asks for the validator (your certified identity if you have one), scope, confidence and notes, once for the whole batch; each image then gets a stamped .qtrace as soon as its instructions have run.
+An image where a step failed, or where nothing was recorded, keeps an unstamped .qtrace, and the console says why.
+The box is off by default, and a single image is never stamped automatically.
+
+### New - A replay on several images saves each image before moving to the next
+**Save each image before moving to the next**, checked by default: the work on the image the batch leaves is saved into the project, so QuPath no longer asks to save at every image.
+
+### Fixed - A batch no longer stops at every image to ask "wasn't stamped"
+A Player batch of two or more images no longer waits on qTrace's "Unstamped image" question at each image change, and an image just stamped by a batch (Player or Import) is no longer asked about when you leave it.
+
+### Fixed - ▶ replays a finished replay
+Once a replay had reached its end, ▶ did nothing, in the Player window as in the mini-player.
+It now plays the open record or workflow again from its first instruction, as a new run with its own log and a new .qtrace on each image, keeping the instructions you checked.
+
 ## What's new in v1.2.17
 
 ### Fixed - The replay creates an annotation before the command that uses it
