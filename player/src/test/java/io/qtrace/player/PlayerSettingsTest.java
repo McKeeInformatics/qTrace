@@ -62,4 +62,36 @@ class PlayerSettingsTest {
             assertThat(files.map(p -> p.getFileName().toString())).containsExactly("player.json");
         }
     }
+
+    @Test
+    void stampingEachImageIsOffByDefault() {
+        // A stamp is someone's validation: never given without the box checked on purpose.
+        assertThat(new PlayerSettings(dir.resolve("player.json")).stampOnTargetChange()).isFalse();
+    }
+
+    @Test
+    void theStampChoiceSurvivesAReloadAndKeepsTheSaveChoice() {
+        Path file = dir.resolve("player.json");
+        new PlayerSettings(file).setSaveOnTargetChange(false);
+        new PlayerSettings(file).setStampOnTargetChange(true);
+        PlayerSettings reloaded = new PlayerSettings(file);
+        assertThat(reloaded.stampOnTargetChange()).isTrue();
+        assertThat(reloaded.saveOnTargetChange()).isFalse();
+    }
+
+    @Test
+    void aStampChoiceThatCannotBeWrittenStillHoldsForThisSession() throws Exception {
+        Path blocker = dir.resolve("not-a-dir");
+        Files.writeString(blocker, "a file where the folder should be");
+        PlayerSettings settings = new PlayerSettings(blocker.resolve("player.json"));
+        settings.setStampOnTargetChange(true);
+        assertThat(settings.stampOnTargetChange()).isTrue();
+    }
+
+    @Test
+    void aDamagedStampValueFallsBackOnOff() throws Exception {
+        Path file = dir.resolve("player.json");
+        Files.writeString(file, "{\"stampOnTargetChange\":\"yes\"}");
+        assertThat(new PlayerSettings(file).stampOnTargetChange()).isFalse();
+    }
 }

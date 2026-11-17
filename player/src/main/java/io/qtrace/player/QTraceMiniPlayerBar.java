@@ -342,7 +342,8 @@ final class QTraceMiniPlayerBar {
         boolean busy = player.isBusy();
 
         playBtn.setText(playing ? "⏸" : "▶");
-        playBtn.setDisable(!loaded || (!playing && (busy || player.isFinished())));
+        // A finished replay can be played again: ▶ replays the open record or workflow from the start
+        playBtn.setDisable(!loaded || (!playing && busy));
         // The gap between clicking ▶ and the first instruction actually starting (the target
         // image opening in the viewer) — runningRow is still null then, so stepTitle() is null.
         boolean openingImage = playing && st.phase() == MiniPlayerStatus.Phase.RUNNING && st.stepTitle() == null;

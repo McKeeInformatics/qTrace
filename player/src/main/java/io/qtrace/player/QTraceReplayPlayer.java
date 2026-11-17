@@ -57,6 +57,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -104,6 +105,11 @@ class QTraceReplayPlayer {
     // Unchecks the instructions recorded only in unstamped sessions (never validated by a stamp).
     private CheckBox validatedOnlyCheckBox;
     private CheckBox saveEachImageCheckBox;
+    private CheckBox stampEachImageCheckBox;
+    // Fewer than two Targets checked: the batch never stamps by itself, the box says so by being grey.
+    private final SimpleBooleanProperty singleTargetProperty = new SimpleBooleanProperty(true);
+    // What every image of the batch being played is stamped with; null = no automatic stamp.
+    private BatchStampDialog.BatchStamp batchStamp;
     private final PlayerSettings settings = new PlayerSettings(PlayerSettings.defaultFile());
     // Shown only for a certificate (qtc_… ID / share link) whose .qtrace holds several sessions:
     // unchecked = replay the certified session only, checked = the image's whole history.
@@ -1271,7 +1277,19 @@ class QTraceReplayPlayer {
         saveEachImageCheckBox.setSelected(settings.saveOnTargetChange());
         saveEachImageCheckBox.setOnAction(e -> settings.setSaveOnTargetChange(saveEachImageCheckBox.isSelected()));
         saveEachImageCheckBox.disableProperty().bind(runningProperty);
-        HBox saveRow = new HBox(saveEachImageCheckBox);
+        stampEachImageCheckBox = new CheckBox("Stamp each image (2 or more Targets)");
+        stampEachImageCheckBox.setId("stamp-each-image");
+        Theme.text(stampEachImageCheckBox, TEXT_SUB);
+        stampEachImageCheckBox.setFont(Font.font("System", 11));
+        Tooltip.install(stampEachImageCheckBox, new Tooltip(
+            "With two or more Targets, each image gets a stamped .qtrace once its instructions have run,"
+          + " as Import does for a whole project.\n"
+          + "Validator, scope and confidence are asked once, when the batch starts."
+          + " An image where a step failed keeps an unstamped .qtrace."));
+        stampEachImageCheckBox.setSelected(settings.stampOnTargetChange());
+        stampEachImageCheckBox.setOnAction(e -> settings.setStampOnTargetChange(stampEachImageCheckBox.isSelected()));
+        stampEachImageCheckBox.disableProperty().bind(runningProperty.or(singleTargetProperty));
+        VBox saveRow = new VBox(4, saveEachImageCheckBox, stampEachImageCheckBox);
         saveRow.setAlignment(Pos.CENTER_LEFT);
         saveRow.setPadding(new Insets(0, 10, 6, 10));
 
@@ -1318,7 +1336,8 @@ class QTraceReplayPlayer {
     // is tiny (just its scrollbar chrome), so without an explicit floor the SplitPane divider
     // was free to leave the freshly-expanded list at whatever sliver of space it already had
     // (as little as 1-2 rows) instead of opening up to a usable size.
-    private static final double TARGET_EXPANDED_MIN_HEIGHT = 172;
+    // Header 34 + filter 40 + the Save and Stamp boxes 46 + four image rows 116.
+    private static final double TARGET_EXPANDED_MIN_HEIGHT = 236;
 
     private void setConsoleExpanded(boolean expanded) {
         if (consoleExpanded == expanded) return;
@@ -1455,6 +1474,7 @@ class QTraceReplayPlayer {
     }
 
     private void updateTargetHeaderSummary() {
+        singleTargetProperty.set(targetRows.stream().filter(r -> r.selected().get()).count() < 2);
         if (targetRows.isEmpty()) {
             targetHeaderText.setText("Target image(s) — Select at least one image");
         } else if (targetRows.size() == 1 && targetRows.get(0).entry() == null) {
@@ -2237,12 +2257,20 @@ class QTraceReplayPlayer {
      */
     private void togglePlay() {
         if (playing) { playing = false; playBtn.setText("▶"); return; }
-        if (cursor >= rows.size() && activeBatch == null) return;
+        if (rows.isEmpty()) return;
+        if (cursor >= rows.size() && activeBatch == null) rewindFinishedRun();
         if (activeBatch != null) { resumeBatch(); return; }
         List<TargetRow> checked = new ArrayList<>(targetRows.stream().filter(r -> r.selected().get()).toList());
         if (checked.isEmpty()) {
             new Alert(Alert.AlertType.INFORMATION, "Select a Target to execute the instructions.").showAndWait();
             return;
+        }
+        batchStamp = null;
+        if (stampEachImageCheckBox.isSelected() && checked.size() >= 2) {
+            Optional<BatchStampDialog.BatchStamp> stamp = BatchStampDialog.ask(
+                stage != null && stage.isShowing() ? stage : qupath.getStage(), checked.size(), qtraceBaseName);
+            if (stamp.isEmpty()) return; // Cancel: the batch does not start
+            batchStamp = stamp.get();
         }
         moveActiveImageFirst(checked);
         // Steps already run with ▶│ on the open image are not replayed — Play carries on from there.
@@ -2274,6 +2302,32 @@ class QTraceReplayPlayer {
         TargetRow target = targets.get(index);
         openTargetAndWait(target).thenRun(() -> Platform.runLater(() ->
             runPlayLoop(() -> runBatch(targets, index + 1, true))));
+    }
+
+    /**
+     * The last run went to the end: Play replays the record or workflow that is open, from its
+     * first instruction, as a new run (its own log, a new trace on each Target). The instructions
+     * checked or unchecked stay as they are; their statuses start again from blank.
+     */
+    private void rewindFinishedRun() {
+        for (PlaylistRow r : rows) r.result = null;
+        if (logWriter != null) { try { logWriter.close(); } catch (Exception ignored) {} }
+        logWriter = null;          // startNewRun() opens the new run's log at its first instruction
+        runningRow = null;
+        recorder = null;           // a new replay session on each Target
+        recorderImage = null;
+        traceExportPending = false;
+        pendingStamp = null;
+        preambleRun = false;
+        cursor = 0;
+        highlighted = null;
+        stampBtn.setDisable(true);
+        applyGrayStamp();
+        setLogsButtonState(false);
+        resetMilestone();
+        rebuildPlaylistNodes();
+        refreshPacketStrip();
+        logArea.appendText("\n=== Replay again: " + qtraceBaseName + " ===\n");
     }
 
     private void resetRunCounters() {
@@ -2616,12 +2670,48 @@ class QTraceReplayPlayer {
     private void exportTargetTrace() {
         if (!traceExportPending || recorderImage == null || logger.getCurrentImageData() != recorderImage) return;
         traceExportPending = false;
+        if (stampTargetTrace()) return;
         try {
             java.nio.file.Path out = QTraceController.exportUnstamped(qupath, logger);
             runTraces++;
             logArea.appendText("=== .qtrace written for this image: " + out + " ===\n");
         } catch (Exception e) {
             logArea.appendText("(.qtrace export failed: " + e.getMessage() + ")\n");
+        }
+    }
+
+    /**
+     * In a batch of two or more Targets with "Stamp each image": writes the target's .qtrace
+     * stamped, as Import does ({@link QTraceController#programmaticExport}). False when it did
+     * not (box off, one Target, a failed step, nothing recorded, a stamp that failed): the
+     * caller then writes it unstamped, as for any replay. FX thread.
+     */
+    private boolean stampTargetTrace() {
+        BatchStampDialog.BatchStamp stamp = batchStamp;
+        if (stamp == null || activeBatch == null) return false;
+        TargetRow played = activeBatch.get(activeBatchIndex);
+        QTraceController controller = QTraceController.current();
+        boolean attached = controller != null && controller.getLogger() == logger;
+        boolean failed = rows.stream().anyMatch(r -> r.result != null
+            && r.result.status() == ReplayExecutor.Status.FAILED);
+        PlayerAutoStamp.Decision decision = PlayerAutoStamp.decide(true, activeBatch.size(),
+            attached && isTargetActive(played), logger.hasSteps(), failed);
+        switch (decision) {
+            case STAMP -> {}
+            case OFF, SINGLE_TARGET -> { return false; }
+            case NOT_TARGET -> { batchNote("Not stamped - the image on screen is not " + played.displayName()); return false; }
+            case NO_STEPS -> { batchNote("Not stamped - nothing was recorded on " + played.displayName()); return false; }
+            case TARGET_FAILED -> { batchNote("Not stamped - a step failed on " + played.displayName()); return false; }
+        }
+        try {
+            String file = controller.programmaticExport(stamp.validator(), stamp.scope(), stamp.confidence(), stamp.notes());
+            runTraces++;
+            logArea.appendText("=== .qtrace written and stamped for this image: " + file + " ===\n");
+            batchNote("Stamped " + played.displayName() + " - validated by " + stamp.validator());
+            return true;
+        } catch (Exception e) {
+            batchNote("Could not stamp " + played.displayName() + ": " + e.getMessage());
+            return false;
         }
     }
 
@@ -2904,6 +2994,11 @@ class QTraceReplayPlayer {
      */
     private void setRunningOverlay(boolean running) {
         runningProperty.set(running);
+        // A batch of two or more Targets opens the images itself: Core's "wasn't stamped" question
+        // would stop it at every image until someone answers. Held while it runs, back once it ends or pauses.
+        QTraceController controller = QTraceController.current();
+        if (controller != null) controller.holdStampReminder(running
+            && currentBatchTargetNames != null && currentBatchTargetNames.size() >= 2);
         runningSpinner.setVisible(running);
         runningSpinner.setManaged(running);
     }

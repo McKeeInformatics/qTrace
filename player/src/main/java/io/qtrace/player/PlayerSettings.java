@@ -38,9 +38,11 @@ import java.nio.file.StandardCopyOption;
 final class PlayerSettings {
 
     static final String SAVE_ON_TARGET_CHANGE = "saveOnTargetChange";
+    static final String STAMP_ON_TARGET_CHANGE = "stampOnTargetChange";
 
     private final Path file;
-    private Boolean saveOnTargetChange; // the choice made in this session, written or not
+    private Boolean saveOnTargetChange;  // the choices made in this session, written or not
+    private Boolean stampOnTargetChange;
 
     PlayerSettings(Path file) { this.file = file; }
 
@@ -50,16 +52,36 @@ final class PlayerSettings {
 
     /** Save each image before the batch moves to the next target. Checked by default. */
     boolean saveOnTargetChange() {
-        if (saveOnTargetChange != null) return saveOnTargetChange;
-        JsonElement v = read().get(SAVE_ON_TARGET_CHANGE);
-        if (v != null && v.isJsonPrimitive() && v.getAsJsonPrimitive().isBoolean()) return v.getAsBoolean();
-        return true;
+        return saveOnTargetChange != null ? saveOnTargetChange : readBoolean(SAVE_ON_TARGET_CHANGE, true);
     }
 
     void setSaveOnTargetChange(boolean value) {
         saveOnTargetChange = value;
+        write(SAVE_ON_TARGET_CHANGE, value);
+    }
+
+    /**
+     * Stamp each image of a batch of two or more Targets. Off by default: a stamp is someone's
+     * validation, given only with the box checked on purpose.
+     */
+    boolean stampOnTargetChange() {
+        return stampOnTargetChange != null ? stampOnTargetChange : readBoolean(STAMP_ON_TARGET_CHANGE, false);
+    }
+
+    void setStampOnTargetChange(boolean value) {
+        stampOnTargetChange = value;
+        write(STAMP_ON_TARGET_CHANGE, value);
+    }
+
+    private boolean readBoolean(String key, boolean fallback) {
+        JsonElement v = read().get(key);
+        if (v != null && v.isJsonPrimitive() && v.getAsJsonPrimitive().isBoolean()) return v.getAsBoolean();
+        return fallback;
+    }
+
+    private void write(String key, boolean value) {
         JsonObject json = read(); // keeps what other versions of the player wrote
-        json.addProperty(SAVE_ON_TARGET_CHANGE, value);
+        json.addProperty(key, value);
         try {
             Path dir = file.toAbsolutePath().getParent();
             Files.createDirectories(dir);
