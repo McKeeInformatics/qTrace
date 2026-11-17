@@ -202,6 +202,7 @@ public class QTraceController {
     // "Don't ask again this session" for the forgotten-stamp reminder — in-memory only,
     // resets on QuPath restart by design.
     private boolean skipStampReminder = false;
+    private volatile boolean stampReminderHeld = false; // a Player batch is opening the images itself
 
     // Recording state listeners (toolbar icon, etc.)
     private final List<Consumer<Boolean>> recordingListeners = new CopyOnWriteArrayList<>();
@@ -1369,15 +1370,10 @@ public class QTraceController {
      * {@code proceed} immediately.
      */
     private boolean maybePromptForgottenStamp(ImageData<BufferedImage> oldData, Runnable proceed) {
-        boolean hasSteps = logger != null && logger.hasNewSteps();
-        String  imageHash = logger != null ? logger.getImageHash() : null;
-        boolean alreadyStamped = imageHash != null && lastStamp != null
-            && imageHash.equals(lastStamp.imageHash())
-            && lastStampChanges >= 0 && logger.getChangeCount() == lastStampChanges;
-
-        if (skipStampReminder || !QTraceConfig.get().isPromptUnstampedReminder()
-            || oldData == null || logger == null || !hasSteps) return false;
-        if (alreadyStamped) return false;
+        boolean stamped = logger != null && StampReminder.stampedAsItIs(logger.getImageHash(),
+            lastStamp != null ? lastStamp.imageHash() : null, lastStampChanges, logger.getChangeCount());
+        if (!StampReminder.needed(stampReminderHeld, skipStampReminder, QTraceConfig.get().isPromptUnstampedReminder(),
+                oldData != null, logger != null && logger.hasNewSteps(), stamped)) return false;
 
         String imageName = oldData.getServer().getMetadata().getName();
         Platform.runLater(() -> {
@@ -1405,6 +1401,13 @@ public class QTraceController {
         });
         return true;
     }
+
+    /**
+     * Holds the "wasn't stamped" reminder while a Player batch of two or more Targets opens the
+     * images itself: a question would stop the batch until someone answers it. The batch says,
+     * image by image, what it stamped and what it did not. Released when the batch ends or pauses.
+     */
+    public void holdStampReminder(boolean held) { stampReminderHeld = held; }
 
     // ── Image helpers ────────────────────────────────────────────────────────
 
@@ -2067,6 +2070,8 @@ public class QTraceController {
             resolveDefaultCaseId(),
             logger.computeClassifierFidelity().name(), 1, "1-In Progress",
             null, null);  // signature + validatorKeyPub: unsigned (batch path, no dialog)
+        // As the Stamp button does: leaving the image just stamped no longer asks to stamp it
+        lastStampChanges = logger.getChangeCount();
 
         Path exportDir = QTraceConfig.get().outputExportDir();
         var  exporter  = new QTraceExporter(logger, lastStamp);
