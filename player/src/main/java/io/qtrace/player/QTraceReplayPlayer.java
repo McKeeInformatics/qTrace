@@ -1272,7 +1272,7 @@ class QTraceReplayPlayer {
         Tooltip.install(saveEachImageCheckBox, new Tooltip(
             "When a batch moves to the next Target (and after the last one), save the work on the image it leaves,"
           + " so the replayed annotations and objects stay in the project.\n"
-          + "An image where a step failed is not saved. An image outside a project is saved only to its own"
+          + "An image where a step failed is not saved: its changes are dropped when the batch moves on. An image outside a project is saved only to its own"
           + " .qpdata file, if it already has one (File > Save As)."));
         saveEachImageCheckBox.setSelected(settings.saveOnTargetChange());
         saveEachImageCheckBox.setOnAction(e -> settings.setSaveOnTargetChange(saveEachImageCheckBox.isSelected()));
@@ -2434,7 +2434,7 @@ class QTraceReplayPlayer {
                 targetFilterToChecked = false; activeTargetRow = null; rebuildTargetNodes();
                 onRunFinished();
                 exportTargetTrace();
-                if (activeBatch != null) saveCurrentTarget(activeBatch.get(activeBatchIndex), false); // says why it is not saved
+                if (activeBatch != null) saveCurrentTarget(activeBatch.get(activeBatchIndex), false, false); // says why it is not saved
                 lastImageCount = currentBatchIndex != null ? currentBatchIndex : 1;
                 activeBatch = null;
                 setPhase(MiniPlayerStatus.Phase.DONE, null);
@@ -2450,7 +2450,7 @@ class QTraceReplayPlayer {
     /** @param resetCursor false only to carry on from steps already run (▶│) on the first target. */
     private void runBatch(List<TargetRow> targets, int index, boolean resetCursor) {
         boolean stoppedEarly = !playing;
-        if (index > 0) saveCurrentTarget(targets.get(index - 1), stoppedEarly);
+        if (index > 0) saveCurrentTarget(targets.get(index - 1), stoppedEarly, index < targets.size());
         if (stoppedEarly || index >= targets.size()) {
             boolean fullyDone = !stoppedEarly; // reached here via exhausting targets, not a pause/decline
             if (fullyDone) { activeBatch = null; lastImageCount = targets.size(); }
@@ -2498,12 +2498,12 @@ class QTraceReplayPlayer {
      * steps then ran on whatever was on screen). A failed save is reported, never fatal: the
      * batch goes on. FX thread.
      */
-    private void saveCurrentTarget(TargetRow played, boolean interrupted) {
+    private void saveCurrentTarget(TargetRow played, boolean interrupted, boolean movingOn) {
         ImageData<BufferedImage> data = qupath.getImageData();
         boolean failed = rows.stream().anyMatch(r -> r.result != null
             && r.result.status() == ReplayExecutor.Status.FAILED);
         PlayerAutoSave.Decision decision = PlayerAutoSave.decide(
-            settings.saveOnTargetChange(), data != null, data != null && isTargetActive(played), failed, interrupted);
+            settings.saveOnTargetChange(), data != null, data != null && isTargetActive(played), failed, interrupted, movingOn);
         switch (decision) {
             case SAVE -> {}
             case OFF -> { return; }
@@ -2511,6 +2511,12 @@ class QTraceReplayPlayer {
             case NO_IMAGE -> { batchNote("Not saved - no image is open"); return; }
             case NOT_TARGET -> { batchNote("Not saved - the image on screen is not " + played.displayName()); return; }
             case TARGET_FAILED -> { batchNote("Not saved - a step failed on " + played.displayName()); return; }
+            case DISCARD_FAILED -> {
+                // The image file keeps its state from before the replay; the .qtrace already says what failed.
+                data.setChanged(false);
+                batchNote("Not saved - a step failed on " + played.displayName() + ", changes discarded");
+                return;
+            }
         }
         Project<BufferedImage> project = qupath.getProject();
         ProjectImageEntry<BufferedImage> entry = project != null ? project.getEntry(data) : null;
