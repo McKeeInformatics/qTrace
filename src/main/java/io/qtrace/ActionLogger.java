@@ -1120,11 +1120,25 @@ public class ActionLogger implements WorkflowListener {
         if (snapshotAnnotationIds.contains(uuid)) return;
         Integer idx = annotationStepIndex.remove(uuid);
         if (idx == null) return;
+        String suffix = uuid.toString().replace("-", "").substring(0, 8);
+        List<Integer> kept = List.copyOf(keptAnnotationSteps.getOrDefault(suffix, List.of()));
+        long action = history.beyondDrawing(); // a deletion is not part of a drawing still debouncing
+        if (!kept.isEmpty() || usedSince(idx, suffix)) {
+            // A step used it (a cell detection run inside it, then the scaffold deleted, its cells kept): its
+            // creation stays in the record, or the replay has nothing for that step to run on. The deletion
+            // replays as QuPath recorded it ("Delete selected objects").
+            history.supersede(action,
+                () -> { annotationStepIndex.put(uuid, idx); refreshManualAnnotationCount(); },
+                () -> { annotationStepIndex.remove(uuid); refreshManualAnnotationCount(); });
+            ActivityLog.add("Annotation deleted: " + roiName + " (kept in the meta-script: a step used it)");
+            CaptureEvents.captured(CaptureEvents.ANNOTATION, "Annotation deleted: " + roiName, null, action);
+            refreshManualAnnotationCount();
+            if (panel != null) panel.updateStepCount(getStepCount(), preExistingStepCount, manualAnnotationCount);
+            return;
+        }
         retireStep(idx);
         // The steps kept in force for a step that used it go with it
-        List<Integer> kept = List.copyOf(keptAnnotationSteps.getOrDefault(uuid.toString().replace("-", "").substring(0, 8), List.of()));
         kept.forEach(this::retireStep);
-        long action = history.beyondDrawing(); // a deletion is not part of a drawing still debouncing
         history.supersede(action,
             () -> { unretireStep(idx); kept.forEach(this::unretireStep); annotationStepIndex.put(uuid, idx); refreshManualAnnotationCount(); },
             () -> { retireStep(idx); kept.forEach(this::retireStep); annotationStepIndex.remove(uuid); refreshManualAnnotationCount(); });
