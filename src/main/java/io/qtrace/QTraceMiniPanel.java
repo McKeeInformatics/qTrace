@@ -283,7 +283,7 @@ public final class QTraceMiniPanel {
         if (importBtn != null) TourHighlight.tag(importBtn, "import");
         resetBtn = button(icon(panel::iconReset), "btn.reset.caption", Theme.web(QTracePanel.RED));
         TourHighlight.tag(resetBtn, "reset");
-        resetBtn.setOnAction(e -> panel.confirmReset());
+        resetBtn.setOnAction(e -> panel.askAndReset());
 
         // The tools the user chose (MiniPanelChoice); without a choice, qTrace's own mini-panel
         // or the one the organization chose (PanelProfile).

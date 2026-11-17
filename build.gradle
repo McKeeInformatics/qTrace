@@ -32,6 +32,8 @@ dependencies {
     implementation 'org.eclipse.jgit:org.eclipse.jgit:6.7.0.202309050840-r'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testImplementation "io.github.qupath:qupath-core:${qupathVersion}"
+    testImplementation "io.github.qupath:qupath-gui-fx:${qupathVersion}"
     testImplementation 'com.google.code.gson:gson:2.10.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

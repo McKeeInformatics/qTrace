@@ -2133,9 +2133,50 @@ public class QTraceController {
 
     // ── Reset ────────────────────────────────────────────────────────────────
 
-    public void resetCapture() {
+    /**
+     * Reset: asks how far to go (capture only / plus the image's history / everything), then does
+     * it. An image with stamped sessions asks for an acknowledgement before its record is set aside.
+     * FX thread.
+     */
+    public void askAndReset() {
         if (logger == null) return;
-        logger.resetCapture();
+        var imageData = logger.getCurrentImageData();
+        Path record = imageData == null ? null : QTraceExporter.fileFor(QTraceConfig.get().outputExportDir(),
+            imageData.getServer().getMetadata().getName());
+        int sessions = 0, stamped = 0;
+        if (record != null && Files.exists(record)) {
+            try {
+                JsonObject root = JsonParser.parseString(Files.readString(record)).getAsJsonObject();
+                if (root.has("sessions") && root.get("sessions").isJsonArray())
+                    for (var el : root.getAsJsonArray("sessions")) {
+                        sessions++;
+                        if (el.isJsonObject() && StampIntegrity.isStamped(el.getAsJsonObject())) stamped++;
+                    }
+            } catch (Exception ignored) { sessions = Math.max(sessions, 1); } // unreadable: it goes aside all the same
+        }
+        ResetDialog.ask(qupath.getStage(), sessions, stamped).ifPresent(this::reset);
+    }
+
+    /** Resets to {@code level}. The record goes aside first: the reset's event makes the Logbook read the image's sessions again. */
+    void reset(ResetLevel level) {
+        if (logger == null) return;
+        if (level.setsRecordAside()) {
+            var imageData = logger.getCurrentImageData();
+            Path record = imageData == null ? null : QTraceExporter.fileFor(QTraceConfig.get().outputExportDir(),
+                imageData.getServer().getMetadata().getName());
+            try {
+                QTraceArchive.archive(record).ifPresent(a ->
+                    ActivityLog.add("— Reset — previous record set aside: " + a.getFileName()));
+            } catch (IOException e) {
+                ActivityLog.add("WARNING: could not set the previous record aside: " + e.getMessage());
+                return; // keep the capture: a half reset would leave a record the next stamp extends
+            }
+        }
+        if (level.emptiesImageHistory()) logger.fullReset(); else logger.resetCapture();
+        afterReset();
+    }
+
+    private void afterReset() {
         drafts.discard();
         lastStamp = null;
         lastStampChanges = -1;

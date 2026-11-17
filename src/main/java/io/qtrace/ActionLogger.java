@@ -1553,6 +1553,37 @@ public class ActionLogger implements WorkflowListener {
      * fire OTHER_STRUCTURE_CHANGE (e.g. setting name, description, color via panel).
      */
     /**
+     * Full reset: a plain {@link #resetCapture()} plus everything it leaves behind, so the past
+     * cannot come back. QuPath's own history workflow of the image (what {@link #attach} re-imports
+     * as "prior contributor" steps) is emptied, and so is the classifier, import, class-list,
+     * display and measurement-map memory, the pending corrections and the replay origin.
+     */
+    public void fullReset() {
+        if (currentImageData == null) return;
+        var history = currentImageData.getHistoryWorkflow();
+        history.removeWorkflowListener(this); // emptying it is not something the user did
+        history.clear();
+        history.addWorkflowListener(this);
+
+        knownClassifiers.clear();
+        knownObjectClassifiers.clear();
+        lastObjectClassifierRaw.clear();
+        knownImportedFiles.clear();
+        importCounter = 0;
+        measurementMapRecords.clear();
+        displaySettingsRecords.clear();
+        classListRecords.clear();
+        manualDetectionCorrections.clear();
+        pendingRemovedDetections.clear();
+        pendingAddedDetections.clear();
+        manualAnnotationCorrections.clear();
+        pendingRemovedAnnotations.clear();
+        replayedFrom    = null;
+        replayStepIndex = null;
+        resetCapture();
+    }
+
+    /**
      * Clears all captured history and restarts tracking from the current workflow
      * position. All annotations currently in the hierarchy become "pre-existing"
      * (they will not be re-captured as new). The classifier watcher keeps running.

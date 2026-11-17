@@ -528,7 +528,7 @@ public class QTracePanel {
             TourHighlight.tag(importBtn, "import");
         }
         resetBtn.setId("reset-button");
-        resetBtn.setOnAction(e -> confirmReset());
+        resetBtn.setOnAction(e -> controller.askAndReset());
         tool(resetBtn, PanelProfile.RESET);
         resetBtn.setDisable(!controller.hasActiveImage());
         resetBtn.setOpacity(controller.hasActiveImage() ? 1.0 : 0.45);
@@ -690,29 +690,8 @@ public class QTracePanel {
         }
     }
 
-    /**
-     * Reset is destructive (clears the whole capture, see ActionLogger#resetCapture) — always
-     * confirm before calling it, same as the "Unstamped image" guard elsewhere in this app.
-     */
-    void confirmReset() {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.initOwner(controller.getQuPath().getStage());
-        alert.setTitle("qTrace — Reset");
-        ButtonType btnReset  = new ButtonType("Reset", ButtonBar.ButtonData.OK_DONE);
-        ButtonType btnCancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE); // Esc
-        alert.getButtonTypes().setAll(btnCancel, btnReset);
-        // Destructive: the action button is red, and Cancel is the default (Enter doesn't erase).
-        DialogLook.apply(alert, "Reset the capture",
-            "Everything captured on this image so far is erased.",
-            DialogLook.text("Reset will erase all of your traces. Are you sure you want to continue?"),
-            btnReset, DialogLook.RED, btnCancel);
-        if (alert.getDialogPane().lookupButton(btnReset) instanceof Button b) b.setDefaultButton(false);
-        if (alert.getDialogPane().lookupButton(btnCancel) instanceof Button c) c.setDefaultButton(true);
-
-        alert.showAndWait().ifPresent(bt -> {
-            if (bt == btnReset) controller.resetCapture();
-        });
-    }
+    /** Reset: opens the question of how far to go (the mini-panel's button too). */
+    void askAndReset() { controller.askAndReset(); }
 
     // ── Status section ───────────────────────────────────────────────────────
 
