@@ -59,10 +59,15 @@ public final class SelectionScope {
         + "|\\binstanseg\\b[\\s\\S]*\\.detectObjects\\s*\\(\\s*\\)",
         Pattern.CASE_INSENSITIVE);
 
-    /** Commands that set the selection themselves: what follows them replays as it ran. */
+    /**
+     * Commands that set the selection themselves: what follows them replays as it ran.
+     * "Create full image annotation" is one when it leaves what it made selected ({@code true}): replayed on another
+     * image, it makes and selects that image's own, which the recorded one (another size, another ID) is not.
+     */
     private static final Pattern SETS = Pattern.compile(
-        "^\\s*(resetSelection|selectAnnotations|selectDetections|selectCells|selectTiles|selectTMACores"
-        + "|selectObjectsByClassification|selectObjectsByClass|selectObjects|selectAllObjects)\\s*\\(");
+        "^\\s*(?:(?:resetSelection|selectAnnotations|selectDetections|selectCells|selectTiles|selectTMACores"
+        + "|selectObjectsByClassification|selectObjectsByClass|selectObjects|selectAllObjects)\\s*\\("
+        + "|(?:createFullImageAnnotation|createAllFullImageAnnotations)\\s*\\(\\s*(?:[^,()]+,\\s*)?true\\b)");
 
     private SelectionScope() {}
 

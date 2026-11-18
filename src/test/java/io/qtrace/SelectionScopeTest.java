@@ -48,6 +48,21 @@ class SelectionScopeTest {
         assertFalse(SelectionScope.setsSelection(null));
     }
 
+    /**
+     * "Create full image annotation" leaves the annotation it made selected: replayed on another image, it makes and
+     * selects that image's own, so the cell detection after it must not look for the recorded one (another size,
+     * another ID - "is not on this image").
+     */
+    @Test
+    void aFullImageAnnotationThatIsLeftSelectedSetsTheSelection() {
+        assertTrue(SelectionScope.setsSelection("createFullImageAnnotation(true)"));
+        assertTrue(SelectionScope.setsSelection("createFullImageAnnotation(true, 0, 0)"));
+        assertTrue(SelectionScope.setsSelection("createAllFullImageAnnotations(true)"));
+        // false: QuPath leaves the selection as it was, so the next command still runs on the hand-made one
+        assertFalse(SelectionScope.setsSelection("createFullImageAnnotation(false)"));
+        assertFalse(SelectionScope.setsSelection("createAllFullImageAnnotations(false)"));
+    }
+
     @Test
     void theScopedFragmentSelectsTheSameObjectsThenRunsTheCommandUnchanged() {
         String scoped = SelectionScope.scoped(CLASSIFY, List.of(RECT));
